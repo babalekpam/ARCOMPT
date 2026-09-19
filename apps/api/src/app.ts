@@ -4,6 +4,8 @@ import { logger } from "hono/logger";
 import type { Sql } from "postgres";
 import { LedgerError, type Ledger } from "@arcompt/ledger";
 import { authMiddleware, type AuthOptions } from "./auth.js";
+import { rateLimit, securityHeaders } from "./security.js";
+import { BurstDetector, raiseSecurityAlert } from "./telemetry.js";
 import { entriesRoutes } from "./routes/entries.js";
 import { statementsRoutes } from "./routes/statements.js";
 import { packsRoutes } from "./routes/packs.js";
@@ -20,11 +22,25 @@ export interface AppDeps {
 export function createApp(deps: AppDeps) {
   const app = new Hono();
   if (!deps.quiet) app.use(logger());
+  app.use("*", securityHeaders());
+  // Limitation de débit générale par compte ou IP, plus une limite serrée sur les points coûteux (IA, rendu).
+  const authFailures = new BurstDetector(20, 5 * 60_000);
+  app.use("/v1/*", rateLimit({ name: "api", limit: 600, windowMs: 60_000, onLimited: (key) => void raiseSecurityAlert({ signal: "rate.limited", detail: key }) }));
+  app.use("/v1/documents/*", rateLimit({ name: "ai", limit: 60, windowMs: 60_000, onLimited: (key) => void raiseSecurityAlert({ signal: "ai.call_spike", detail: key }) }));
+  app.use("/v1/render/*", rateLimit({ name: "render", limit: 30, windowMs: 60_000 }));
 
   app.get("/health", (c) => c.json({ ok: true, service: "arcompt-api" }));
 
   const api = new Hono();
   api.use("*", authMiddleware(deps.auth));
+  api.use("*", async (c, next) => {
+    await next();
+    if (c.res.status === 401 || c.res.status === 403) {
+      const ip = c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for") ?? "unknown";
+      if (authFailures.hit(ip)) void raiseSecurityAlert({ signal: "auth.failure_burst", detail: `ip=${ip}` });
+      if (c.res.status === 403) void raiseSecurityAlert({ signal: "rls.rejection", detail: `${c.req.method} ${c.req.path}` });
+    }
+  });
   api.route("/entries", entriesRoutes(deps));
   api.route("/statements", statementsRoutes(deps));
   api.route("/packs", packsRoutes());

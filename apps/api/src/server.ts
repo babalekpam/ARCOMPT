@@ -3,6 +3,9 @@ import type { Sql } from "postgres";
 import { createDb } from "@arcompt/db";
 import { Ledger, PostgresStore } from "@arcompt/ledger";
 import { createApp } from "./app.js";
+import { initTelemetry, log } from "./telemetry.js";
+
+await initTelemetry();
 
 const port = Number(process.env.API_PORT ?? 4000);
 const mode = (process.env.AUTH_MODE ?? "dev") as "dev" | "oidc";
@@ -18,5 +21,5 @@ const app = createApp({
 });
 
 serve({ fetch: app.fetch, port }, () => {
-  console.log(`ARCOMPT API sur http://localhost:${port} (auth ${mode})`);
+  log("info", "api.started", { port, auth: mode });
 });
