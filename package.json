@@ -1,0 +1,34 @@
+{
+  "name": "arcompt",
+  "version": "0.1.0",
+  "private": true,
+  "description": "La comptabilité intelligente des PME de l'espace OHADA — noyau SYSCOHADA révisé, packs pays, IA qui propose et humain qui valide.",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/* dev",
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:statements": "vitest run --project statements",
+    "test:tenancy": "vitest run --project db",
+    "db:migrate": "pnpm --filter @arcompt/db migrate",
+    "db:seed": "pnpm --filter @arcompt/db seed",
+    "pack:validate": "pnpm --filter @arcompt/country-packs validate",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8"
+  }
+}

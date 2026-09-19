@@ -1,0 +1,27 @@
+{
+  "name": "@arcompt/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Schéma PostgreSQL, migrations, seeds (plan de comptes SYSCOHADA) et client.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./chart": "./src/chart.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "migrate": "tsx src/migrate.ts",
+    "seed": "tsx src/seed.ts"
+  },
+  "dependencies": {
+    "@arcompt/ledger": "workspace:*",
+    "drizzle-orm": "^0.38.2",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

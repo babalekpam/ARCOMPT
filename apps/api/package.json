@@ -1,0 +1,26 @@
+{
+  "name": "@arcompt/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API ARCOMPT : authentification, contexte tenant, moteur comptable et états financiers.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@arcompt/country-packs": "workspace:*",
+    "@arcompt/db": "workspace:*",
+    "@arcompt/ledger": "workspace:*",
+    "@arcompt/statements": "workspace:*",
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14",
+    "jose": "^5.9.6",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": { "tsx": "^4.19.2" }
+}

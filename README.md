@@ -2,7 +2,7 @@ ARCOMPT
 
 La comptabilité intelligente des PME de l'espace OHADA. ARCOMPT permet à une PME de facturer, encaisser, payer ses salariés et déclarer ses impôts, puis produit automatiquement ses états financiers conformes au SYSCOHADA révisé : bilan, compte de résultat, tableau des flux de trésorerie, notes annexes et liasse fiscale (DSF).
 
-Statut : phase 0 — fondations. Le dépôt est en cours d'initialisation. Les commandes et la structure ci-dessous décrivent la convention cible du projet ; adaptez-les au fur et à mesure que le code arrive.
+Statut : phase 0 — fondations livrées (monorepo, schéma PostgreSQL avec invariants et RLS, plan de comptes SYSCOHADA, moteur comptable, import de balance) et moteur d'états de la phase 1 (bilan, compte de résultat, TFT, notes, contrôles). Les modules métier, le portail cabinets et les canaux WhatsApp / mobile money arrivent dans les phases suivantes.
 
 Pourquoi ARCOMPT
 Conforme OHADA par construction. Plan de comptes SYSCOHADA, systèmes Normal et SMT, contrôles de cohérence bloquants (actif = passif, résultat bilan = résultat CR, TFT = variation de trésorerie).
@@ -24,9 +24,9 @@ Assistant IA	Questions en langage naturel, alertes, explication des états	3
 Stack
 Brique	Choix
 Front	Next.js (React) en PWA, Tailwind CSS, FR / EN
-API	Node.js + TypeScript
+API	Node.js + TypeScript (Hono)
 Base de données	PostgreSQL (Neon), Row-Level Security par dossier, pgvector
-ORM	Drizzle + SQL natif pour les états
+ORM	SQL natif (postgres) + Drizzle pour les requêtes applicatives
 Tâches de fond	BullMQ + Redis
 Fichiers	Cloudflare R2
 Authentification	Keycloak (OIDC), MFA, rôles par dossier
@@ -52,6 +52,10 @@ pnpm db:migrate               # crée le schéma et les contraintes comptables
 pnpm db:seed                  # plan de comptes SYSCOHADA + dossier de démonstration
 
 pnpm dev                      # web sur http://localhost:3000, API sur :4000
+
+# En mode AUTH_MODE=dev, l'API accepte les en-têtes X-User-Id et X-Tenant-Id :
+curl -H "X-User-Id: demo" -H "X-Tenant-Id: <id du dossier>" \
+     "http://localhost:4000/v1/statements?fiscalYear=2025"
 Variables d'environnement
 Variable	Rôle
 DATABASE_URL	Connexion PostgreSQL
@@ -79,7 +83,8 @@ arcompt/
 │   ├── db/                   # Schéma, migrations, seeds (plan SYSCOHADA)
 │   └── ui/                   # Composants partagés
 ├── fixtures/
-│   └── balances/             # Balances de référence + liasses attendues
+│   └── balances/             # Balances de référence + postes attendus (demo-ci)
+├── .github/workflows/ci.yml  # lint, typecheck, migrations, tests, build
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   └── country-packs/
@@ -91,7 +96,7 @@ pnpm dev	Lance web + API en mode développement
 pnpm build	Build de production
 pnpm test	Tests unitaires
 pnpm test:statements	Non-régression des états sur les balances de référence
-pnpm test:tenancy	Vérifie qu'aucune donnée ne fuit entre dossiers
+pnpm test:tenancy	Vérifie qu'aucune donnée ne fuit entre dossiers (exige DATABASE_URL)
 pnpm db:migrate / pnpm db:seed	Schéma et données initiales
 pnpm pack:validate <pays>	Valide un pack pays contre son schéma
 pnpm lint / pnpm typecheck	Qualité du code
