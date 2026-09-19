@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 /**
  * Contexte d'authentification côté serveur Next.
  *
@@ -99,6 +100,6 @@ export async function getAuthContext(): Promise<AuthContext | null> {
 /** Contexte obligatoire : lève une erreur (les layouts redirigent avant). */
 export async function requireAuthContext(): Promise<AuthContext> {
   const ctx = await getAuthContext();
-  if (!ctx) throw new Error("Non authentifié");
+  if (!ctx) redirect("/login");
   return ctx;
 }

@@ -40,3 +40,7 @@ jobs:
       - run: pnpm pack:validate
       - run: pnpm test
       - run: pnpm --filter @arcompt/web build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+        env:
+          AUTH_MODE: dev
