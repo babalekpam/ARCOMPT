@@ -1,0 +1,452 @@
+{
+  "code": "sn",
+  "name": "Sénégal",
+  "version": "2025.1",
+  "status": "DRAFT",
+  "identity": {
+    "currency": "XOF",
+    "languages": [
+      "fr"
+    ],
+    "tax_ids": [
+      {
+        "code": "NINEA",
+        "label": "Numéro d'identification national des entreprises et associations (7 chiffres, suivi du COFI à 3 caractères) — format indicatif : à valider",
+        "pattern": "^[0-9]{7}( ?[0-9][A-Z][0-9])?$",
+        "required": true
+      },
+      {
+        "code": "RCCM",
+        "label": "Registre du commerce et du crédit mobilier",
+        "required": false
+      }
+    ],
+    "accounting_systems": [
+      "NORMAL",
+      "SMT"
+    ],
+    "smt_threshold_revenue": "60000000",
+    "social_security_body": "IPRES (retraite) et Caisse de sécurité sociale (CSS : prestations familiales, accidents du travail)",
+    "tax_authority": "Direction générale des impôts et des domaines (DGID)"
+  },
+  "vat": {
+    "rates": [
+      {
+        "code": "TVA18",
+        "label": "TVA taux normal 18 % (indicatif : à valider — CGI SN art. 369)",
+        "rate": "0.18",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "code": "TVA10",
+        "label": "TVA taux réduit 10 % — hébergement et restauration agréés (indicatif : à valider)",
+        "rate": "0.10",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2013-01-01"
+      },
+      {
+        "code": "EXO",
+        "label": "Exonéré",
+        "rate": "0",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      }
+    ],
+    "rules": [
+      {
+        "id": "vat.due",
+        "label": "TVA nette due (ou crédit si négatif)",
+        "expr": "tva_collectee - tva_deductible",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "taxes": {
+    "rules": [
+      {
+        "id": "is.rate",
+        "label": "Taux de l'impôt sur les sociétés 30 % (indicatif : à valider)",
+        "value": "0.30",
+        "valid_from": "2013-01-01",
+        "source": "CGI Sénégal (loi 2012-31), art. 36 — à confirmer par l'expert-comptable référent"
+      },
+      {
+        "id": "is.amount",
+        "label": "Impôt sur les sociétés",
+        "expr": "round(max(resultat_fiscal, 0) * is.rate, 0)",
+        "depends_on": [
+          "is.rate"
+        ],
+        "valid_from": "2013-01-01"
+      },
+      {
+        "id": "imf.rate",
+        "label": "Impôt minimum forfaitaire, taux sur CA 0,5 % (indicatif : à valider)",
+        "value": "0.005",
+        "valid_from": "2013-01-01",
+        "source": "CGI Sénégal art. 39 — à confirmer"
+      },
+      {
+        "id": "imf.min",
+        "label": "IMF plancher 500 000 (indicatif : à valider)",
+        "value": "500000",
+        "valid_from": "2013-01-01"
+      },
+      {
+        "id": "imf.max",
+        "label": "IMF plafond 5 000 000 (indicatif : à valider)",
+        "value": "5000000",
+        "valid_from": "2013-01-01"
+      },
+      {
+        "id": "imf.amount",
+        "label": "Impôt minimum forfaitaire : 0,5 % du CA, borné entre plancher et plafond",
+        "expr": "min(max(round(ca_annuel * imf.rate, 0), imf.min), imf.max)",
+        "depends_on": [
+          "imf.rate",
+          "imf.min",
+          "imf.max"
+        ],
+        "valid_from": "2013-01-01"
+      },
+      {
+        "id": "is.due",
+        "label": "Impôt dû : le plus élevé de l'IS et de l'IMF",
+        "expr": "max(is.amount, imf.amount)",
+        "depends_on": [
+          "is.amount",
+          "imf.amount"
+        ],
+        "valid_from": "2013-01-01"
+      }
+    ]
+  },
+  "payroll": {
+    "variables": [
+      "salaire_brut",
+      "tva_collectee",
+      "tva_deductible"
+    ],
+    "rules": [
+      {
+        "id": "payroll.ipres.employee_rate",
+        "label": "IPRES régime général, part salariale 5,6 % (indicatif : à valider)",
+        "value": "0.056",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.ipres.employer_rate",
+        "label": "IPRES régime général, part patronale 8,4 % (indicatif : à valider)",
+        "value": "0.084",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.ipres.plafond",
+        "label": "Plafond mensuel IPRES régime général 432 000 (indicatif : à valider — 360 000 avant revalorisation)",
+        "value": "432000",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.ipres.base",
+        "label": "Assiette IPRES plafonnée",
+        "expr": "min(salaire_brut, payroll.ipres.plafond)",
+        "depends_on": [
+          "payroll.ipres.plafond"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.ipres.employee",
+        "label": "Cotisation IPRES salariale",
+        "expr": "round(payroll.ipres.base * payroll.ipres.employee_rate, 0)",
+        "depends_on": [
+          "payroll.ipres.base",
+          "payroll.ipres.employee_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.ipres.employer",
+        "label": "Cotisation IPRES patronale",
+        "expr": "round(payroll.ipres.base * payroll.ipres.employer_rate, 0)",
+        "depends_on": [
+          "payroll.ipres.base",
+          "payroll.ipres.employer_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.css.employer_rate",
+        "label": "CSS part patronale : prestations familiales 7 % + accidents du travail 1 % (taux AT de 1 à 5 % selon risque) — indicatif : à valider",
+        "value": "0.08",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.css.plafond",
+        "label": "Plafond mensuel CSS 63 000 (indicatif : à valider)",
+        "value": "63000",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.css.base",
+        "label": "Assiette CSS plafonnée",
+        "expr": "min(salaire_brut, payroll.css.plafond)",
+        "depends_on": [
+          "payroll.css.plafond"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.css.employer",
+        "label": "Cotisation CSS patronale (aucune part salariale)",
+        "expr": "round(payroll.css.base * payroll.css.employer_rate, 0)",
+        "depends_on": [
+          "payroll.css.base",
+          "payroll.css.employer_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.irpp.abattement_rate",
+        "label": "Abattement forfaitaire pour frais professionnels 30 % (indicatif : à valider)",
+        "value": "0.30",
+        "valid_from": "2013-01-01"
+      },
+      {
+        "id": "payroll.irpp.abattement_plafond",
+        "label": "Plafond mensuel de l'abattement frais professionnels 75 000 (900 000 par an) — indicatif : à valider",
+        "value": "75000",
+        "valid_from": "2013-01-01"
+      },
+      {
+        "id": "payroll.irpp.base",
+        "label": "Base imposable IRPP mensuelle : brut − IPRES salarié − abattement 30 % plafonné",
+        "expr": "max(salaire_brut - payroll.ipres.employee - min((salaire_brut - payroll.ipres.employee) * payroll.irpp.abattement_rate, payroll.irpp.abattement_plafond), 0)",
+        "depends_on": [
+          "payroll.ipres.employee",
+          "payroll.irpp.abattement_rate",
+          "payroll.irpp.abattement_plafond"
+        ],
+        "valid_from": "2013-01-01"
+      },
+      {
+        "id": "payroll.its.bareme",
+        "label": "Barème progressif IRPP annuel (droit commun, 1 part) — indicatif : à valider",
+        "value": {
+          "kind": "bareme",
+          "tranches": [
+            {
+              "upTo": "630000",
+              "rate": "0"
+            },
+            {
+              "upTo": "1500000",
+              "rate": "0.20"
+            },
+            {
+              "upTo": "4000000",
+              "rate": "0.30"
+            },
+            {
+              "upTo": "8000000",
+              "rate": "0.35"
+            },
+            {
+              "upTo": "13500000",
+              "rate": "0.37"
+            },
+            {
+              "rate": "0.40"
+            }
+          ]
+        },
+        "valid_from": "2013-01-01",
+        "source": "CGI Sénégal art. 173 (loi 2012-31) — barème indicatif à valider"
+      },
+      {
+        "id": "payroll.its",
+        "label": "IRPP retenu à la source sur salaires (barème annuel appliqué à la base mensuelle × 12, ramené au mois ; réduction pour charges de famille non modélisée)",
+        "expr": "round(tranche(payroll.irpp.base * 12, payroll.its.bareme) / 12, 0)",
+        "depends_on": [
+          "payroll.irpp.base",
+          "payroll.its.bareme"
+        ],
+        "valid_from": "2013-01-01"
+      },
+      {
+        "id": "payroll.trimf.bareme",
+        "label": "TRIMF : montant annuel par tranche de salaire brut annuel (le champ rate porte le montant en FCFA, barème non cumulatif) — indicatif : à valider",
+        "value": {
+          "kind": "bareme",
+          "tranches": [
+            {
+              "upTo": "599999",
+              "rate": "900"
+            },
+            {
+              "upTo": "999999",
+              "rate": "3600"
+            },
+            {
+              "upTo": "1999999",
+              "rate": "4800"
+            },
+            {
+              "upTo": "6999999",
+              "rate": "12000"
+            },
+            {
+              "upTo": "11999999",
+              "rate": "18000"
+            },
+            {
+              "rate": "36000"
+            }
+          ]
+        },
+        "valid_from": "2013-01-01",
+        "source": "CGI Sénégal art. 267 et s. (TRIMF) — montants indicatifs à valider"
+      },
+      {
+        "id": "payroll.trimf",
+        "label": "Taxe représentative de l'impôt du minimum fiscal, retenue mensuelle",
+        "expr": "round(taux_tranche(salaire_brut * 12, payroll.trimf.bareme) / 12, 0)",
+        "depends_on": [
+          "payroll.trimf.bareme"
+        ],
+        "valid_from": "2013-01-01"
+      },
+      {
+        "id": "payroll.net",
+        "label": "Net à payer : brut − IPRES salarié − IRPP − TRIMF",
+        "expr": "salaire_brut - payroll.ipres.employee - payroll.its - payroll.trimf",
+        "depends_on": [
+          "payroll.ipres.employee",
+          "payroll.its",
+          "payroll.trimf"
+        ],
+        "valid_from": "2013-01-01"
+      }
+    ]
+  },
+  "variables": [
+    "resultat_comptable",
+    "resultat_fiscal",
+    "ca_annuel",
+    "reintegrations",
+    "deductions"
+  ],
+  "dsf": {
+    "label": "Liasse fiscale et états financiers annuels (DGID) — système normal",
+    "statements": [
+      "BILAN_ACTIF",
+      "BILAN_PASSIF",
+      "COMPTE_RESULTAT",
+      "TFT",
+      "NOTES"
+    ],
+    "adjustments": [
+      {
+        "id": "dsf.resultat_fiscal",
+        "label": "Résultat fiscal = résultat comptable + réintégrations − déductions",
+        "expr": "resultat_comptable + reintegrations - deductions",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "filing": [
+    {
+      "id": "dsf",
+      "label": "Dépôt des états financiers et de la déclaration de résultat",
+      "portal": "e-tax (DGID Sénégal)",
+      "url": "https://etax.dgid.sn",
+      "format": "XLSX",
+      "api": false
+    },
+    {
+      "id": "vat",
+      "label": "Déclaration mensuelle de TVA",
+      "portal": "e-tax (DGID Sénégal)",
+      "url": "https://etax.dgid.sn",
+      "format": "MANUAL",
+      "api": false
+    },
+    {
+      "id": "salaires",
+      "label": "Déclaration mensuelle des retenues sur salaires (IRPP, TRIMF)",
+      "portal": "e-tax (DGID Sénégal)",
+      "url": "https://etax.dgid.sn",
+      "format": "MANUAL",
+      "api": false
+    }
+  ],
+  "calendar": [
+    {
+      "id": "vat",
+      "label": "Déclaration et paiement de la TVA (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "salaires",
+      "label": "Versement des retenues sur salaires et cotisations IPRES/CSS (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "is_acompte1",
+      "label": "1er acompte d'IS (indicatif : à valider)",
+      "frequency": "ANNUAL",
+      "due": "02-15"
+    },
+    {
+      "id": "is_acompte2",
+      "label": "2e acompte d'IS (indicatif : à valider)",
+      "frequency": "ANNUAL",
+      "due": "04-30"
+    },
+    {
+      "id": "dsf",
+      "label": "Dépôt de la déclaration de résultat et des états financiers (indicatif : à valider)",
+      "frequency": "ANNUAL",
+      "due": "04-30"
+    },
+    {
+      "id": "is_solde",
+      "label": "Solde de l'IS (indicatif : à valider)",
+      "frequency": "ANNUAL",
+      "due": "06-15"
+    }
+  ],
+  "chart_overrides": [
+    {
+      "number": "4471",
+      "label": "État, IRPP retenu sur salaires"
+    },
+    {
+      "number": "4472",
+      "label": "État, TRIMF retenue sur salaires"
+    },
+    {
+      "number": "4311",
+      "label": "IPRES, cotisations dues"
+    },
+    {
+      "number": "4312",
+      "label": "Caisse de sécurité sociale (CSS), cotisations dues"
+    }
+  ],
+  "certified_invoice": {
+    "system": "Facture électronique DGID (projet de généralisation) — indicatif : à valider",
+    "mandatory": false
+  },
+  "notes": [
+    "Pack en brouillon : tous les taux, barèmes, plafonds, comptes et échéances sont indicatifs (« à valider ») et doivent être confirmés contre le CGI sénégalais (loi 2012-31 et lois de finances ultérieures), les textes IPRES/CSS et la pratique de la DGID par un expert-comptable inscrit à l'ONECCA avant toute utilisation.",
+    "Simplifications connues : IRPP calculé pour 1 part sans réduction pour charges de famille ; IPRES régime cadres complémentaire (2,4 % / 3,6 %, plafond 1 296 000) non modélisé ; taux AT de la CSS fixé à 1 % (varie de 1 à 5 % selon le risque).",
+    "Le portail e-tax n'expose pas d'API publique connue : les fichiers sont générés puis déposés manuellement."
+  ]
+}

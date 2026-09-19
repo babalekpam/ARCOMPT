@@ -47,3 +47,83 @@ describe("packs pays", () => {
     expect(() => vatRate(pack, "TVA99", "2025-03-01")).toThrow(PackError);
   });
 });
+
+describe("tous les packs : attentes structurelles", () => {
+  const DATE = "2025-06-30";
+  const GROSS = 500000;
+  const codes = listPackCodes();
+  const num = (s: string) => Number(s);
+
+  it.each(codes)("pack %s : chargement, validation et composants obligatoires", (code) => {
+    const pack = loadPack(code);
+    expect(validatePackData(JSON.parse(JSON.stringify(pack)))).toEqual([]);
+    expect(pack.status).toBe("DRAFT");
+    expect(pack.identity.currency).toMatch(/^X[AO]F$/);
+    expect(pack.identity.tax_ids.length).toBeGreaterThan(0);
+    expect(pack.vat.rates.some((r) => r.code === "EXO")).toBe(true);
+    expect(pack.vat.rates.some((r) => num(String(r.rate)) > 0)).toBe(true);
+    expect(pack.filing.length).toBeGreaterThan(0);
+    for (const f of pack.filing) expect(f.api).toBe(false);
+    expect(pack.calendar.length).toBeGreaterThan(0);
+    const overrides = pack.chart_overrides.map((o) => o.number);
+    expect(overrides).toContain("4471");
+    expect(overrides).toContain("4311");
+    const ids = packRules(pack).ids();
+    for (const id of ["is.rate", "is.amount", "imf.amount", "is.due", "payroll.its.bareme", "payroll.its", "payroll.net"]) expect(ids).toContain(id);
+    expect(ids.some((id) => /^payroll\.[a-z]+\.employee$/.test(id))).toBe(true);
+    expect(ids.some((id) => /^payroll\.[a-z]+\.employer$/.test(id))).toBe(true);
+    expect(ids.some((id) => /^payroll\.[a-z]+\.plafond$/.test(id))).toBe(true);
+    expect(pack.notes.join(" ")).toMatch(/valid/i);
+  });
+
+  it.each(codes)("pack %s : paie sur un brut de 500 000", (code) => {
+    const rules = packRules(loadPack(code));
+    const scope = { salaire_brut: String(GROSS) };
+    const its = num(rules.evaluate("payroll.its", DATE, scope).value.toString());
+    const net = num(rules.evaluate("payroll.net", DATE, scope).value.toString());
+    expect(its).toBeGreaterThan(0);
+    expect(net).toBeGreaterThan(0);
+    expect(net).toBeLessThan(GROSS);
+    expect(net + its).toBeLessThan(GROSS); // il reste au moins une cotisation salariale
+  });
+
+  it.each(codes)("pack %s : impôt dû avec résultat fiscal positif et négatif", (code) => {
+    const rules = packRules(loadPack(code));
+    const ca = { ca_annuel: "10000000" };
+    const imf = num(rules.evaluate("imf.amount", DATE, ca).value.toString());
+    const profit = num(rules.evaluate("is.due", DATE, { ...ca, resultat_fiscal: "1000000" }).value.toString());
+    const loss = num(rules.evaluate("is.due", DATE, { ...ca, resultat_fiscal: "-200000" }).value.toString());
+    const isAmount = num(rules.evaluate("is.amount", DATE, { ...ca, resultat_fiscal: "1000000" }).value.toString());
+    expect(imf).toBeGreaterThan(0);
+    expect(isAmount).toBeGreaterThan(0);
+    expect(profit).toBeGreaterThan(0);
+    expect(profit).toBeGreaterThanOrEqual(imf);
+    expect(profit).toBeGreaterThanOrEqual(isAmount);
+    // En déficit l'IS est nul : l'impôt dû est exactement le minimum.
+    expect(loss).toBe(imf);
+  });
+
+  it("pack cm : valeur calculée à la main (brut 500 000)", () => {
+    // Hypothèses du pack (indicatives) : CNPS PVID salarié 4,2 % plafonné à 750 000 ;
+    // base IRPP = brut × 70 % − CNPS − 500 000 / 12 ; barème annuel 10 / 15 / 25 / 35 % ; CAC 10 %.
+    //   CNPS salarié      = 500 000 × 4,2 %                       = 21 000
+    //   Base mensuelle    = 350 000 − 21 000 − 41 666,67          = 287 333,33
+    //   Base annuelle     = 287 333,33 × 12                       = 3 448 000
+    //   IRPP annuel       = 2 000 000 × 10 % + 1 000 000 × 15 % + 448 000 × 25 %
+    //                     = 200 000 + 150 000 + 112 000            = 462 000
+    //   IRPP mensuel      = 462 000 / 12                          = 38 500
+    //   CAC 10 %          =                                         3 850
+    //   payroll.its       = 38 500 + 3 850                        = 42 350
+    //   CFC salarié 1 %   = 5 000 ; RAV (tranche 400 001–500 000) = 5 850
+    //   payroll.net       = 500 000 − 21 000 − 42 350 − 5 000 − 5 850 = 425 800
+    const rules = packRules(loadPack("cm"));
+    const scope = { salaire_brut: "500000" };
+    expect(rules.evaluate("payroll.cnps.employee", DATE, scope).value.toString()).toBe("21000");
+    expect(rules.evaluate("payroll.irpp.principal", DATE, scope).value.toString()).toBe("38500");
+    expect(rules.evaluate("payroll.its", DATE, scope).value.toString()).toBe("42350");
+    expect(rules.evaluate("payroll.net", DATE, scope).value.toString()).toBe("425800");
+    // IS : 1 000 000 × 30 % × 1,10 = 330 000 ; minimum 2,2 % × 10 000 000 = 220 000 → dû 330 000.
+    expect(rules.evaluate("is.due", DATE, { resultat_fiscal: "1000000", ca_annuel: "10000000" }).value.toString()).toBe("330000");
+    expect(vatRate(loadPack("cm"), "TVA1925", DATE).rate).toBe("0.1925");
+  });
+});

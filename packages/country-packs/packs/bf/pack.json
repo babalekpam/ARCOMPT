@@ -1,0 +1,347 @@
+{
+  "code": "bf",
+  "name": "Burkina Faso",
+  "version": "2025.1",
+  "status": "DRAFT",
+  "identity": {
+    "currency": "XOF",
+    "languages": [
+      "fr"
+    ],
+    "tax_ids": [
+      {
+        "code": "IFU",
+        "label": "Identifiant financier unique (8 chiffres suivis d'une lettre) — format indicatif : à valider",
+        "pattern": "^[0-9]{8}[A-Z]$",
+        "required": true
+      },
+      {
+        "code": "RCCM",
+        "label": "Registre du commerce et du crédit mobilier",
+        "required": false
+      }
+    ],
+    "accounting_systems": [
+      "NORMAL",
+      "SMT"
+    ],
+    "smt_threshold_revenue": "60000000",
+    "social_security_body": "Caisse nationale de sécurité sociale (CNSS Burkina Faso)",
+    "tax_authority": "Direction générale des impôts (DGI Burkina Faso)"
+  },
+  "vat": {
+    "rates": [
+      {
+        "code": "TVA18",
+        "label": "TVA taux normal 18 % (indicatif : à valider — CGI Burkina Faso)",
+        "rate": "0.18",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "code": "TVA10",
+        "label": "TVA taux réduit 10 % — hébergement et restauration (indicatif : à valider)",
+        "rate": "0.10",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2020-01-01"
+      },
+      {
+        "code": "EXO",
+        "label": "Exonéré",
+        "rate": "0",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      }
+    ],
+    "rules": [
+      {
+        "id": "vat.due",
+        "label": "TVA nette due (ou crédit si négatif)",
+        "expr": "tva_collectee - tva_deductible",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "taxes": {
+    "rules": [
+      {
+        "id": "is.rate",
+        "label": "Taux de l'impôt sur les sociétés 27,5 % (indicatif : à valider)",
+        "value": "0.275",
+        "valid_from": "2019-01-01",
+        "source": "CGI Burkina Faso (loi 058-2017/AN) et loi de finances 2019 — à confirmer par l'expert-comptable référent"
+      },
+      {
+        "id": "is.amount",
+        "label": "Impôt sur les sociétés",
+        "expr": "round(max(resultat_fiscal, 0) * is.rate, 0)",
+        "depends_on": [
+          "is.rate"
+        ],
+        "valid_from": "2019-01-01"
+      },
+      {
+        "id": "imf.rate",
+        "label": "Minimum forfaitaire de perception (MFP), taux sur CA 0,5 % (indicatif : à valider)",
+        "value": "0.005",
+        "valid_from": "2019-01-01",
+        "source": "CGI Burkina Faso, minimum forfaitaire de perception — à confirmer"
+      },
+      {
+        "id": "imf.min",
+        "label": "MFP plancher 1 000 000 pour le réel normal (indicatif : à valider)",
+        "value": "1000000",
+        "valid_from": "2019-01-01"
+      },
+      {
+        "id": "imf.amount",
+        "label": "Minimum forfaitaire de perception : 0,5 % du CA avec plancher",
+        "expr": "max(round(ca_annuel * imf.rate, 0), imf.min)",
+        "depends_on": [
+          "imf.rate",
+          "imf.min"
+        ],
+        "valid_from": "2019-01-01"
+      },
+      {
+        "id": "is.due",
+        "label": "Impôt dû : le plus élevé de l'IS et du MFP",
+        "expr": "max(is.amount, imf.amount)",
+        "depends_on": [
+          "is.amount",
+          "imf.amount"
+        ],
+        "valid_from": "2019-01-01"
+      }
+    ]
+  },
+  "payroll": {
+    "variables": [
+      "salaire_brut",
+      "tva_collectee",
+      "tva_deductible"
+    ],
+    "rules": [
+      {
+        "id": "payroll.cnss.employee_rate",
+        "label": "CNSS part salariale 5,5 % (pension) — indicatif : à valider",
+        "value": "0.055",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employer_rate",
+        "label": "CNSS part patronale 16 % (pension 5,5 % + prestations familiales 7 % + risques professionnels 3,5 %) — indicatif : à valider",
+        "value": "0.16",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.plafond",
+        "label": "Plafond mensuel CNSS 600 000 (indicatif : à valider)",
+        "value": "600000",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.base",
+        "label": "Assiette CNSS plafonnée",
+        "expr": "min(salaire_brut, payroll.cnss.plafond)",
+        "depends_on": [
+          "payroll.cnss.plafond"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employee",
+        "label": "Cotisation CNSS salariale",
+        "expr": "round(payroll.cnss.base * payroll.cnss.employee_rate, 0)",
+        "depends_on": [
+          "payroll.cnss.base",
+          "payroll.cnss.employee_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employer",
+        "label": "Cotisation CNSS patronale",
+        "expr": "round(payroll.cnss.base * payroll.cnss.employer_rate, 0)",
+        "depends_on": [
+          "payroll.cnss.base",
+          "payroll.cnss.employer_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.iuts.abattement_rate",
+        "label": "Abattement forfaitaire pour frais professionnels 25 % (indicatif : à valider)",
+        "value": "0.25",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.iuts.abattement_plafond",
+        "label": "Plafond mensuel de l'abattement frais professionnels 50 000 (indicatif : à valider)",
+        "value": "50000",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.iuts.base",
+        "label": "Base imposable IUTS mensuelle : brut − CNSS salarié − abattement 25 % plafonné",
+        "expr": "max(salaire_brut - payroll.cnss.employee - min((salaire_brut - payroll.cnss.employee) * payroll.iuts.abattement_rate, payroll.iuts.abattement_plafond), 0)",
+        "depends_on": [
+          "payroll.cnss.employee",
+          "payroll.iuts.abattement_rate",
+          "payroll.iuts.abattement_plafond"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.its.bareme",
+        "label": "Barème progressif IUTS mensuel (indicatif : à valider)",
+        "value": {
+          "kind": "bareme",
+          "tranches": [
+            {
+              "upTo": "30000",
+              "rate": "0"
+            },
+            {
+              "upTo": "50000",
+              "rate": "0.121"
+            },
+            {
+              "upTo": "80000",
+              "rate": "0.139"
+            },
+            {
+              "upTo": "120000",
+              "rate": "0.157"
+            },
+            {
+              "upTo": "170000",
+              "rate": "0.184"
+            },
+            {
+              "upTo": "250000",
+              "rate": "0.217"
+            },
+            {
+              "rate": "0.25"
+            }
+          ]
+        },
+        "valid_from": "2000-01-01",
+        "source": "CGI Burkina Faso, impôt unique sur les traitements et salaires (IUTS) — barème indicatif à valider"
+      },
+      {
+        "id": "payroll.its",
+        "label": "Impôt unique sur les traitements et salaires (IUTS) — réduction pour charges de famille non modélisée",
+        "expr": "round(tranche(payroll.iuts.base, payroll.its.bareme), 0)",
+        "depends_on": [
+          "payroll.iuts.base",
+          "payroll.its.bareme"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.net",
+        "label": "Net à payer : brut − CNSS salarié − IUTS",
+        "expr": "salaire_brut - payroll.cnss.employee - payroll.its",
+        "depends_on": [
+          "payroll.cnss.employee",
+          "payroll.its"
+        ],
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "variables": [
+    "resultat_comptable",
+    "resultat_fiscal",
+    "ca_annuel",
+    "reintegrations",
+    "deductions"
+  ],
+  "dsf": {
+    "label": "Liasse fiscale et états financiers annuels (DGI Burkina Faso) — système normal",
+    "statements": [
+      "BILAN_ACTIF",
+      "BILAN_PASSIF",
+      "COMPTE_RESULTAT",
+      "TFT",
+      "NOTES"
+    ],
+    "adjustments": [
+      {
+        "id": "dsf.resultat_fiscal",
+        "label": "Résultat fiscal = résultat comptable + réintégrations − déductions",
+        "expr": "resultat_comptable + reintegrations - deductions",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "filing": [
+    {
+      "id": "dsf",
+      "label": "Dépôt des états financiers et de la déclaration de résultat",
+      "portal": "eSINTAX (DGI Burkina Faso)",
+      "url": "https://esintax.bf",
+      "format": "XLSX",
+      "api": false
+    },
+    {
+      "id": "vat",
+      "label": "Déclaration mensuelle de TVA",
+      "portal": "eSINTAX (DGI Burkina Faso)",
+      "url": "https://esintax.bf",
+      "format": "MANUAL",
+      "api": false
+    }
+  ],
+  "calendar": [
+    {
+      "id": "vat",
+      "label": "Déclaration et paiement de la TVA (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "20"
+    },
+    {
+      "id": "salaires",
+      "label": "Versement de l'IUTS retenu et des cotisations CNSS (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "20"
+    },
+    {
+      "id": "is_acompte",
+      "label": "Acomptes d'IS (indicatif : à valider)",
+      "frequency": "QUARTERLY",
+      "due": "20"
+    },
+    {
+      "id": "dsf",
+      "label": "Dépôt de la déclaration de résultat et des états financiers (indicatif : à valider)",
+      "frequency": "ANNUAL",
+      "due": "04-30"
+    }
+  ],
+  "chart_overrides": [
+    {
+      "number": "4471",
+      "label": "État, impôt unique sur les traitements et salaires (IUTS) retenu"
+    },
+    {
+      "number": "4311",
+      "label": "CNSS Burkina Faso, cotisations dues"
+    }
+  ],
+  "certified_invoice": {
+    "system": "Facture normalisée DGI (mentions et vignette obligatoires ; facture électronique en déploiement) — indicatif : à valider",
+    "mandatory": true,
+    "since": "2014-01-01"
+  },
+  "notes": [
+    "Pack en brouillon : tous les taux, barèmes, plafonds, comptes et échéances sont indicatifs (« à valider ») et doivent être confirmés contre le CGI burkinabè (loi 058-2017/AN et lois de finances ultérieures), les textes CNSS et la pratique de la DGI par un expert-comptable inscrit à l'ONECCA-BF avant toute utilisation.",
+    "Simplifications connues : IUTS calculé sans réduction pour charges de famille ; taux de risques professionnels CNSS fixé à 3,5 % (varie selon l'activité).",
+    "Le portail eSINTAX n'expose pas d'API publique connue : les fichiers sont générés puis déposés manuellement."
+  ]
+}

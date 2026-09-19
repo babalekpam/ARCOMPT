@@ -1,0 +1,335 @@
+{
+  "code": "tg",
+  "name": "Togo",
+  "version": "2025.1",
+  "status": "DRAFT",
+  "identity": {
+    "currency": "XOF",
+    "languages": [
+      "fr"
+    ],
+    "tax_ids": [
+      {
+        "code": "NIF",
+        "label": "Numéro d'identification fiscale (OTR, 7 chiffres suivis d'une lettre) — format indicatif : à valider",
+        "pattern": "^[0-9]{7}[A-Z]?$",
+        "required": true
+      },
+      {
+        "code": "RCCM",
+        "label": "Registre du commerce et du crédit mobilier",
+        "required": false
+      }
+    ],
+    "accounting_systems": [
+      "NORMAL",
+      "SMT"
+    ],
+    "smt_threshold_revenue": "60000000",
+    "social_security_body": "Caisse nationale de sécurité sociale (CNSS Togo)",
+    "tax_authority": "Office togolais des recettes (OTR) — Commissariat des impôts"
+  },
+  "vat": {
+    "rates": [
+      {
+        "code": "TVA18",
+        "label": "TVA taux normal 18 % (indicatif : à valider — CGI Togo)",
+        "rate": "0.18",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "code": "TVA10",
+        "label": "TVA taux réduit 10 % — hôtellerie et restauration (indicatif : à valider, LF 2021)",
+        "rate": "0.10",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2021-01-01"
+      },
+      {
+        "code": "EXO",
+        "label": "Exonéré",
+        "rate": "0",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      }
+    ],
+    "rules": [
+      {
+        "id": "vat.due",
+        "label": "TVA nette due (ou crédit si négatif)",
+        "expr": "tva_collectee - tva_deductible",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "taxes": {
+    "rules": [
+      {
+        "id": "is.rate",
+        "label": "Taux de l'impôt sur les sociétés 27 % (indicatif : à valider)",
+        "value": "0.27",
+        "valid_from": "2019-01-01",
+        "source": "CGI Togo (loi de finances 2019 et suivantes) — à confirmer par l'expert-comptable référent"
+      },
+      {
+        "id": "is.amount",
+        "label": "Impôt sur les sociétés",
+        "expr": "round(max(resultat_fiscal, 0) * is.rate, 0)",
+        "depends_on": [
+          "is.rate"
+        ],
+        "valid_from": "2019-01-01"
+      },
+      {
+        "id": "imf.rate",
+        "label": "Impôt minimum forfaitaire, taux sur CA 1 % (indicatif : à valider)",
+        "value": "0.01",
+        "valid_from": "2019-01-01",
+        "source": "CGI Togo, IMF — à confirmer"
+      },
+      {
+        "id": "imf.min",
+        "label": "IMF plancher 50 000 (indicatif : à valider)",
+        "value": "50000",
+        "valid_from": "2019-01-01"
+      },
+      {
+        "id": "imf.amount",
+        "label": "Impôt minimum forfaitaire : 1 % du CA avec plancher",
+        "expr": "max(round(ca_annuel * imf.rate, 0), imf.min)",
+        "depends_on": [
+          "imf.rate",
+          "imf.min"
+        ],
+        "valid_from": "2019-01-01"
+      },
+      {
+        "id": "is.due",
+        "label": "Impôt dû : le plus élevé de l'IS et de l'IMF",
+        "expr": "max(is.amount, imf.amount)",
+        "depends_on": [
+          "is.amount",
+          "imf.amount"
+        ],
+        "valid_from": "2019-01-01"
+      }
+    ]
+  },
+  "payroll": {
+    "variables": [
+      "salaire_brut",
+      "tva_collectee",
+      "tva_deductible"
+    ],
+    "rules": [
+      {
+        "id": "payroll.cnss.employee_rate",
+        "label": "CNSS part salariale 4 % (pensions) — indicatif : à valider",
+        "value": "0.04",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employer_rate",
+        "label": "CNSS part patronale 17,5 % (pensions 12,5 % + prestations familiales 3 % + risques professionnels 2 %) — indicatif : à valider",
+        "value": "0.175",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.plafond",
+        "label": "Plafond mensuel CNSS : assiette non plafonnée selon nos informations, valeur sentinelle très élevée — indicatif : à valider",
+        "value": "999999999",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.base",
+        "label": "Assiette CNSS (plafonnée si un plafond est confirmé)",
+        "expr": "min(salaire_brut, payroll.cnss.plafond)",
+        "depends_on": [
+          "payroll.cnss.plafond"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employee",
+        "label": "Cotisation CNSS salariale",
+        "expr": "round(payroll.cnss.base * payroll.cnss.employee_rate, 0)",
+        "depends_on": [
+          "payroll.cnss.base",
+          "payroll.cnss.employee_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employer",
+        "label": "Cotisation CNSS patronale",
+        "expr": "round(payroll.cnss.base * payroll.cnss.employer_rate, 0)",
+        "depends_on": [
+          "payroll.cnss.base",
+          "payroll.cnss.employer_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.irpp.abattement_rate",
+        "label": "Abattement forfaitaire pour frais professionnels 28 % (indicatif : à valider)",
+        "value": "0.28",
+        "valid_from": "2021-01-01"
+      },
+      {
+        "id": "payroll.irpp.base",
+        "label": "Base imposable IRPP mensuelle : (brut − CNSS salarié) × (1 − abattement)",
+        "expr": "max((salaire_brut - payroll.cnss.employee) * (1 - payroll.irpp.abattement_rate), 0)",
+        "depends_on": [
+          "payroll.cnss.employee",
+          "payroll.irpp.abattement_rate"
+        ],
+        "valid_from": "2021-01-01"
+      },
+      {
+        "id": "payroll.its.bareme",
+        "label": "Barème progressif IRPP annuel sur salaires (indicatif : à valider)",
+        "value": {
+          "kind": "bareme",
+          "tranches": [
+            {
+              "upTo": "900000",
+              "rate": "0"
+            },
+            {
+              "upTo": "4000000",
+              "rate": "0.07"
+            },
+            {
+              "upTo": "6000000",
+              "rate": "0.15"
+            },
+            {
+              "upTo": "10000000",
+              "rate": "0.25"
+            },
+            {
+              "upTo": "15000000",
+              "rate": "0.30"
+            },
+            {
+              "rate": "0.35"
+            }
+          ]
+        },
+        "valid_from": "2021-01-01",
+        "source": "CGI Togo art. 137 (loi de finances 2021) — barème indicatif à valider"
+      },
+      {
+        "id": "payroll.its",
+        "label": "IRPP retenu à la source sur salaires (barème annuel appliqué à la base mensuelle × 12, ramené au mois ; charges de famille non modélisées)",
+        "expr": "round(tranche(payroll.irpp.base * 12, payroll.its.bareme) / 12, 0)",
+        "depends_on": [
+          "payroll.irpp.base",
+          "payroll.its.bareme"
+        ],
+        "valid_from": "2021-01-01"
+      },
+      {
+        "id": "payroll.net",
+        "label": "Net à payer : brut − CNSS salarié − IRPP",
+        "expr": "salaire_brut - payroll.cnss.employee - payroll.its",
+        "depends_on": [
+          "payroll.cnss.employee",
+          "payroll.its"
+        ],
+        "valid_from": "2021-01-01"
+      }
+    ]
+  },
+  "variables": [
+    "resultat_comptable",
+    "resultat_fiscal",
+    "ca_annuel",
+    "reintegrations",
+    "deductions"
+  ],
+  "dsf": {
+    "label": "Déclaration annuelle de résultat et états financiers (OTR) — système normal",
+    "statements": [
+      "BILAN_ACTIF",
+      "BILAN_PASSIF",
+      "COMPTE_RESULTAT",
+      "TFT",
+      "NOTES"
+    ],
+    "adjustments": [
+      {
+        "id": "dsf.resultat_fiscal",
+        "label": "Résultat fiscal = résultat comptable + réintégrations − déductions",
+        "expr": "resultat_comptable + reintegrations - deductions",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "filing": [
+    {
+      "id": "dsf",
+      "label": "Dépôt des états financiers et de la déclaration de résultat",
+      "portal": "OTR e-services (télédéclaration)",
+      "url": "https://eservices.otr.tg",
+      "format": "XLSX",
+      "api": false
+    },
+    {
+      "id": "vat",
+      "label": "Déclaration mensuelle de TVA",
+      "portal": "OTR e-services (télédéclaration)",
+      "url": "https://eservices.otr.tg",
+      "format": "MANUAL",
+      "api": false
+    }
+  ],
+  "calendar": [
+    {
+      "id": "vat",
+      "label": "Déclaration et paiement de la TVA (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "salaires",
+      "label": "Versement de l'IRPP retenu et des cotisations CNSS (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "is_acompte",
+      "label": "Acomptes d'IS (indicatif : à valider)",
+      "frequency": "QUARTERLY",
+      "due": "15"
+    },
+    {
+      "id": "dsf",
+      "label": "Dépôt de la déclaration de résultat et des états financiers (indicatif : à valider)",
+      "frequency": "ANNUAL",
+      "due": "04-30"
+    }
+  ],
+  "chart_overrides": [
+    {
+      "number": "4471",
+      "label": "État, IRPP retenu sur salaires"
+    },
+    {
+      "number": "4311",
+      "label": "CNSS Togo, cotisations dues"
+    }
+  ],
+  "certified_invoice": {
+    "system": "Facture électronique normalisée OTR (déploiement annoncé) — indicatif : à valider",
+    "mandatory": false
+  },
+  "notes": [
+    "Pack en brouillon : tous les taux, barèmes, plafonds, comptes et échéances sont indicatifs (« à valider ») et doivent être confirmés contre le CGI togolais, le Livre des procédures fiscales, les textes CNSS et la pratique de l'OTR par un expert-comptable inscrit à l'ONECCA-Togo avant toute utilisation.",
+    "Simplifications connues : IRPP calculé sans réduction pour charges de famille ; abattement frais professionnels et absence de plafond CNSS à confirmer.",
+    "Le portail OTR e-services n'expose pas d'API publique connue : les fichiers sont générés puis déposés manuellement."
+  ]
+}

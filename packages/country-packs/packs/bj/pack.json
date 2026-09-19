@@ -1,0 +1,319 @@
+{
+  "code": "bj",
+  "name": "Bénin",
+  "version": "2025.1",
+  "status": "DRAFT",
+  "identity": {
+    "currency": "XOF",
+    "languages": [
+      "fr"
+    ],
+    "tax_ids": [
+      {
+        "code": "IFU",
+        "label": "Identifiant fiscal unique (13 chiffres) — format indicatif : à valider",
+        "pattern": "^[0-9]{13}$",
+        "required": true
+      },
+      {
+        "code": "RCCM",
+        "label": "Registre du commerce et du crédit mobilier",
+        "required": false
+      }
+    ],
+    "accounting_systems": [
+      "NORMAL",
+      "SMT"
+    ],
+    "smt_threshold_revenue": "60000000",
+    "social_security_body": "Caisse nationale de sécurité sociale (CNSS Bénin)",
+    "tax_authority": "Direction générale des impôts (DGI Bénin)"
+  },
+  "vat": {
+    "rates": [
+      {
+        "code": "TVA18",
+        "label": "TVA taux normal 18 % (indicatif : à valider — CGI Bénin 2022)",
+        "rate": "0.18",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "code": "EXO",
+        "label": "Exonéré",
+        "rate": "0",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      }
+    ],
+    "rules": [
+      {
+        "id": "vat.due",
+        "label": "TVA nette due (ou crédit si négatif)",
+        "expr": "tva_collectee - tva_deductible",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "taxes": {
+    "rules": [
+      {
+        "id": "is.rate",
+        "label": "Taux de l'impôt sur les sociétés 30 % (droit commun ; 25 % pour certaines activités industrielles) — indicatif : à valider",
+        "value": "0.30",
+        "valid_from": "2022-01-01",
+        "source": "CGI Bénin 2022 (loi 2021-15) — à confirmer par l'expert-comptable référent"
+      },
+      {
+        "id": "is.amount",
+        "label": "Impôt sur les sociétés",
+        "expr": "round(max(resultat_fiscal, 0) * is.rate, 0)",
+        "depends_on": [
+          "is.rate"
+        ],
+        "valid_from": "2022-01-01"
+      },
+      {
+        "id": "imf.rate",
+        "label": "Impôt minimum, taux sur CA 1 % (indicatif : à valider)",
+        "value": "0.01",
+        "valid_from": "2022-01-01",
+        "source": "CGI Bénin 2022, impôt minimum — à confirmer"
+      },
+      {
+        "id": "imf.min",
+        "label": "Impôt minimum plancher 250 000 (indicatif : à valider)",
+        "value": "250000",
+        "valid_from": "2022-01-01"
+      },
+      {
+        "id": "imf.amount",
+        "label": "Impôt minimum : 1 % du CA avec plancher",
+        "expr": "max(round(ca_annuel * imf.rate, 0), imf.min)",
+        "depends_on": [
+          "imf.rate",
+          "imf.min"
+        ],
+        "valid_from": "2022-01-01"
+      },
+      {
+        "id": "is.due",
+        "label": "Impôt dû : le plus élevé de l'IS et de l'impôt minimum",
+        "expr": "max(is.amount, imf.amount)",
+        "depends_on": [
+          "is.amount",
+          "imf.amount"
+        ],
+        "valid_from": "2022-01-01"
+      }
+    ]
+  },
+  "payroll": {
+    "variables": [
+      "salaire_brut",
+      "tva_collectee",
+      "tva_deductible"
+    ],
+    "rules": [
+      {
+        "id": "payroll.cnss.employee_rate",
+        "label": "CNSS part salariale 3,6 % (pension) — indicatif : à valider",
+        "value": "0.036",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employer_rate",
+        "label": "CNSS part patronale 16,4 % (pension 6,4 % + prestations familiales 9 % + risques professionnels 1 %, ce dernier variant de 1 à 4 %) — indicatif : à valider",
+        "value": "0.164",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.plafond",
+        "label": "Plafond mensuel CNSS : assiette non plafonnée selon nos informations, valeur sentinelle très élevée — indicatif : à valider",
+        "value": "999999999",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.base",
+        "label": "Assiette CNSS (plafonnée si un plafond est confirmé)",
+        "expr": "min(salaire_brut, payroll.cnss.plafond)",
+        "depends_on": [
+          "payroll.cnss.plafond"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employee",
+        "label": "Cotisation CNSS salariale",
+        "expr": "round(payroll.cnss.base * payroll.cnss.employee_rate, 0)",
+        "depends_on": [
+          "payroll.cnss.base",
+          "payroll.cnss.employee_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employer",
+        "label": "Cotisation CNSS patronale",
+        "expr": "round(payroll.cnss.base * payroll.cnss.employer_rate, 0)",
+        "depends_on": [
+          "payroll.cnss.base",
+          "payroll.cnss.employer_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.its.base",
+        "label": "Base imposable ITS mensuelle : brut − CNSS salarié",
+        "expr": "max(salaire_brut - payroll.cnss.employee, 0)",
+        "depends_on": [
+          "payroll.cnss.employee"
+        ],
+        "valid_from": "2022-01-01"
+      },
+      {
+        "id": "payroll.its.bareme",
+        "label": "Barème progressif ITS mensuel (indicatif : à valider)",
+        "value": {
+          "kind": "bareme",
+          "tranches": [
+            {
+              "upTo": "60000",
+              "rate": "0"
+            },
+            {
+              "upTo": "150000",
+              "rate": "0.10"
+            },
+            {
+              "upTo": "250000",
+              "rate": "0.15"
+            },
+            {
+              "upTo": "500000",
+              "rate": "0.19"
+            },
+            {
+              "rate": "0.30"
+            }
+          ]
+        },
+        "valid_from": "2022-01-01",
+        "source": "CGI Bénin 2022, impôt sur les traitements et salaires — barème indicatif à valider"
+      },
+      {
+        "id": "payroll.its",
+        "label": "Impôt sur les traitements et salaires (réduction pour charges de famille non modélisée)",
+        "expr": "round(tranche(payroll.its.base, payroll.its.bareme), 0)",
+        "depends_on": [
+          "payroll.its.base",
+          "payroll.its.bareme"
+        ],
+        "valid_from": "2022-01-01"
+      },
+      {
+        "id": "payroll.net",
+        "label": "Net à payer : brut − CNSS salarié − ITS",
+        "expr": "salaire_brut - payroll.cnss.employee - payroll.its",
+        "depends_on": [
+          "payroll.cnss.employee",
+          "payroll.its"
+        ],
+        "valid_from": "2022-01-01"
+      }
+    ]
+  },
+  "variables": [
+    "resultat_comptable",
+    "resultat_fiscal",
+    "ca_annuel",
+    "reintegrations",
+    "deductions"
+  ],
+  "dsf": {
+    "label": "Liasse fiscale et états financiers (e-Bilan DGI Bénin) — système normal",
+    "statements": [
+      "BILAN_ACTIF",
+      "BILAN_PASSIF",
+      "COMPTE_RESULTAT",
+      "TFT",
+      "NOTES"
+    ],
+    "adjustments": [
+      {
+        "id": "dsf.resultat_fiscal",
+        "label": "Résultat fiscal = résultat comptable + réintégrations − déductions",
+        "expr": "resultat_comptable + reintegrations - deductions",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "filing": [
+    {
+      "id": "dsf",
+      "label": "Dépôt des états financiers (modèle e-Bilan)",
+      "portal": "e-Bilan (DGI Bénin)",
+      "url": "https://e-services.impots.bj",
+      "format": "XLSX",
+      "template": "e-bilan-syscohada",
+      "api": false
+    },
+    {
+      "id": "vat",
+      "label": "Déclaration mensuelle de TVA",
+      "portal": "e-services DGI Bénin",
+      "url": "https://e-services.impots.bj",
+      "format": "MANUAL",
+      "api": false
+    }
+  ],
+  "calendar": [
+    {
+      "id": "vat",
+      "label": "Déclaration et paiement de la TVA (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "10"
+    },
+    {
+      "id": "salaires",
+      "label": "Versement de l'ITS retenu et des cotisations CNSS (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "10"
+    },
+    {
+      "id": "is_acompte",
+      "label": "Acomptes d'IS (indicatif : à valider)",
+      "frequency": "QUARTERLY",
+      "due": "10"
+    },
+    {
+      "id": "dsf",
+      "label": "Dépôt de la déclaration de résultat et des états financiers via e-Bilan (indicatif : à valider)",
+      "frequency": "ANNUAL",
+      "due": "04-30"
+    }
+  ],
+  "chart_overrides": [
+    {
+      "number": "4471",
+      "label": "État, impôt sur les traitements et salaires (ITS) retenu"
+    },
+    {
+      "number": "4311",
+      "label": "CNSS Bénin, cotisations dues"
+    }
+  ],
+  "certified_invoice": {
+    "system": "MECeF / e-MECeF (machine électronique certifiée de facturation)",
+    "mandatory": true,
+    "connector": "mecef-bj",
+    "since": "2020-01-01"
+  },
+  "notes": [
+    "Pack en brouillon : tous les taux, barèmes, plafonds, comptes et échéances sont indicatifs (« à valider ») et doivent être confirmés contre le CGI béninois 2022 (loi 2021-15 et lois de finances ultérieures), les textes CNSS et la pratique de la DGI par un expert-comptable inscrit à l'OECCA-Bénin avant toute utilisation.",
+    "La facture normalisée MECeF est obligatoire pour les assujettis à la TVA : chaque facture doit être certifiée (numéro et code de sécurité) avant émission ; le connecteur mecef-bj est à implémenter.",
+    "Le dépôt e-Bilan n'expose pas d'API publique connue : le classeur est généré puis déposé manuellement."
+  ]
+}
