@@ -23,16 +23,19 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   const contentType = req.headers.get("content-type");
   if (contentType) headers["content-type"] = contentType;
 
-  const hasBody = req.method !== "GET" && req.method !== "DELETE";
+  // Le corps est relayé en flux, tel quel (octets), avec son content-type :
+  // indispensable pour les envois multipart (pièces, photos) que `req.text()`
+  // corromprait. `duplex: "half"` est exigé par undici pour un corps en flux.
+  const hasBody = req.method !== "GET" && req.method !== "DELETE" && req.body !== null;
   let upstream: Response;
   try {
     upstream = await fetch(target, {
       method: req.method,
       headers,
-      ...(hasBody ? { body: await req.text() } : {}),
+      ...(hasBody ? { body: req.body, duplex: "half" } : {}),
       cache: "no-store",
       redirect: "manual",
-    });
+    } as RequestInit);
   } catch {
     return NextResponse.json({ error: { code: "UPSTREAM_UNREACHABLE", message: `API injoignable (${config.apiUrl()})` } }, { status: 502 });
   }

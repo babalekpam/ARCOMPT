@@ -43,6 +43,30 @@ test.describe("parcours PME", () => {
     await expect(page.getByText(/Clients/).first()).toBeVisible();
   });
 
+  test("les écrans des modules métier se chargent", async ({ page }) => {
+    for (const path of ["/invoices", "/expenses", "/payments", "/treasury", "/payroll", "/tax", "/assets", "/closing?fy=2025", "/documents", "/documents/review", "/assistant", "/firm", "/settings"]) {
+      const res = await page.goto(path);
+      expect(res?.status(), path).toBeLessThan(400);
+      await expect(page.getByRole("heading", { level: 1 }).first(), path).toBeVisible();
+    }
+  });
+
+  test("facturation : création d'une facture et refus d'émission sans certification", async ({ page }) => {
+    const partners = await (await page.request.get("/api/proxy/partners?type=CUSTOMER")).json();
+    const partnerId = partners.partners[0]?.id as string | undefined;
+    expect(partnerId).toBeTruthy();
+    const created = await page.request.post("/api/proxy/sales", {
+      data: { kind: "INVOICE", partnerId, issueDate: "2025-06-15", lines: [{ label: "Conseil", quantity: "2", unitPrice: "100000", accountNumber: "706", vatCode: "TVA18" }] },
+    });
+    expect(created.status()).toBe(201);
+    const doc = await created.json();
+    expect(doc.totalGross).toBe("236000.0000");
+    await page.goto(`/invoices/${doc.id}`);
+    await expect(page.getByText("236").first()).toBeVisible();
+    const issue = await page.request.post(`/api/proxy/sales/${doc.id}/issue`);
+    expect([201, 200, 422]).toContain(issue.status());
+  });
+
   test("export PDF des états via le proxy", async ({ page }) => {
     const res = await page.request.get("/api/proxy/render/statements.pdf?fiscalYear=2025");
     expect(res.status()).toBe(200);

@@ -13,6 +13,7 @@ import { documentsRoutes } from "./routes/documents.js";
 import { entriesRoutes } from "./routes/entries.js";
 import { invoicingRoutes } from "./routes/invoicing.js";
 import { packsRoutes } from "./routes/packs.js";
+import { partnersRoutes } from "./routes/partners.js";
 import { payrollRoutes } from "./routes/payroll.js";
 import { portalRoutes } from "./routes/portal.js";
 import { publicWebhookRoutes } from "./routes/public-webhooks.js";
@@ -21,6 +22,7 @@ import { statementsRoutes } from "./routes/statements.js";
 import { taxRoutes } from "./routes/tax.js";
 import { treasuryRoutes } from "./routes/treasury.js";
 import { whatsappRoutes } from "./routes/whatsapp.js";
+import { whatsappLinkRoutes } from "./routes/whatsapp-link.js";
 
 export interface AppDeps {
   /** Fabrique un moteur comptable pour le contexte courant (adaptateur mémoire ou PostgreSQL). */
@@ -55,6 +57,8 @@ export function createApp(deps: AppDeps) {
   });
   api.route("/entries", entriesRoutes(deps));
   api.route("/accounts", accountsRoutes(deps));
+  api.route("/partners", partnersRoutes(deps));
+  api.route("/whatsapp", whatsappLinkRoutes(deps));
   api.route("/statements", statementsRoutes(deps));
   api.route("/packs", packsRoutes());
   api.route("/render", renderRoutes(deps));

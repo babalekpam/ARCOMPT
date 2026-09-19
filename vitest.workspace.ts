@@ -21,5 +21,5 @@ export default defineWorkspace([
   { test: { name: "portal", root: "packages/portal", include: ["src/**/*.test.ts"], testTimeout: 60000 } },
   { test: { name: "whatsapp", root: "packages/whatsapp", include: ["src/**/*.test.ts"], testTimeout: 60000 } },
   { test: { name: "api", root: "apps/api", include: ["src/**/*.test.ts"] } },
-  { test: { name: "web", root: "apps/web", include: ["**/*.test.ts"], exclude: ["**/node_modules/**", "**/.next/**"] } },
+  "apps/web/vitest.config.ts",
 ]);
