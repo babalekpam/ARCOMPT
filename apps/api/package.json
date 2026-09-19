@@ -9,18 +9,34 @@
     "start": "tsx src/server.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "worker": "tsx src/worker.ts"
   },
   "dependencies": {
+    "@arcompt/assets": "workspace:*",
+    "@arcompt/closing": "workspace:*",
     "@arcompt/country-packs": "workspace:*",
     "@arcompt/db": "workspace:*",
+    "@arcompt/documents": "workspace:*",
+    "@arcompt/invoicing": "workspace:*",
+    "@arcompt/jobs": "workspace:*",
     "@arcompt/ledger": "workspace:*",
+    "@arcompt/payroll": "workspace:*",
+    "@arcompt/portal": "workspace:*",
+    "@arcompt/posting": "workspace:*",
+    "@arcompt/render": "workspace:*",
     "@arcompt/statements": "workspace:*",
+    "@arcompt/storage": "workspace:*",
+    "@arcompt/tax": "workspace:*",
+    "@arcompt/treasury": "workspace:*",
+    "@arcompt/whatsapp": "workspace:*",
     "@hono/node-server": "^1.13.7",
     "hono": "^4.6.14",
     "jose": "^5.9.6",
     "postgres": "^3.4.5",
     "zod": "^3.24.1"
   },
-  "devDependencies": { "tsx": "^4.19.2" }
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
 }

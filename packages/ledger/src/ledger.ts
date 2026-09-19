@@ -214,6 +214,11 @@ export class Ledger {
     };
   }
 
+  /** Écritures validées d'un exercice (grand livre), éventuellement limitées à un compte ou préfixe de compte. */
+  async listEntries(tenantId: Id, opts: { fiscalYearCode: string; accountNumber?: string }): Promise<JournalEntry[]> {
+    return this.store.listEntries(tenantId, opts);
+  }
+
   /** Vérifie l'intégrité de la chaîne de hash d'un journal. */
   async verifyChain(tenantId: Id, journalCode: string): Promise<{ ok: boolean; brokenAt?: Id; checked: number }> {
     const journal = await this.store.getJournalByCode(tenantId, journalCode);

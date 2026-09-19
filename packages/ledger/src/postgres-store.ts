@@ -206,6 +206,23 @@ export class PostgresStore implements LedgerStore {
     });
   }
 
+  async listEntries(tenantId: Id, opts: { fiscalYearCode: string; accountNumber?: string }): Promise<JournalEntry[]> {
+    return this.tx(tenantId, async (tx) => {
+      // Filtre par préfixe de compte : une écriture est retenue si l'une de ses lignes touche le compte.
+      const prefix = opts.accountNumber ? `${opts.accountNumber}%` : null;
+      const rows = await tx`${entrySelect(tx)}
+        JOIN fiscal_year f ON f.id = e.fiscal_year_id
+       WHERE e.tenant_id = ${tenantId} AND e.status = 'VALIDATED' AND f.code = ${opts.fiscalYearCode}
+         AND (${prefix}::text IS NULL OR EXISTS (
+               SELECT 1 FROM journal_line l JOIN account a ON a.id = l.account_id
+                WHERE l.entry_id = e.id AND a.number LIKE ${prefix}))
+       ORDER BY e.entry_date, j.code, e.number`;
+      const out: JournalEntry[] = [];
+      for (const r of rows) out.push(await hydrate(tx, r));
+      return out;
+    });
+  }
+
   async setPeriodStatus(tenantId: Id, periodId: Id, status: Period["status"], _actor: Actor): Promise<void> {
     await this.tx(tenantId, async (tx) => {
       await tx`UPDATE period SET status = ${status} WHERE tenant_id = ${tenantId} AND id = ${periodId}`;

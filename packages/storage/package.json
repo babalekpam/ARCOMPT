@@ -1,0 +1,21 @@
+{
+  "name": "@arcompt/storage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Stockage de fichiers : système de fichiers local en développement, Cloudflare R2 (S3) en production.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.24.1",
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@aws-sdk/s3-request-presigner": "^3.700.0"
+  }
+}

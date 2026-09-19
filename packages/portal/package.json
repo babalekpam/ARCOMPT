@@ -1,0 +1,20 @@
+{
+  "name": "@arcompt/portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portail cabinets : organisation, dossiers, membres et rôles, invitations, tableau de bord multi-dossiers, file de revue, commentaires, demandes de pièces, dépôts, tarification cabinet et marque blanche.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": {
+    "@arcompt/closing": "workspace:*",
+    "@arcompt/country-packs": "workspace:*",
+    "@arcompt/db": "workspace:*",
+    "@arcompt/documents": "workspace:*",
+    "@arcompt/ledger": "workspace:*",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1"
+  }
+}

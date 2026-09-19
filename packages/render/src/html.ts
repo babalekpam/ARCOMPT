@@ -1,0 +1,194 @@
+import { Money } from "@arcompt/ledger";
+import { t, type LabelKey } from "./i18n.js";
+import type { Amount, CompanyHeader, Locale, RenderOptions } from "./views.js";
+
+/**
+ * Briques communes des gabarits HTML : échappement, mise en forme des
+ * montants et des dates, en-tête d'entreprise, squelette de document et
+ * feuille de style d'impression A4.
+ */
+
+export function esc(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return String(value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
+}
+
+export function money(a: Amount): Money {
+  return Money.parse(a);
+}
+
+export interface FmtOptions {
+  /** Affichage du zéro : tiret (états officiels) ou « 0 ». */
+  zero?: "dash" | "zero";
+  /** Négatifs : signe moins typographique « − » ou parenthèses. */
+  negative?: "minus" | "parentheses";
+}
+
+/** Montant formaté via Money.format (séparateur de milliers, décimales de la devise). */
+export function fmt(a: Amount | undefined, currency: string, opts: FmtOptions = {}): string {
+  if (a === undefined) return "";
+  const m = money(a);
+  if (m.isZero()) return opts.zero === "zero" ? Money.zero().format(currency) : "–";
+  const abs = m.abs().format(currency);
+  if (!m.isNegative()) return abs;
+  return opts.negative === "parentheses" ? `(${abs})` : `−${abs}`;
+}
+
+/** Solde avec sens : « 1 234 D » (débiteur) ou « 1 234 C » (créditeur). */
+export function fmtDC(a: Amount, currency: string): string {
+  const m = money(a);
+  if (m.isZero()) return "–";
+  return `${m.abs().format(currency)} ${m.isNegative() ? "C" : "D"}`;
+}
+
+/** Date ISO → « 31/12/2025 » (fr) ou « 2025-12-31 » (en) ; toute autre chaîne est rendue telle quelle. */
+export function fmtDate(iso: string | undefined | null, locale: Locale): string {
+  if (!iso) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  return locale === "fr" ? `${m[3]}/${m[2]}/${m[1]}` : `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+export function fmtDateTime(iso: string, locale: Locale): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const date = fmtDate(d.toISOString(), locale);
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${date} ${hh}:${mm} UTC`;
+}
+
+/** Contexte de rendu partagé par un document. */
+export interface Ctx {
+  locale: Locale;
+  currency: string;
+  company: CompanyHeader | undefined;
+  generatedAt: string;
+  watermark: string | undefined;
+  /** Raccourci de traduction. */
+  L: (key: LabelKey) => string;
+}
+
+export function makeCtx(opts: RenderOptions, currency: string): Ctx {
+  const locale = opts.locale ?? "fr";
+  return {
+    locale,
+    currency,
+    company: opts.company,
+    generatedAt: opts.generatedAt ?? new Date().toISOString(),
+    watermark: opts.watermark,
+    L: (key) => t(locale, key),
+  };
+}
+
+/** Cellule numérique alignée à droite, classe `neg` pour les négatifs. */
+export function td(a: Amount | undefined, currency: string, opts: FmtOptions = {}, extraClass = ""): string {
+  const neg = a !== undefined && money(a).isNegative();
+  return `<td class="num${neg ? " neg" : ""}${extraClass ? " " + extraClass : ""}">${fmt(a, currency, opts)}</td>`;
+}
+
+/** Bloc d'identification de l'entreprise (nom, forme, identifiants, adresse). */
+export function companyBlock(company: CompanyHeader | undefined, ctx: Ctx, tagClass = "company"): string {
+  if (!company) return `<div class="${tagClass}"><div class="company-name">—</div></div>`;
+  const legal = [company.legalForm, company.capital !== undefined ? `${ctx.L("capital")} ${fmt(company.capital, ctx.currency, { zero: "zero" })} ${esc(ctx.currency)}` : ""].filter(Boolean).join(" · ");
+  const ids = (company.identifiers ?? []).map((i) => `<span class="id"><b>${esc(i.label)}</b> ${esc(i.value)}</span>`).join(" · ");
+  const address = [company.address, [company.city, company.country].filter(Boolean).join(", ")].filter(Boolean).join("<br>");
+  const contact = [company.phone, company.email].filter(Boolean).map(esc).join(" · ");
+  return `<div class="${tagClass}">
+    ${company.logoDataUri ? `<img class="logo" src="${esc(company.logoDataUri)}" alt="">` : ""}
+    <div class="company-name">${esc(company.name)}</div>
+    ${legal ? `<div class="small">${esc(legal)}</div>` : ""}
+    ${ids ? `<div class="small ids">${ids}</div>` : ""}
+    ${address ? `<div class="small">${address}</div>` : ""}
+    ${contact ? `<div class="small">${contact}</div>` : ""}
+  </div>`;
+}
+
+/** En-tête répété en haut de chaque page (section `.page`). */
+export function pageHeader(ctx: Ctx, title: string, meta: string[]): string {
+  return `<header class="doc-header">
+    ${companyBlock(ctx.company, ctx)}
+    <div class="meta">
+      <div class="doc-title">${esc(title)}</div>
+      ${meta.map((m) => `<div>${m}</div>`).join("")}
+    </div>
+  </header>`;
+}
+
+export function pageFooter(ctx: Ctx): string {
+  return `<footer class="doc-footer">${esc(ctx.L("generatedOn"))} ${esc(fmtDateTime(ctx.generatedAt, ctx.locale))} · ARCOMPT</footer>`;
+}
+
+/** Document HTML complet : squelette, style d'impression, filigrane éventuel. */
+export function layout(ctx: Ctx, title: string, body: string): string {
+  return `<!DOCTYPE html>
+<html lang="${ctx.locale}">
+<head>
+<meta charset="utf-8">
+<title>${esc(title)}</title>
+<style>${CSS}</style>
+</head>
+<body>
+${ctx.watermark ? `<div class="watermark">${esc(ctx.watermark)}</div>` : ""}
+${body}
+</body>
+</html>`;
+}
+
+export const CSS = `
+@page { size: A4 portrait; margin: 12mm 11mm 14mm 11mm; }
+@page landscape { size: A4 landscape; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif; font-size: 9pt; color: #111; line-height: 1.3; }
+.page { page-break-after: always; break-after: page; position: relative; }
+.page:last-of-type { page-break-after: auto; break-after: auto; }
+.page.landscape { page: landscape; }
+.doc-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; margin-bottom: 10px; gap: 12px; }
+.company-name { font-weight: 700; font-size: 12pt; color: #1a3a5c; }
+.logo { max-height: 42px; max-width: 120px; display: block; margin-bottom: 4px; }
+.meta { text-align: right; font-size: 8.5pt; color: #333; min-width: 40%; }
+.doc-title { font-weight: 700; font-size: 11pt; color: #1a3a5c; text-transform: uppercase; letter-spacing: .04em; }
+.doc-footer { margin-top: 10px; padding-top: 4px; border-top: 1px solid #bbb; font-size: 7.5pt; color: #666; text-align: right; }
+h1 { font-size: 14pt; text-transform: uppercase; margin: 6px 0 4px; color: #1a3a5c; letter-spacing: .04em; }
+h2 { font-size: 11pt; margin: 12px 0 4px; color: #1a3a5c; }
+h3 { font-size: 10pt; margin: 10px 0 3px; }
+.small { font-size: 8pt; color: #444; }
+.ids .id { margin-right: 4px; }
+.muted { color: #666; }
+table.fin { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+table.fin th, table.fin td { border: 1px solid #8a8a8a; padding: 2.5px 5px; vertical-align: top; }
+table.fin th { background: #e8eef5; font-weight: 600; text-align: center; font-size: 8.5pt; }
+table.fin td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.fin td.neg { color: #7a0000; }
+table.fin td.code { width: 3em; text-align: center; font-family: "DejaVu Sans Mono", Menlo, monospace; font-size: 8pt; color: #333; }
+table.fin td.note { width: 3.2em; text-align: center; color: #555; font-size: 8pt; }
+table.fin tr.subtotal td { font-weight: 600; background: #f3f6fa; }
+table.fin tr.total td { font-weight: 700; background: #dde6f0; border-top: 2px solid #1a3a5c; }
+table.fin tr.header td { font-weight: 700; text-transform: uppercase; background: #fafafa; }
+table.fin tr.grand td { font-weight: 700; background: #c9d7e6; }
+table.kv { border-collapse: collapse; }
+table.kv td { padding: 1px 6px 1px 0; vertical-align: top; }
+table.kv td.k { color: #555; white-space: nowrap; }
+.box { border: 1px solid #8a8a8a; padding: 6px 8px; border-radius: 2px; }
+.row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; }
+.col { flex: 1; }
+.banner { border: 2px dashed #b00020; color: #b00020; font-weight: 700; padding: 5px 8px; text-align: center; text-transform: uppercase; margin: 6px 0; letter-spacing: .06em; }
+.ok { color: #157347; font-weight: 700; }
+.ko { color: #b00020; font-weight: 700; }
+.badge { display: inline-block; padding: 0 6px; border-radius: 3px; font-size: 8pt; font-weight: 700; }
+.badge.ok { background: #d9f2e3; color: #0f5132; }
+.badge.ko { background: #f8d7da; color: #842029; }
+.badge.blocking { background: #ffe5b4; color: #7a4100; }
+.badge.warning { background: #e2e3e5; color: #41464b; }
+section.note { break-inside: avoid; margin-bottom: 12px; }
+section.account { break-inside: avoid-page; margin-bottom: 10px; }
+.watermark { position: fixed; top: 40%; left: 10%; right: 10%; text-align: center; font-size: 64pt; color: rgba(160, 0, 0, .12); transform: rotate(-24deg); font-weight: 800; letter-spacing: .1em; pointer-events: none; z-index: 0; }
+.total-box { border: 2px solid #1a3a5c; padding: 6px 10px; font-size: 11pt; font-weight: 700; background: #dde6f0; text-align: right; }
+.qr { width: 88px; height: 88px; border: 1px solid #444; display: flex; align-items: center; justify-content: center; font-size: 8pt; color: #666; text-align: center; padding: 4px; word-break: break-all; }
+.qr img { width: 100%; height: 100%; }
+ul.legal { font-size: 7.5pt; color: #444; padding-left: 14px; margin: 4px 0; }
+ol.outline { margin: 4px 0 4px 18px; }
+.right { text-align: right; }
+.center { text-align: center; }
+`;

@@ -8,3 +8,4 @@ export * from "./validate.js";
 export * from "./ledger.js";
 export * from "./balance-import.js";
 export * from "./postgres-store.js";
+export * from "./anchoring.js";

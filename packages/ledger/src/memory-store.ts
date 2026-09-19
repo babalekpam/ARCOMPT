@@ -192,6 +192,17 @@ export class MemoryStore implements LedgerStore {
       .map(clone);
   }
 
+  async listEntries(tenantId: Id, opts: { fiscalYearCode: string; accountNumber?: string }): Promise<JournalEntry[]> {
+    const fy = await this.getFiscalYearByCode(tenantId, opts.fiscalYearCode);
+    if (!fy) return [];
+    const prefix = opts.accountNumber;
+    return [...this.entries.values()]
+      .filter((e) => e.tenantId === tenantId && e.fiscalYearId === fy.id && e.status === "VALIDATED")
+      .filter((e) => !prefix || e.lines.some((l) => l.accountNumber.startsWith(prefix)))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.journalCode.localeCompare(b.journalCode) || (a.number ?? 0) - (b.number ?? 0))
+      .map(clone);
+  }
+
   async setPeriodStatus(tenantId: Id, periodId: Id, status: Period["status"], _actor: Actor): Promise<void> {
     const p = this.periods.get(periodId);
     if (!p || p.tenantId !== tenantId) throw new LedgerError("NO_OPEN_PERIOD", "Période introuvable");

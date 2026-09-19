@@ -2,7 +2,7 @@ ARCOMPT
 
 La comptabilité intelligente des PME de l'espace OHADA. ARCOMPT permet à une PME de facturer, encaisser, payer ses salariés et déclarer ses impôts, puis produit automatiquement ses états financiers conformes au SYSCOHADA révisé : bilan, compte de résultat, tableau des flux de trésorerie, notes annexes et liasse fiscale (DSF).
 
-Statut : phase 0 — fondations livrées (monorepo, schéma PostgreSQL avec invariants et RLS, plan de comptes SYSCOHADA, moteur comptable, import de balance) et moteur d'états de la phase 1 (bilan, compte de résultat, TFT, notes, contrôles). Les modules métier, le portail cabinets et les canaux WhatsApp / mobile money arrivent dans les phases suivantes.
+Statut : phases 0 à 3 livrées côté serveur — moteur comptable avec invariants en base, états financiers et rendu PDF/Excel, facturation, achats, trésorerie et rapprochement, paie chiffrée, immobilisations, fiscalité et DSF, clôture et circuit de visa, capture IA avec file de revue, WhatsApp, portail cabinets, huit packs pays en brouillon. Le web couvre la fondation (auth, hors ligne, tableau de bord, écritures, balance, états) ; les écrans des modules métier sont en cours.
 
 Pourquoi ARCOMPT
 Conforme OHADA par construction. Plan de comptes SYSCOHADA, systèmes Normal et SMT, contrôles de cohérence bloquants (actif = passif, résultat bilan = résultat CR, TFT = variation de trésorerie).
@@ -13,14 +13,15 @@ Pensé pour le terrain. PWA mobile, tolérante aux coupures réseau, prix en FCF
 Portail cabinets. Vue multi-dossiers, file de revue, circuit de visa de l'expert-comptable.
 Fonctionnalités
 Module	Contenu	Phase
-Moteur comptable	Grand livre en partie double, journaux, exercices, inaltérabilité, piste d'audit	0
-États financiers	Bilan, compte de résultat, TFT, notes annexes, PDF officiel, import de balance	1
-Portail cabinets	Multi-dossiers, révision, visa, dépôt	1
-Facturation et dépenses	Devis, factures, avoirs, relances, capture de pièces par IA	2
-Trésorerie	Banque, caisse, mobile money, rapprochement, prévision	2
-Paie	Bulletins, cotisations sociales par pays, livre de paie	3
-Fiscalité	TVA, retenues, acomptes, DSF, facture certifiée (FNE, MECeF…)	3
-Assistant IA	Questions en langage naturel, alertes, explication des états	3
+Moteur comptable	Grand livre en partie double, journaux, exercices, inaltérabilité, piste d'audit, ancrage Merkle	Livré
+États financiers	Bilan, compte de résultat, TFT, notes annexes, PDF et Excel, import de balance	Livré
+Portail cabinets	Multi-dossiers, file de revue, commentaires, visa, dépôt, facturation cabinet, marque blanche	Livré (API)
+Facturation et dépenses	Devis, factures, avoirs, relances, règlements, mobile money, capture de pièces par IA	Livré (API)
+Trésorerie	Banque, caisse, mobile money, import de relevés, rapprochement, prévision	Livré (API)
+Paie	Bulletins par pack pays, cotisations, livre de paie, déclarations, chiffrement	Livré (API)
+Fiscalité	TVA, retenues, acomptes, DSF Excel, calendrier, facture certifiée (connecteur)	Livré (API)
+Assistant IA	Questions en langage naturel sur outils typés, anomalies, WhatsApp	Livré (API)
+Web	Fondation PWA, tableau de bord, écritures, balance, états ; écrans des modules	En cours
 Stack
 Brique	Choix
 Front	Next.js (React) en PWA, Tailwind CSS, FR / EN
@@ -93,6 +94,7 @@ arcompt/
 Commandes
 Commande	Effet
 pnpm dev	Lance web + API en mode développement
+pnpm worker	Lance le processus de tâches de fond (extraction IA, WhatsApp, relances)
 pnpm build	Build de production
 pnpm test	Tests unitaires
 pnpm test:statements	Non-régression des états sur les balances de référence
@@ -120,7 +122,7 @@ Phase	Livrable
 3. Paie et fiscalité	Paie par pays, déclarations, DSF, facture certifiée, assistant
 4. Extension	Nouveaux pays, zone CEMAC, stocks, consolidation, API publique
 
-Détails : docs/ARCHITECTURE.md.
+Détails : docs/ARCHITECTURE.md, docs/SECURITY.md, docs/MODULES.md, docs/country-packs/README.md.
 
 Avertissement
 

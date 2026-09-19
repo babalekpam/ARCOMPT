@@ -207,3 +207,22 @@ describe("Import de balance", () => {
     expect(tb.totalDebit.toString()).toBe("8500000.0000");
   });
 });
+
+describe("Ledger — listEntries (grand livre)", () => {
+  it("renvoie les écritures validées de l'exercice, triées, filtrables par préfixe de compte", async () => {
+    const second = await ledger.post(actor, sale({ date: "2025-01-05", reference: "FAC-000", lines: [{ accountNumber: "521", debit: "50000" }, { accountNumber: "101", credit: "50000" }] }));
+    const first = await ledger.post(actor, sale());
+    const draft = await ledger.createDraft(actor, sale({ date: "2025-04-01" }));
+    await ledger.post(other, sale());
+
+    const all = await ledger.listEntries(TENANT, { fiscalYearCode: "2025" });
+    expect(all.map((e) => e.id)).toEqual([second.id, first.id]); // tri par date, brouillon exclu, autre dossier exclu
+    expect(all.some((e) => e.id === draft.id)).toBe(false);
+
+    const clients = await ledger.listEntries(TENANT, { fiscalYearCode: "2025", accountNumber: "41" });
+    expect(clients.map((e) => e.id)).toEqual([first.id]);
+
+    expect(await ledger.listEntries(TENANT, { fiscalYearCode: "2024" })).toEqual([]);
+    expect(await store.listEntries(OTHER, { fiscalYearCode: "2025" })).toHaveLength(1);
+  });
+});

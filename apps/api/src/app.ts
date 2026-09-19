@@ -6,9 +6,21 @@ import { LedgerError, type Ledger } from "@arcompt/ledger";
 import { authMiddleware, type AuthOptions } from "./auth.js";
 import { rateLimit, securityHeaders } from "./security.js";
 import { BurstDetector, raiseSecurityAlert } from "./telemetry.js";
+import { accountsRoutes } from "./routes/accounts.js";
+import { assetsRoutes } from "./routes/assets.js";
+import { closingRoutes } from "./routes/closing.js";
+import { documentsRoutes } from "./routes/documents.js";
 import { entriesRoutes } from "./routes/entries.js";
-import { statementsRoutes } from "./routes/statements.js";
+import { invoicingRoutes } from "./routes/invoicing.js";
 import { packsRoutes } from "./routes/packs.js";
+import { payrollRoutes } from "./routes/payroll.js";
+import { portalRoutes } from "./routes/portal.js";
+import { publicWebhookRoutes } from "./routes/public-webhooks.js";
+import { renderRoutes } from "./routes/render.js";
+import { statementsRoutes } from "./routes/statements.js";
+import { taxRoutes } from "./routes/tax.js";
+import { treasuryRoutes } from "./routes/treasury.js";
+import { whatsappRoutes } from "./routes/whatsapp.js";
 
 export interface AppDeps {
   /** Fabrique un moteur comptable pour le contexte courant (adaptateur mémoire ou PostgreSQL). */
@@ -42,9 +54,23 @@ export function createApp(deps: AppDeps) {
     }
   });
   api.route("/entries", entriesRoutes(deps));
+  api.route("/accounts", accountsRoutes(deps));
   api.route("/statements", statementsRoutes(deps));
   api.route("/packs", packsRoutes());
+  api.route("/render", renderRoutes(deps));
+  api.route("/", invoicingRoutes(deps)); // /products, /sales, /purchases, /payments, /receivables, /payables, /dunning
+  api.route("/treasury", treasuryRoutes(deps));
+  api.route("/payroll", payrollRoutes(deps));
+  api.route("/tax", taxRoutes(deps));
+  api.route("/assets", assetsRoutes(deps));
+  api.route("/closing", closingRoutes(deps));
+  api.route("/", documentsRoutes(deps)); // /documents, /proposals, /assistant, /anomalies
+  api.route("/portal", portalRoutes(deps));
   app.route("/v1", api);
+
+  // Canaux entrants sans jeton : WhatsApp (signature Meta) et webhooks de paiement (HMAC + anti-rejeu).
+  app.route("/whatsapp", whatsappRoutes(deps));
+  app.route("/webhooks", publicWebhookRoutes(deps));
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) return err.getResponse();

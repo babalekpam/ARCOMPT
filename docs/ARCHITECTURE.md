@@ -251,15 +251,25 @@ L'exercice se verrouille seulement une fois l'accusé de dépôt joint au dossie
 
 ## État d'implémentation
 
-| Bloc | Fichiers | Statut |
+| Bloc | Paquets et fichiers | Statut |
 | --- | --- | --- |
-| Monorepo, outillage | `package.json`, `pnpm-workspace.yaml`, `vitest.workspace.ts`, `.github/workflows/ci.yml` | Fait |
-| Schéma et invariants | `packages/db/migrations/*.sql`, `packages/db/src/db.test.ts` | Fait, testé contre PostgreSQL |
+| Monorepo, outillage, CI | `package.json`, `vitest.workspace.ts`, `.github/workflows/ci.yml`, `infra/` | Fait |
+| Schéma et invariants | `packages/db/migrations/0001…0008`, tests `db` | Fait, testé contre PostgreSQL (RLS, triggers, chaînage) |
 | Plan de comptes SYSCOHADA | `packages/db/src/chart.ts` | Fait (indicatif) |
-| Moteur comptable | `packages/ledger` | Fait : brouillon/validation, contrepassation, chaînage, balance, import |
-| Moteur d'états | `packages/statements` | Fait : bilan, CR, TFT, 16 notes, contrôles, fixture de référence |
-| Règles et packs pays | `packages/rules`, `packages/country-packs` | Fait : interpréteur, schéma, modèle, pack CI en brouillon |
-| Passerelle IA | `packages/ai-gateway` | Fait : schémas, garde-fous, journal, fournisseur Claude ; capture et assistant branchés en phase 2 |
-| API | `apps/api` | Fait : auth dev/OIDC, écritures, balance, états, packs |
-| Web | `apps/web` | Squelette Next.js + manifeste PWA |
-| Portail cabinets, modules métier, WhatsApp, PDF | — | Phases 1 à 3 |
+| Moteur comptable | `packages/ledger` | Fait : brouillon/validation, contrepassation, chaînage, balance, import, ancrage Merkle |
+| Moteur d'états | `packages/statements` | Fait : bilan, CR, TFT, notes, contrôles, fixture de référence |
+| Rendu PDF / Excel | `packages/render` | Fait : états, balance, grand livre, facture, bulletin, rapprochement ; Chromium + ExcelJS |
+| Règles et packs pays | `packages/rules`, `packages/country-packs` | Fait : 8 packs en brouillon (CI, SN, TG, BJ, BF, ML, NE, CM) |
+| Posting engine | `packages/posting` | Fait : modèles paramétrés pour tous les événements métier |
+| Facturation et achats | `packages/invoicing` | Fait : devis, factures, avoirs, numérotation légale, certification (connecteur), règlements avec séparation des tâches, liens et webhooks mobile money signés et idempotents, balances âgées, relances |
+| Trésorerie | `packages/treasury` | Fait : comptes, import CSV/SMS, rapprochement automatique borné, LLM sur ambiguïtés, caisse, prévision 13 semaines |
+| Paie | `packages/payroll` | Fait : salariés chiffrés (enveloppe, rotation), bulletins par pack, livre de paie, déclarations, écritures |
+| Immobilisations | `packages/assets` | Fait : plans linéaire/dégressif, dotations idempotentes, cessions, notes 3A/3C |
+| Fiscalité | `packages/tax` | Fait : TVA périodique et liquidation, acomptes IS/IMF, retenues, DSF Excel, calendrier |
+| Clôture et workflow | `packages/closing` | Fait : listes de contrôle, clôture bloquée par les contrôles, déverrouillage approuvé, circuit tenue → révision → états → visa → dépôt → verrouillé |
+| Pièces, IA, assistant | `packages/documents`, `packages/storage`, `packages/jobs` | Fait : capture, extraction, propositions en tampon, file de revue, mémoire des corrections, assistant à outils typés, anomalies |
+| WhatsApp | `packages/whatsapp` | Fait : webhook signé, photo → proposition avec boutons, dépenses par texte, vérification du numéro |
+| Portail cabinets | `packages/portal` | Fait : organisation, invitations, tableau de bord multi-dossiers, file de revue, commentaires, pièces manquantes, dépôts, facturation dégressive, marque blanche, accès administrateur notifié, break-glass |
+| API | `apps/api` | Fait : auth dev/OIDC, limitation de débit, en-têtes, télémétrie, tous les modules montés, webhooks publics, worker de tâches |
+| Web | `apps/web` | Fondation : auth Keycloak + dev, proxy, i18n FR/EN, PWA hors ligne chiffrée, tableau de bord, écritures, balance, états, plan de comptes, paramètres ; écrans des modules métier en seconde passe |
+| Mobile natif (Expo), vocal en langues locales | — | Phase 4 |

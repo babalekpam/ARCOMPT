@@ -1,0 +1,12 @@
+{
+  "name": "@arcompt/invoicing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Facturation et achats : devis, factures, avoirs, factures fournisseurs, notes de frais, règlements, relances, numérotation légale, facture certifiée.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": { "@arcompt/ledger": "workspace:*", "@arcompt/db": "workspace:*", "postgres": "^3.4.5", "zod": "^3.24.1", "@arcompt/posting": "workspace:*", "@arcompt/country-packs": "workspace:*" }
+}

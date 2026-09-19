@@ -1,0 +1,12 @@
+{
+  "name": "@arcompt/posting",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Posting engine : événements métier → écritures selon des modèles paramétrés.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": { "@arcompt/ledger": "workspace:*", "@arcompt/country-packs": "workspace:*", "zod": "^3.24.1" }
+}

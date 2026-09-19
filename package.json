@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "test:statements": "vitest run --project statements",
     "test:tenancy": "vitest run --project db",
+    "worker": "pnpm --filter @arcompt/api worker",
     "db:migrate": "pnpm --filter @arcompt/db migrate",
     "db:seed": "pnpm --filter @arcompt/db seed",
     "pack:validate": "pnpm --filter @arcompt/country-packs validate",

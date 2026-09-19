@@ -48,6 +48,8 @@ export interface LedgerStore {
   accountBalances(tenantId: Id, from: string, to: string): Promise<AccountBalance[]>;
   /** Écritures validées d'un journal dans l'ordre de numérotation (audit, vérification de chaîne). */
   listValidatedEntries(tenantId: Id, journalId: Id): Promise<JournalEntry[]>;
+  /** Écritures validées d'un exercice (grand livre), filtrables par compte ou préfixe de compte, triées par date puis numéro. */
+  listEntries(tenantId: Id, opts: { fiscalYearCode: string; accountNumber?: string }): Promise<JournalEntry[]>;
 
   setPeriodStatus(tenantId: Id, periodId: Id, status: Period["status"], actor: Actor): Promise<void>;
 
