@@ -2,7 +2,7 @@ ARCOMPT
 
 La comptabilité intelligente des PME de l'espace OHADA. ARCOMPT permet à une PME de facturer, encaisser, payer ses salariés et déclarer ses impôts, puis produit automatiquement ses états financiers conformes au SYSCOHADA révisé : bilan, compte de résultat, tableau des flux de trésorerie, notes annexes et liasse fiscale (DSF).
 
-Statut : phases 0 à 3 livrées côté serveur — moteur comptable avec invariants en base, états financiers et rendu PDF/Excel, facturation, achats, trésorerie et rapprochement, paie chiffrée, immobilisations, fiscalité et DSF, clôture et circuit de visa, capture IA avec file de revue, WhatsApp, portail cabinets, huit packs pays en brouillon. Le web couvre la fondation (auth, hors ligne, tableau de bord, écritures, balance, états) ; les écrans des modules métier sont en cours.
+Statut : phases 0 à 3 livrées côté serveur — moteur comptable avec invariants en base, états financiers et rendu PDF/Excel, facturation, achats, trésorerie et rapprochement, paie chiffrée, immobilisations, fiscalité et DSF, clôture et circuit de visa, capture IA avec file de revue, WhatsApp, portail cabinets, huit packs pays en brouillon. Le web couvre tous les modules (60 routes) avec une PWA hors ligne ; des tests de bout en bout dans Chromium vérifient le parcours PME.
 
 Pourquoi ARCOMPT
 Conforme OHADA par construction. Plan de comptes SYSCOHADA, systèmes Normal et SMT, contrôles de cohérence bloquants (actif = passif, résultat bilan = résultat CR, TFT = variation de trésorerie).
@@ -21,7 +21,7 @@ Trésorerie	Banque, caisse, mobile money, import de relevés, rapprochement, pr�
 Paie	Bulletins par pack pays, cotisations, livre de paie, déclarations, chiffrement	Livré (API)
 Fiscalité	TVA, retenues, acomptes, DSF Excel, calendrier, facture certifiée (connecteur)	Livré (API)
 Assistant IA	Questions en langage naturel sur outils typés, anomalies, WhatsApp	Livré (API)
-Web	Fondation PWA, tableau de bord, écritures, balance, états ; écrans des modules	En cours
+Web	PWA hors ligne, tableau de bord, écritures, états et écrans de tous les modules	Livré
 Stack
 Brique	Choix
 Front	Next.js (React) en PWA, Tailwind CSS, FR / EN
@@ -99,6 +99,7 @@ pnpm build	Build de production
 pnpm test	Tests unitaires
 pnpm test:statements	Non-régression des états sur les balances de référence
 pnpm test:tenancy	Vérifie qu'aucune donnée ne fuit entre dossiers (exige DATABASE_URL)
+pnpm test:e2e	Parcours navigateur (Chromium) contre l'API et le web sur une base peuplée
 pnpm db:migrate / pnpm db:seed	Schéma et données initiales
 pnpm pack:validate <pays>	Valide un pack pays contre son schéma
 pnpm lint / pnpm typecheck	Qualité du code

@@ -271,5 +271,6 @@ L'exercice se verrouille seulement une fois l'accusé de dépôt joint au dossie
 | WhatsApp | `packages/whatsapp` | Fait : webhook signé, photo → proposition avec boutons, dépenses par texte, vérification du numéro |
 | Portail cabinets | `packages/portal` | Fait : organisation, invitations, tableau de bord multi-dossiers, file de revue, commentaires, pièces manquantes, dépôts, facturation dégressive, marque blanche, accès administrateur notifié, break-glass |
 | API | `apps/api` | Fait : auth dev/OIDC, limitation de débit, en-têtes, télémétrie, tous les modules montés, webhooks publics, worker de tâches |
-| Web | `apps/web` | Fondation : auth Keycloak + dev, proxy, i18n FR/EN, PWA hors ligne chiffrée, tableau de bord, écritures, balance, états, plan de comptes, paramètres ; écrans des modules métier en seconde passe |
-| Mobile natif (Expo), vocal en langues locales | — | Phase 4 |
+| Web | `apps/web` | Fait : auth Keycloak + dev, proxy, i18n FR/EN, PWA hors ligne chiffrée, et les écrans de tous les modules (facturation, achats, règlements, trésorerie, paie, fiscalité, immobilisations, clôture, pièces et IA, assistant, portail cabinets) ; 60 routes |
+| Tests de bout en bout | `e2e/` | Fait : parcours PME dans Chromium (connexion, écrans, facture, PDF, refus d'écriture déséquilibrée), exécuté en CI |
+| Mobile natif (Expo), vocal en langues locales, connecteurs DGI et opérateurs réels | — | Phase 4 : les interfaces (certification, paiement, WhatsApp, ancrage) sont en place avec des simulateurs |
