@@ -1,0 +1,112 @@
+{
+  "realm": "arcompt",
+  "enabled": true,
+  "displayName": "ARCOMPT",
+  "registrationAllowed": false,
+  "bruteForceProtected": true,
+  "otpPolicyType": "totp",
+  "roles": {
+    "realm": [
+      { "name": "platform-admin", "description": "Administrateur de la plateforme" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "arcompt-web",
+      "name": "ARCOMPT Web",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "dev-web-secret-change-me",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "protocol": "openid-connect",
+      "defaultClientScopes": ["openid", "profile", "email", "arcompt-tenants"],
+      "attributes": { "post.logout.redirect.uris": "http://localhost:3000/*" }
+    },
+    {
+      "clientId": "arcompt-api",
+      "name": "ARCOMPT API",
+      "enabled": true,
+      "bearerOnly": true,
+      "protocol": "openid-connect"
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "arcompt-tenants",
+      "description": "Dossiers et rôles par dossier de l'utilisateur (claim tenants) et organisation (claim organization_id)",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "protocolMappers": [
+        {
+          "name": "tenants",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "tenants",
+            "claim.name": "tenants",
+            "jsonType.label": "JSON",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "organization_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "organization_id",
+            "claim.name": "organization_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": { "included.client.audience": "arcompt-api", "access.token.claim": "true" }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "comptable",
+      "email": "comptable@arcompt.local",
+      "firstName": "Aminata",
+      "lastName": "Comptable",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "comptable", "temporary": false }],
+      "attributes": {
+        "organization_id": ["00000000-0000-4000-8000-000000000001"],
+        "tenants": ["{\"00000000-0000-4000-8000-000000000010\":[\"ACCOUNTANT\",\"REVIEWER\"]}"]
+      }
+    },
+    {
+      "username": "dirigeant",
+      "email": "dirigeant@arcompt.local",
+      "firstName": "Kouamé",
+      "lastName": "Dirigeant",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "dirigeant", "temporary": false }],
+      "attributes": {
+        "organization_id": ["00000000-0000-4000-8000-000000000001"],
+        "tenants": ["{\"00000000-0000-4000-8000-000000000010\":[\"OWNER\"]}"]
+      }
+    }
+  ],
+  "requiredActions": [
+    { "alias": "CONFIGURE_TOTP", "name": "Configure OTP", "enabled": true, "defaultAction": false }
+  ]
+}

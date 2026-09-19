@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "hono/logger";
+import type { Sql } from "postgres";
 import { LedgerError, type Ledger } from "@arcompt/ledger";
 import { authMiddleware, type AuthOptions } from "./auth.js";
 import { entriesRoutes } from "./routes/entries.js";
@@ -10,6 +11,8 @@ import { packsRoutes } from "./routes/packs.js";
 export interface AppDeps {
   /** Fabrique un moteur comptable pour le contexte courant (adaptateur mémoire ou PostgreSQL). */
   ledgerFor: (ctx: { userId: string; tenantId: string; organizationId?: string }) => Ledger;
+  /** Connexion PostgreSQL (absente dans les tests API en mémoire) ; les modules l'utilisent via withTenant(). */
+  db?: Sql;
   auth: AuthOptions;
   quiet?: boolean;
 }

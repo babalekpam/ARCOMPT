@@ -9,6 +9,7 @@ const mode = (process.env.AUTH_MODE ?? "dev") as "dev" | "oidc";
 const db = createDb();
 
 const app = createApp({
+  db: db as unknown as Sql,
   auth: { mode, ...(process.env.KEYCLOAK_ISSUER ? { issuer: process.env.KEYCLOAK_ISSUER } : {}), ...(process.env.KEYCLOAK_CLIENT_ID ? { audience: process.env.KEYCLOAK_CLIENT_ID } : {}) },
   ledgerFor: (ctx) =>
     new Ledger(new PostgresStore(db as unknown as Sql, { userId: ctx.userId, ...(ctx.organizationId ? { organizationId: ctx.organizationId } : {}) }), {
