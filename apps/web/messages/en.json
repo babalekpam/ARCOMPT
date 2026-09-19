@@ -265,5 +265,7 @@
   "soon.body": "The \"{module}\" module arrives in a later release. Its entries will flow through the ledger, the single source of truth.",
   "soon.back": "Back to dashboard",
   "pwa.updateAvailable": "A new version is available.",
-  "pwa.reload": "Reload"
+  "pwa.reload": "Reload",
+  "nav.assets": "Fixed assets",
+  "nav.closing": "Closing"
 }

@@ -265,5 +265,7 @@
   "soon.body": "Le module « {module} » arrive dans une prochaine version. Les écritures qu'il produira passeront par le grand livre, seule source de vérité.",
   "soon.back": "Retour au tableau de bord",
   "pwa.updateAvailable": "Une nouvelle version est disponible.",
-  "pwa.reload": "Recharger"
+  "pwa.reload": "Recharger",
+  "nav.assets": "Immobilisations",
+  "nav.closing": "Clôture"
 }

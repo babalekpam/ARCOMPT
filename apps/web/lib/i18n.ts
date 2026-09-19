@@ -5,15 +5,37 @@
  * Ce module ne touche ni aux cookies ni à React : il sert côté serveur et côté
  * client. La lecture du cookie de langue est dans `lib/i18n-server.ts`.
  */
-import fr from "../messages/fr.json";
-import en from "../messages/en.json";
+import frBase from "../messages/fr.json";
+import enBase from "../messages/en.json";
+// Dictionnaires par module (écrans métier) : un fichier par module et par langue,
+// fusionnés ici pour que plusieurs modules puissent être développés en parallèle
+// sans se disputer un fichier unique.
+import frInvoicing from "../messages/modules/invoicing.fr.json";
+import enInvoicing from "../messages/modules/invoicing.en.json";
+import frTreasury from "../messages/modules/treasury.fr.json";
+import enTreasury from "../messages/modules/treasury.en.json";
+import frPayroll from "../messages/modules/payroll.fr.json";
+import enPayroll from "../messages/modules/payroll.en.json";
+import frTax from "../messages/modules/tax.fr.json";
+import enTax from "../messages/modules/tax.en.json";
+import frAssets from "../messages/modules/assets.fr.json";
+import enAssets from "../messages/modules/assets.en.json";
+import frClosing from "../messages/modules/closing.fr.json";
+import enClosing from "../messages/modules/closing.en.json";
+import frDocuments from "../messages/modules/documents.fr.json";
+import enDocuments from "../messages/modules/documents.en.json";
+import frFirm from "../messages/modules/firm.fr.json";
+import enFirm from "../messages/modules/firm.en.json";
+
+const fr: Record<string, string> = { ...frBase, ...frInvoicing, ...frTreasury, ...frPayroll, ...frTax, ...frAssets, ...frClosing, ...frDocuments, ...frFirm };
+const en: Record<string, string> = { ...enBase, ...enInvoicing, ...enTreasury, ...enPayroll, ...enTax, ...enAssets, ...enClosing, ...enDocuments, ...enFirm };
 
 export type Locale = "fr" | "en";
 export const LOCALES: Locale[] = ["fr", "en"];
 export const DEFAULT_LOCALE: Locale = "fr";
 
 export type Messages = Record<string, string>;
-export type MessageKey = keyof typeof fr;
+export type MessageKey = keyof typeof frBase;
 
 const dictionaries: Record<Locale, Messages> = { fr, en };
 

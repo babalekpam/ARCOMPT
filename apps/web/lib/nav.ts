@@ -9,21 +9,23 @@ export interface NavItem {
 export const MAIN_NAV: NavItem[] = [
   { href: "/", labelKey: "nav.dashboard", icon: "▦" },
   { href: "/entries", labelKey: "nav.entries", icon: "✎" },
+  { href: "/invoices", labelKey: "nav.invoices", icon: "▣" },
+  { href: "/expenses", labelKey: "nav.expenses", icon: "▧" },
+  { href: "/treasury", labelKey: "nav.treasury", icon: "◈" },
+  { href: "/payroll", labelKey: "nav.payroll", icon: "☺" },
+  { href: "/tax", labelKey: "nav.tax", icon: "％" },
+  { href: "/assets", labelKey: "nav.assets", icon: "▥" },
+  { href: "/closing", labelKey: "nav.closing", icon: "✔" },
+  { href: "/documents", labelKey: "nav.documents", icon: "✦" },
   { href: "/balance", labelKey: "nav.ledger", icon: "☰" },
   { href: "/statements", labelKey: "nav.statements", icon: "▤" },
   { href: "/accounts", labelKey: "nav.accounts", icon: "⌗" },
+  { href: "/firm", labelKey: "nav.firm", icon: "◫" },
   { href: "/settings", labelKey: "nav.settings", icon: "⚙" },
 ];
 
-export const SOON_NAV: NavItem[] = [
-  { href: "/soon/invoices", labelKey: "nav.invoices", icon: "▣", soon: true },
-  { href: "/soon/expenses", labelKey: "nav.expenses", icon: "▧", soon: true },
-  { href: "/soon/treasury", labelKey: "nav.treasury", icon: "◈", soon: true },
-  { href: "/soon/payroll", labelKey: "nav.payroll", icon: "☺", soon: true },
-  { href: "/soon/tax", labelKey: "nav.tax", icon: "％", soon: true },
-  { href: "/soon/documents", labelKey: "nav.documents", icon: "✦", soon: true },
-  { href: "/soon/firm", labelKey: "nav.firm", icon: "◫", soon: true },
-];
+/** Modules non encore livrés (aucun à ce stade ; conservé pour les phases suivantes). */
+export const SOON_NAV: NavItem[] = [];
 
 /** Éléments de la barre inférieure sur mobile (4 + « Plus »). */
 export const BOTTOM_NAV: NavItem[] = MAIN_NAV.slice(0, 4);

@@ -64,6 +64,19 @@ export function entriesRoutes(deps: AppDeps) {
     return c.body(null, 204);
   });
 
+  r.get("/", async (c) => {
+    const auth = c.get("auth");
+    const q = z.object({ fiscalYear: z.string(), account: z.string().optional(), limit: z.coerce.number().int().min(1).max(500).default(100) }).safeParse(c.req.query());
+    if (!q.success) return c.json({ error: { code: "VALIDATION", message: "fiscalYear requis" } }, 400);
+    const entries = await deps.ledgerFor(auth).listEntries(auth.tenantId, { fiscalYearCode: q.data.fiscalYear, ...(q.data.account ? { accountNumber: q.data.account } : {}) });
+    return c.json({ entries: entries.slice(-q.data.limit).reverse() });
+  });
+
+  r.get("/fiscal-years", async (c) => {
+    const auth = c.get("auth");
+    return c.json({ fiscalYears: await deps.ledgerFor(auth).listFiscalYears(auth.tenantId) });
+  });
+
   r.get("/trial-balance", async (c) => {
     const auth = c.get("auth");
     const q = z.object({ fiscalYear: z.string(), from: z.string().optional(), to: z.string().optional() }).safeParse(c.req.query());

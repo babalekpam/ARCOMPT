@@ -59,6 +59,14 @@ describe("API", () => {
     expect(chain).toEqual({ ok: true, checked: 2 });
   });
 
+  it("liste les écritures validées et les exercices", async () => {
+    const list = await json(await app.request("/v1/entries?fiscalYear=2025", { headers: headers() }));
+    expect(list.entries.length).toBeGreaterThanOrEqual(2);
+    expect(list.entries[0].status).toBe("VALIDATED");
+    const fys = await json(await app.request("/v1/entries/fiscal-years", { headers: headers() }));
+    expect(fys.fiscalYears.map((f: { code: string }) => f.code)).toEqual(["2025"]);
+  });
+
   it("renvoie 422 sur une écriture déséquilibrée et 400 sur un corps invalide", async () => {
     const bad = { journalCode: "VT", date: "2025-02-10", label: "x", lines: [{ accountNumber: "411", debit: "10" }, { accountNumber: "706", credit: "9" }] };
     const res = await app.request("/v1/entries", { method: "POST", headers: headers(), body: JSON.stringify(bad) });

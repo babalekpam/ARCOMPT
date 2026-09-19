@@ -219,6 +219,11 @@ export class Ledger {
     return this.store.listEntries(tenantId, opts);
   }
 
+  /** Exercices du dossier (le plus ancien en premier). */
+  listFiscalYears(tenantId: Id) {
+    return this.store.listFiscalYears(tenantId);
+  }
+
   /** Vérifie l'intégrité de la chaîne de hash d'un journal. */
   async verifyChain(tenantId: Id, journalCode: string): Promise<{ ok: boolean; brokenAt?: Id; checked: number }> {
     const journal = await this.store.getJournalByCode(tenantId, journalCode);
