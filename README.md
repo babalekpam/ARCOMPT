@@ -2,7 +2,7 @@ ARCOMPT
 
 La comptabilité intelligente des PME de l'espace OHADA. ARCOMPT permet à une PME de facturer, encaisser, payer ses salariés et déclarer ses impôts, puis produit automatiquement ses états financiers conformes au SYSCOHADA révisé : bilan, compte de résultat, tableau des flux de trésorerie, notes annexes et liasse fiscale (DSF).
 
-Statut : phases 0 à 3 livrées côté serveur — moteur comptable avec invariants en base, états financiers et rendu PDF/Excel, facturation, achats, trésorerie et rapprochement, paie chiffrée, immobilisations, fiscalité et DSF, clôture et circuit de visa, capture IA avec file de revue, WhatsApp, portail cabinets, huit packs pays en brouillon. Le web couvre tous les modules (60 routes) avec une PWA hors ligne ; des tests de bout en bout dans Chromium vérifient le parcours PME.
+Statut : phases 0 à 3 livrées côté serveur — moteur comptable avec invariants en base, états financiers et rendu PDF/Excel, facturation, achats, trésorerie et rapprochement, paie chiffrée, immobilisations, fiscalité et DSF, clôture et circuit de visa, capture IA avec file de revue, WhatsApp, portail cabinets, huit packs pays en brouillon. Le web couvre tous les modules (52 pages) avec une PWA hors ligne ; des tests de bout en bout dans Chromium vérifient le parcours PME. Ce qui n'est pas construit — stocks, opérateur de paiement réel, connecteur de certification réel, envoi d'e-mails et de SMS, ancrage exécuté, application mobile native — est listé plus bas.
 
 Pourquoi ARCOMPT
 Conforme OHADA par construction. Plan de comptes SYSCOHADA, systèmes Normal et SMT, contrôles de cohérence bloquants (actif = passif, résultat bilan = résultat CR, TFT = variation de trésorerie).
@@ -13,28 +13,28 @@ Pensé pour le terrain. PWA mobile, tolérante aux coupures réseau, prix en FCF
 Portail cabinets. Vue multi-dossiers, file de revue, circuit de visa de l'expert-comptable.
 Fonctionnalités
 Module	Contenu	Phase
-Moteur comptable	Grand livre en partie double, journaux, exercices, inaltérabilité, piste d'audit, ancrage Merkle	Livré
-États financiers	Bilan, compte de résultat, TFT, notes annexes, PDF et Excel, import de balance	Livré
+Moteur comptable	Grand livre en partie double, journaux, exercices, inaltérabilité (triggers), piste d'audit, ancrage Merkle conçu et testé mais jamais exécuté	Livré
+États financiers	Bilan, compte de résultat, TFT, PDF et Excel, import de balance ; 16 notes annexes sur environ 36 au référentiel	Livré
 Portail cabinets	Multi-dossiers, file de revue, commentaires, visa, dépôt, facturation cabinet, marque blanche	Livré (API)
-Facturation et dépenses	Devis, factures, avoirs, relances, règlements, mobile money, capture de pièces par IA	Livré (API)
+Facturation et dépenses	Devis, factures, avoirs, relances, règlements, capture de pièces par IA ; mobile money derrière un opérateur simulé	Livré (API)
 Trésorerie	Banque, caisse, mobile money, import de relevés, rapprochement, prévision	Livré (API)
 Paie	Bulletins par pack pays, cotisations, livre de paie, déclarations, chiffrement	Livré (API)
-Fiscalité	TVA, retenues, acomptes, DSF Excel, calendrier, facture certifiée (connecteur)	Livré (API)
+Fiscalité	TVA, retenues, acomptes, DSF Excel, calendrier ; facture certifiée en connecteur simulé seulement	Livré (API)
 Assistant IA	Questions en langage naturel sur outils typés, anomalies, WhatsApp	Livré (API)
 Web	PWA hors ligne, tableau de bord, écritures, états et écrans de tous les modules	Livré
 Stack
 Brique	Choix
 Front	Next.js (React) en PWA, Tailwind CSS, FR / EN
 API	Node.js + TypeScript (Hono)
-Base de données	PostgreSQL (Neon), Row-Level Security par dossier, pgvector
+Base de données	PostgreSQL (Neon), Row-Level Security par dossier (pgvector prévu, pas encore utilisé)
 ORM	SQL natif (postgres) + Drizzle pour les requêtes applicatives
 Tâches de fond	BullMQ + Redis
 Fichiers	Cloudflare R2
-Authentification	Keycloak (OIDC), MFA, rôles par dossier
+Authentification	Keycloak (OIDC) authentifie ; rôles par dossier dans company_member ; MFA exigée par l'API quand l'organisation la requiert
 IA	API Claude (vision + texte) derrière une passerelle interne
 PDF / Excel	Gabarits HTML → PDF (Playwright), ExcelJS
 Messagerie	WhatsApp Business API
-Observabilité	OpenTelemetry, Sentry
+Observabilité	Journaux structurés ; OpenTelemetry et Sentry pris en charge, activés par variable d'environnement
 Prérequis
 Node.js 20 ou plus, pnpm 9 ou plus
 Docker (PostgreSQL et Redis en local)
@@ -68,6 +68,8 @@ WHATSAPP_API_URL, WHATSAPP_TOKEN	Canal WhatsApp
 PAYMENT_PROVIDER, PAYMENT_API_KEY	Agrégateur mobile money
 APP_URL, DEFAULT_LOCALE	URL publique, langue par défaut (fr)
 
+La liste complète, avec l'effet de chaque variable absente, est dans .env.example. En production (NODE_ENV=production), l'API refuse de démarrer tant que les secrets et les connecteurs ne sont pas réels : la validation de démarrage rassemble tous les manques et échoue avec la liste complète, et chaque exception délibérée se pose par une variable d'opt-out explicite.
+
 Ne jamais committer .env. Les secrets de production vivent dans le gestionnaire de secrets de l'hébergeur.
 
 Structure du dépôt
@@ -79,15 +81,17 @@ arcompt/
 │   ├── ledger/               # Moteur comptable : écritures, invariants, soldes
 │   ├── statements/           # Moteur d'états : table de passage, contrôles, rendu
 │   ├── rules/                # Interpréteur des règles déclaratives (TVA, paie)
-│   ├── country-packs/        # Un dossier par pays : ci/, sn/, tg/, bj/, bf/…
+│   ├── country-packs/        # packs/<code ISO>/ : ci, sn, tg, bj, bf, ml, ne, cm
 │   ├── ai-gateway/           # Appels modèle, schémas JSON, journalisation
 │   ├── db/                   # Schéma, migrations, seeds (plan SYSCOHADA)
-│   └── ui/                   # Composants partagés
+│   ├── posting/              # Modèles d'écriture des modules métier
+│   ├── invoicing/ treasury/ payroll/ tax/ assets/ closing/   # Modules métier
+│   └── documents/ storage/ jobs/ whatsapp/ portal/ render/   # Pièces, IA, fichiers, tâches, canal, portail, rendu
 ├── fixtures/
 │   └── balances/             # Balances de référence + postes attendus (demo-ci)
 ├── .github/workflows/ci.yml  # lint, typecheck, migrations, tests, build
 ├── docs/
-│   ├── ARCHITECTURE.md
+│   ├── ARCHITECTURE.md  SECURITY.md  MODULES.md  OPERATIONS.md  API.md
 │   └── country-packs/
 ├── docker-compose.yml
 └── .env.example
@@ -111,10 +115,23 @@ Aucune logique pays en dur. Tout ce qui varie d'un pays à l'autre va dans packa
 L'IA ne calcule jamais un état et ne comptabilise rien sans validation humaine.
 Tout changement de gabarit d'état passe pnpm test:statements.
 Ajouter un pays
-Copier packages/country-packs/_template/ vers le code ISO du pays.
+Copier packages/country-packs/packs/_template/ vers le code ISO du pays.
 Renseigner identité fiscale, TVA, taxes, paie, DSF, format de dépôt et calendrier.
 Faire valider les valeurs par un expert-comptable du pays.
 Lancer pnpm pack:validate <pays> puis ajouter une balance de référence dans fixtures/.
+Ce qui n'est pas encore construit
+Stocks / inventaire : aucun code, seulement les comptes 31x–38x du plan de comptes.
+Encaissement mobile money : aucun opérateur réel, seul un fournisseur simulé en mémoire.
+Facture certifiée (FNE, MECeF…) : aucun connecteur réel, seulement un simulateur.
+Envoi d'e-mails et de SMS : aucun expéditeur ; le port de notification du portail journalise et n'envoie rien.
+Gestionnaire de clés : la clé maître de paie vient d'une variable d'environnement, aucune implémentation KMS.
+Ancrage externe de la chaîne de hash : calcul et preuves écrits et testés, mais jamais appelés ni publiés.
+Application mobile native (Expo) et saisie vocale en langues locales : non commencées.
+Mémoire sémantique (pgvector) : le chemin vectoriel n'est jamais emprunté, la mémoire des catégorisations est lexicale.
+Packs pays : les huit packs sont en brouillon, aucun relu par un expert-comptable.
+Séparation des rôles SQL, sauvegardes et exercices de restauration : procédures manuelles, sans outillage dans le dépôt.
+Détail et justification : docs/ARCHITECTURE.md (« Ce qui n'est pas encore construit »).
+
 Feuille de route
 Phase	Livrable
 0. Fondations	Multi-tenant, auth, plan de comptes, moteur comptable, import de balance

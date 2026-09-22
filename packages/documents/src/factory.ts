@@ -4,7 +4,7 @@ import { createStorageFromEnv, type Storage } from "@arcompt/storage";
 import type { Sql } from "postgres";
 import { PgCallLogger } from "./call-log.js";
 import { DocumentsService } from "./service.js";
-import { createScannerFromEnv, maxDocumentBytesFromEnv, type AntivirusScanner } from "./security.js";
+import { createScannerFromEnv, guardSimulatedDependency, maxDocumentBytesFromEnv, type AntivirusScanner } from "./security.js";
 import type { TenantContext } from "./types.js";
 
 /**
@@ -64,10 +64,26 @@ export interface DocumentsInfra {
 
 let cached: DocumentsInfra | null = null;
 
-/** Passerelle IA (Claude si ANTHROPIC_API_KEY, sinon simulation), stockage, antivirus : construits une fois par processus. */
+/** Repli hors ligne : autorisé hors production, refusé en production sans opt-out explicite. */
+function offlineProvider(env: NodeJS.ProcessEnv): ModelProvider {
+  guardSimulatedDependency({
+    env,
+    simulated: "l'extraction IA des pièces (fournisseur, référence et montants inventés, versés à la file de validation puis au grand livre)",
+    missing: "ANTHROPIC_API_KEY est absente",
+    optOut: "ALLOW_INSECURE_AI",
+  });
+  return new OfflineProvider();
+}
+
+/**
+ * Passerelle IA (Claude si ANTHROPIC_API_KEY, sinon simulation), stockage,
+ * antivirus : construits une fois par processus. En production, la simulation
+ * est refusée (sauf ALLOW_INSECURE_AI=1) : l'extraction hors ligne inventerait
+ * fournisseur et montants, qui finiraient au grand livre après une validation.
+ */
 export function createDocumentsInfraFromEnv(db: Sql, env: NodeJS.ProcessEnv = process.env): DocumentsInfra {
   if (cached) return cached;
-  const provider: ModelProvider = env.ANTHROPIC_API_KEY ? new AnthropicProvider({ apiKey: env.ANTHROPIC_API_KEY, ...(env.AI_MODEL ? { model: env.AI_MODEL } : {}) }) : new OfflineProvider();
+  const provider: ModelProvider = env.ANTHROPIC_API_KEY ? new AnthropicProvider({ apiKey: env.ANTHROPIC_API_KEY, ...(env.AI_MODEL ? { model: env.AI_MODEL } : {}) }) : offlineProvider(env);
   cached = {
     gateway: new AiGateway({ provider, logger: new PgCallLogger(db) }),
     storage: createStorageFromEnv(env),

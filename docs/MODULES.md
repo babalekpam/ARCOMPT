@@ -19,9 +19,11 @@ Ce guide s'adresse à qui ajoute un module (facturation, trésorerie, paie…). 
 | Base | `import { createDb, withTenant, migrate } from "@arcompt/db"` ; tests : `import { createTestDatabase } from "@arcompt/db/testing"` ; seed : `seedCompany(db, …)` | Les comptes lettrables (401, 411, 421, 422, 481, 485) exigent `partnerId` (table `partner`). |
 | États | `import { computeStatements } from "@arcompt/statements"` | Fonction pure sur une balance (`ledger.trialBalance().rows`). |
 | Règles | `import { evalNumber, RuleSet } from "@arcompt/rules"` | Décimaux exacts, `tranche()`. |
-| Packs pays | `import { loadPack, packRules, vatRate } from "@arcompt/country-packs"` | Le pack `ci` existe (brouillon, valeurs indicatives). |
+| Packs pays | `import { loadPack, packRules, vatRate } from "@arcompt/country-packs"` | Huit packs existent : `ci`, `sn`, `tg`, `bj`, `bf`, `ml`, `ne`, `cm`. Tous en `status: "DRAFT"`, aucun relu par un expert-comptable : valeurs indicatives, jamais de déclaration réelle. |
 | IA | `import { AiGateway, DocumentExtractionSchema, checkProposal, routeProposal } from "@arcompt/ai-gateway"` | `MockProvider` en test. |
-| API | `apps/api/src/routes/<module>.ts` exporte `<module>Routes(deps: AppDeps)` (Hono). `deps.db` (Sql) et `deps.ledgerFor(auth)` ; `c.get("auth")` donne `{ userId, tenantId, organizationId?, roles }` ; `requireRole(...)` pour restreindre. Erreurs métier : lever `LedgerError` ou renvoyer `{ error: { code, message } }` avec 400/404/409/422. |
+| API | `apps/api/src/routes/<module>.ts` exporte `<module>Routes(deps: AppDeps)` (Hono). `deps.db` (Sql) et `deps.ledgerFor(auth)` ; `c.get("auth")` donne `{ userId, tenantId, organizationId?, roles }` — le dossier et les rôles viennent de `company_member` (résolution par `apps/api/src/identity.ts`), jamais d'un attribut du jeton : un rôle changé au portail vaut dès la requête suivante ; `requireRole(...)` pour restreindre. Erreurs métier : lever `LedgerError` ou renvoyer `{ error: { code, message } }` avec 400/404/409/422. |
+
+Les connecteurs externes n'existent qu'en simulateur : paiement (`MockPaymentProvider`), facture certifiée (`NullConnector`, `MockFneConnector`), notifications du portail (port `Notifier` sans implémentation par défaut). Un module qui s'appuie dessus doit rester derrière son interface et ne rien présumer d'un opérateur réel. L'inventaire complet est en fin de `ARCHITECTURE.md`.
 
 ## Migrations
 
@@ -35,6 +37,7 @@ Un fichier par module dans `packages/db/migrations/`, préfixe réservé :
 | `0006_assets_tax.sql` | immobilisations, déclarations fiscales |
 | `0007_documents_ai.sql` | pièces, propositions, file de revue, mémoire, WhatsApp |
 | `0008_closing_portal.sql` | clôture, workflow d'exercice, commentaires, dépôts, invitations |
+| `0009_identity.sql` | résolution d'identité : appartenances et rôles lus dans `company_member` |
 
 Modèle de table :
 

@@ -1,18 +1,24 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import type { Identity, TokenIdentityHints } from "./identity.js";
 
 /**
- * Contexte d'authentification. Le tenant (dossier) vient TOUJOURS du jeton ou
- * d'une appartenance vérifiée, jamais d'un champ libre envoyé par le client.
+ * Contexte d'authentification. Keycloak authentifie, ARCOMPT autorise : le
+ * jeton ne sert qu'à prouver l'identité (`sub`) ; les dossiers accessibles et
+ * les rôles sont lus dans `company_member`, jamais dans un claim recopié.
  *
  * Deux modes :
- *  - AUTH_MODE=oidc : jeton Keycloak vérifié via JWKS ; le dossier courant est
- *    choisi par l'en-tête X-Tenant-Id et doit figurer dans les dossiers du jeton
- *    (claim `tenants`, ou rôle par dossier) ;
+ *  - AUTH_MODE=oidc : jeton Keycloak vérifié via JWKS, puis résolution de
+ *    l'identité en base (auth_resolve_identity). Le dossier courant est choisi
+ *    par l'en-tête X-Tenant-Id et doit correspondre à une appartenance ; le
+ *    rôle vient de cette appartenance, l'organisation de `app_user`. Un compte
+ *    suspendu, sans appartenance, ou sans second facteur lorsque
+ *    `organization.mfa_required` est vrai, est refusé ;
  *  - AUTH_MODE=dev : X-User-Id / X-Tenant-Id acceptés tels quels. Développement
  *    local uniquement ; refusé si NODE_ENV=production.
  */
 export interface AuthContext {
+  /** `app_user.id` (uuid) en mode oidc : il alimente audit_log.user_id et app.user_id. */
   userId: string;
   tenantId: string;
   organizationId?: string;
@@ -20,6 +26,14 @@ export interface AuthContext {
 }
 
 export type Role = "OWNER" | "ACCOUNTANT" | "CASHIER" | "AUDITOR" | "REVIEWER";
+
+/**
+ * Valeurs `amr` (RFC 8176) acceptées comme preuve d'un second facteur, et seuil
+ * `acr` équivalent. Liste volontairement courte et exportée : c'est le seul
+ * endroit à ajuster si le fournisseur d'identité en émet d'autres.
+ */
+export const MFA_AMR_VALUES = ["mfa", "otp", "hwk", "swk"] as const;
+export const MFA_MIN_ACR = 2;
 
 declare module "hono" {
   interface ContextVariableMap {
@@ -31,11 +45,19 @@ export interface AuthOptions {
   mode: "dev" | "oidc";
   issuer?: string;
   audience?: string;
+  /** Résolution des droits en base ; injectable pour tester le middleware sans PostgreSQL. */
+  resolveIdentity?: (sub: string, hints: TokenIdentityHints) => Promise<Identity | null>;
+  /** Trace d'activité, au mieux : son échec ne doit jamais bloquer la requête. */
+  touchLastActive?: (userId: string) => Promise<void>;
 }
 
 export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
   if (opts.mode === "dev" && process.env.NODE_ENV === "production") {
     throw new Error("AUTH_MODE=dev est interdit en production");
+  }
+  const resolve = opts.resolveIdentity;
+  if (opts.mode === "oidc" && !resolve) {
+    throw new Error("AUTH_MODE=oidc exige un résolveur d'identité (base de données)");
   }
   const jwks = opts.mode === "oidc" && opts.issuer ? createRemoteJWKSet(new URL(`${opts.issuer}/protocol/openid-connect/certs`)) : null;
 
@@ -50,23 +72,46 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
     const header = c.req.header("authorization") ?? "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : null;
     if (!token || !jwks) return unauthorized(c, "Jeton Bearer requis");
-    let payload: JWTPayload & { tenants?: Record<string, string[]>; organization_id?: string };
+    let payload: JWTPayload & { amr?: unknown; acr?: unknown; email?: unknown; email_verified?: unknown };
     try {
       const verifyOptions = { ...(opts.issuer ? { issuer: opts.issuer } : {}), ...(opts.audience ? { audience: opts.audience } : {}) };
       payload = (await jwtVerify(token, jwks, verifyOptions)).payload;
     } catch {
       return unauthorized(c, "Jeton invalide");
     }
-    const tenants = payload.tenants ?? {};
-    if (!tenantHeader || !tenants[tenantHeader]) return forbidden(c, "Dossier non autorisé pour cet utilisateur");
-    c.set("auth", {
-      userId: String(payload.sub),
-      tenantId: tenantHeader,
-      roles: tenants[tenantHeader] ?? [],
-      ...(payload.organization_id ? { organizationId: payload.organization_id } : {}),
-    });
+    const sub = typeof payload.sub === "string" ? payload.sub : "";
+    if (!sub) return unauthorized(c, "Jeton sans sujet (sub)");
+
+    // Le courriel ne sert qu'au rattachement au premier accès, et seulement
+    // s'il est vérifié par le fournisseur d'identité : sinon, s'inscrire avec
+    // l'adresse d'autrui suffirait à récupérer son dossier.
+    const hints: TokenIdentityHints = {
+      ...(typeof payload.email === "string" ? { email: payload.email } : {}),
+      ...(payload.email_verified === true ? { emailVerified: true } : {}),
+    };
+    const identity = resolve ? await resolve(sub, hints) : null;
+    if (!identity) return forbidden(c, "Compte inconnu dans ARCOMPT : aucun utilisateur ne correspond à ce sujet Keycloak");
+    if (identity.suspendedAt) return forbidden(c, "Compte suspendu : contactez l'administrateur de votre organisation");
+    if (identity.memberships.length === 0) return forbidden(c, "Aucun dossier accessible : demandez à être ajouté comme membre");
+    if (identity.mfaRequired && !hasSecondFactor(payload)) {
+      return forbidden(c, "Authentification multifacteur requise par votre organisation : reconnectez-vous avec un second facteur");
+    }
+    if (!tenantHeader) return forbidden(c, "En-tête X-Tenant-Id requis");
+    const membership = identity.memberships.find((m) => m.companyId === tenantHeader);
+    if (!membership) return forbidden(c, "Dossier non autorisé pour cet utilisateur");
+
+    c.set("auth", { userId: identity.userId, tenantId: membership.companyId, roles: [membership.role], organizationId: identity.organizationId });
+    if (opts.touchLastActive) void opts.touchLastActive(identity.userId);
     return next();
   };
+}
+
+/** Second facteur prouvé par le claim `amr` (RFC 8176) ou par un `acr` suffisant. */
+function hasSecondFactor(payload: { amr?: unknown; acr?: unknown }): boolean {
+  const amr = Array.isArray(payload.amr) ? payload.amr : [];
+  if (amr.some((v) => typeof v === "string" && (MFA_AMR_VALUES as readonly string[]).includes(v.toLowerCase()))) return true;
+  const acr = Number(payload.acr);
+  return Number.isFinite(acr) && acr >= MFA_MIN_ACR;
 }
 
 export function requireRole(...roles: Role[]): MiddlewareHandler {

@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import type { Sql } from "postgres";
 import { withTenant } from "@arcompt/db";
 import { loadPack } from "@arcompt/country-packs";
-import { InvoicingError, MockPaymentProvider, NullConnector, PaymentsService, type InvoicingDeps } from "@arcompt/invoicing";
+import { InvoicingError, NullConnector, PaymentsService, type InvoicingDeps } from "@arcompt/invoicing";
 import type { AppDeps } from "../app.js";
+import { paymentProvidersFromEnv } from "../config.js";
 import { raiseSecurityAlert } from "../telemetry.js";
 
 /**
@@ -17,7 +18,9 @@ export const SYSTEM_USER_ID = "00000000-0000-4000-8000-00000000f00d";
 
 export function publicWebhookRoutes(deps: AppDeps) {
   const r = new Hono();
-  const providers = { mock: new MockPaymentProvider({ secret: process.env.PAYMENT_WEBHOOK_SECRET ?? "mock-secret" }) };
+  // Opérateurs simulés refusés en production (voir config.ts) : le secret de
+  // démonstration laissait signer un encaissement à qui devinait la référence.
+  const providers = paymentProvidersFromEnv();
 
   r.post("/payments/:provider/:providerRef", async (c) => {
     if (!deps.db) return c.json({ error: { code: "UNAVAILABLE", message: "Base de données indisponible" } }, 503);

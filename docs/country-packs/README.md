@@ -16,7 +16,7 @@ Un pack ne contient **jamais de code**. Les calculs sont des expressions déclar
 | `filing` | Format et canal de dépôt (e-impôts, e-Bilan, modèle Excel ou XML) ; `api: false` tant qu'aucun portail n'expose d'API |
 | `calendar` | Échéances déclaratives |
 | `chart_overrides` | Sous-comptes imposés localement |
-| `certified_invoice` | Facture normalisée (FNE, MECeF…) : obligation et connecteur |
+| `certified_invoice` | Facture normalisée (FNE, MECeF…) : obligation et nom du connecteur ; aucun connecteur réel n'est livré à ce jour, seulement un simulateur |
 
 ## Cycle de vie
 
@@ -26,6 +26,12 @@ Un pack ne contient **jamais de code**. Les calculs sont des expressions déclar
 4. Faire valider chaque valeur par un expert-comptable inscrit à l'ordre du pays ; renseigner `reviewed_by` et passer en `REVIEWED` puis `PUBLISHED`.
 5. Ajouter une balance de référence et sa liasse attendue dans `fixtures/balances/` (test de non-régression).
 6. Publier : un dossier référence `pack_version` (`ci@2025.1`) ; changer de version est une décision explicite par dossier.
+
+## État réel des packs
+
+Huit packs sont livrés — `ci`, `sn`, `tg`, `bj`, `bf`, `ml`, `ne`, `cm` — plus le gabarit `_template`. **Tous sont en `status: "DRAFT"`**, aucun ne porte de `reviewed_by`, aucun n'est passé en `REVIEWED` ni en `PUBLISHED` : l'étape 4 du cycle de vie n'a été franchie pour aucun pays. Une seule balance de référence existe (`fixtures/balances/demo-ci`), donc l'étape 5 n'est faite que pour la Côte d'Ivoire.
+
+Concrètement : les packs permettent de développer et de tester, pas de déclarer.
 
 ## Ordre d'ouverture recommandé
 

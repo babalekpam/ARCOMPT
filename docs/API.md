@@ -1,8 +1,10 @@
 # Référence de l'API
 
-Toutes les routes sous `/v1` exigent le contexte d'authentification (jeton OIDC Keycloak avec `X-Tenant-Id`, ou en-têtes `X-User-Id` / `X-Tenant-Id` / `X-Organization-Id` en `AUTH_MODE=dev`). Les erreurs sont renvoyées sous la forme `{ "error": { "code", "message", "details" } }`. Les montants sont des chaînes décimales (4 décimales max), jamais des flottants. Limitation de débit : 600 requêtes/min par compte, 60/min sur les points IA, 30/min sur le rendu.
+Toutes les routes sous `/v1` exigent le contexte d'authentification (jeton OIDC Keycloak avec `X-Tenant-Id`, ou en-têtes `X-User-Id` / `X-Tenant-Id` / `X-Organization-Id` en `AUTH_MODE=dev`). Le jeton n'apporte que l'identité : le dossier demandé et les rôles appliqués sont vérifiés dans la table `company_member`, si bien qu'un changement de rôle fait au portail vaut dès la requête suivante. `X-Tenant-Id` qui ne correspond à aucune appartenance donne 403. Quand l'organisation exige la MFA (`organization.mfa_required`), un jeton sans second facteur est refusé — encore faut-il que le realm Keycloak propose ce second facteur. Les erreurs sont renvoyées sous la forme `{ "error": { "code", "message", "details" } }`. Les montants sont des chaînes décimales (4 décimales max), jamais des flottants. Limitation de débit : 600 requêtes/min par compte, 60/min sur les points IA, 30/min sur le rendu.
 
 Généré depuis `apps/api/src/routes/*.ts` ; les rôles requis sont indiqués quand la route les restreint.
+
+Deux familles de routes s'appuient sur des connecteurs simulés : les liens et webhooks de paiement (`/v1/sales/:id/payment-link`, `/v1/payments/webhook/:provider`, `/webhooks/payments/...`) ne parlent aujourd'hui qu'à `MockPaymentProvider`, et la certification de facture n'a que `NullConnector` ou `MockFneConnector` derrière elle. Les contrats de ces routes sont stables, les encaissements et les références de certification ne sont pas réels.
 
 
 ## Écritures et balance

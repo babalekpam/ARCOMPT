@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { createDocumentsInfraFromEnv, createDocumentsServiceFromEnv } from "@arcompt/documents";
 import { MockProvider, PgConversationStore, WhatsAppBot, createProviderFromEnv, verifyMetaSignature, type WhatsAppProvider } from "@arcompt/whatsapp";
 import type { AppDeps } from "../app.js";
+import { INSECURE_OPT_OUT, guardSimulatedDependency } from "../config.js";
 
 /**
  * Webhook WhatsApp. À monter SANS le middleware d'authentification tenant
@@ -18,9 +19,25 @@ export interface WhatsAppRouteDeps extends AppDeps {
 
 let cachedProvider: WhatsAppProvider | null = null;
 
+/** Réinitialise le fournisseur mémorisé (tests). */
+export function resetWhatsAppProvider(): void {
+  cachedProvider = null;
+}
+
 function providerFor(deps: WhatsAppRouteDeps): WhatsAppProvider {
   if (deps.whatsapp?.provider) return deps.whatsapp.provider;
-  if (!cachedProvider) cachedProvider = createProviderFromEnv() ?? new MockProvider(process.env.WHATSAPP_VERIFY_TOKEN ?? "dev-verify");
+  if (!cachedProvider) {
+    const real = createProviderFromEnv();
+    if (!real) {
+      // Le mock avale tous les messages sortants : interdit en production.
+      guardSimulatedDependency({
+        simulated: "le canal WhatsApp sortant (tous les messages seraient avalés sans être envoyés)",
+        missing: "WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID est absent",
+        optOut: INSECURE_OPT_OUT.whatsapp,
+      });
+    }
+    cachedProvider = real ?? new MockProvider(process.env.WHATSAPP_VERIFY_TOKEN ?? "dev-verify");
+  }
   return cachedProvider;
 }
 
@@ -28,6 +45,9 @@ export function whatsappRoutes(deps: WhatsAppRouteDeps) {
   const r = new Hono();
   const appSecret = deps.whatsapp?.appSecret ?? process.env.WHATSAPP_APP_SECRET;
   if (!appSecret && process.env.NODE_ENV === "production") throw new Error("WHATSAPP_APP_SECRET est obligatoire en production");
+  // Le fournisseur est résolu au montage : une production sans WHATSAPP_TOKEN/
+  // WHATSAPP_PHONE_ID refuse de démarrer au lieu d'avaler les messages.
+  providerFor(deps);
 
   r.get("/webhook", (c) => {
     const challenge = providerFor(deps).verifyWebhook(c.req.query());

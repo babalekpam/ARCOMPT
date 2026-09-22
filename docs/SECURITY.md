@@ -49,8 +49,8 @@ Aucune couche ne fait confiance à celle du dessus : l'API ne fait pas confiance
 
 ## 4. Identités et accès
 
-- Identité centralisée Keycloak (OIDC) ; l'application n'émet aucun jeton.
-- MFA obligatoire pour les cabinets, administrateurs, comptes ayant pouvoir de validation ou de paiement (TOTP ou WebAuthn ; pas de SMS).
+- Identité centralisée Keycloak (OIDC) ; l'application n'émet aucun jeton. **Keycloak authentifie, ARCOMPT autorise** : les dossiers accessibles et les rôles sont lus dans la table `company_member`, et non plus dans un attribut recopié dans le jeton. Un changement fait au portail (rôle modifié, membre retiré, dossier ajouté) prend effet à la requête suivante, sans intervention sur Keycloak.
+- MFA : l'API la fait respecter quand l'organisation l'exige (`organization.mfa_required`, vrai par défaut pour les cabinets) ; elle lit les revendications `amr` / `acr` du jeton et refuse celui qui ne prouve pas de second facteur. Elle suppose que le fournisseur d'identité est configuré pour exiger et signaler ce second facteur (TOTP ou WebAuthn ; pas de SMS) : ARCOMPT ne peut que vérifier, pas enrôler. Un compte suspendu ou sans appartenance est refusé avec un motif explicite.
 - Jamais de compte partagé ; comptes de service distincts par service, portée minimale, rotation.
 - RBAC par dossier et moindre privilège :
 
@@ -67,29 +67,37 @@ Aucune couche ne fait confiance à celle du dessus : l'API ne fait pas confiance
 - Administrateur neutralisé : aucun droit SQL direct sur les tables comptables ; tout accès à un dossier client notifie le client ; accès d'urgence (break-glass) temporaire, approuvé par un second administrateur, intégralement journalisé.
 - Cycle de vie : invitation seule et limitée dans le temps, révocation immédiate (backchannel OIDC), revue trimestrielle des droits, suspension après 90 jours d'inactivité, chaque changement de rôle dans `audit_log`.
 
-**Dans le dépôt.** `apps/api/src/auth.ts` (tenant issu du claim `tenants` du jeton), `requireRole`, realm Keycloak `infra/keycloak` avec MFA. La séparation des tâches et les seuils de double validation sont portés par le module facturation (`payment` approuvé par un utilisateur différent du créateur) ; les notifications d'accès administrateur par le portail.
+**Dans le dépôt.** `apps/api/src/auth.ts` et `apps/api/src/identity.ts` : le jeton n'apporte que le `sub` vérifié, l'identité et les rôles viennent de `auth_resolve_identity()` (migration `0009_identity.sql`, `SECURITY DEFINER` car `app_user` et `company_member` sont en RLS forcée) ; `requireRole` ; realm Keycloak `infra/keycloak`. La séparation des tâches et les seuils de double validation sont portés par le module facturation (`payment` approuvé par un utilisateur différent du créateur) ; les notifications d'accès administrateur par le portail.
 
 ## 5. Isolation multi-dossiers
 
 RLS PostgreSQL sur `tenant_id` sans exception, contexte fixé par la couche d'authentification et hors de portée des requêtes utilisateur ; aucune requête inter-dossiers légitime en dehors des vues et procédures du portail, elles-mêmes contrôlées ; tests de fuite automatisés bloquants (lecture, modification, insertion vers un dossier étranger par l'API, par SQL applicatif et par chemins indirects) ; environnements physiquement séparés, jamais de copie de données de production en clair.
 
-**Dans le dépôt.** `packages/db/migrations/0001_core.sql` (RLS forcée, rôle `arcompt_app`), `packages/db/src/db.test.ts` et `pnpm test:tenancy`.
+**Dans le dépôt.** `packages/db/migrations/0001_core.sql` (RLS forcée, rôle `arcompt_app` — voir § 6 : ce rôle n'est pas encore celui avec lequel l'application se connecte en exploitation), `packages/db/src/db.test.ts` et `pnpm test:tenancy`.
 
 ## 6. Intégrité et immutabilité du grand livre
 
-Équilibre par trigger différé ; UPDATE/DELETE interdits sur une écriture validée (par les droits et triggers, pas par convention) ; correction par contrepassation liée ; verrouillage des périodes (déverrouillage seulement avec trace complète et approbation) ; chaînage par hash des écritures et du journal d'audit.
+Équilibre par trigger différé ; UPDATE/DELETE interdits sur une écriture validée **par des triggers de base de données**, pas par convention applicative ; correction par contrepassation liée ; verrouillage des périodes (déverrouillage seulement avec trace complète et approbation) ; chaînage par hash des écritures et du journal d'audit.
 
-Renforcement recommandé : **ancrage externe périodique** — une racine de Merkle des hashes des écritures validées (par dossier et par jour) publiée hors de la plateforme (horodatage qualifié ou registre public immuable). L'immutabilité devient prouvable devant un juge ou un commissaire aux comptes.
+Renforcement recommandé : **ancrage externe périodique** — une racine de Merkle des hashes des écritures validées (par dossier et par jour) publiée hors de la plateforme (horodatage qualifié ou registre public immuable). L'immutabilité devient prouvable devant un juge ou un commissaire aux comptes. **Ce renforcement est conçu et testé, mais pas exécuté** : `packages/ledger/src/anchoring.ts` calcule la racine de Merkle, la chaîne d'ancres et les preuves d'inclusion, avec des tests unitaires, mais rien n'appelle ce code, aucune migration ne crée de table d'ancre et le seul publieur livré, `MemoryAnchorPublisher`, garde les ancres en mémoire du processus. Aucune ancre n'a donc jamais été publiée ni conservée.
 
-**Dans le dépôt.** Triggers de `0001_core.sql`, `Ledger.verifyChain`, `packages/ledger/src/anchoring.ts` (racine de Merkle quotidienne, journal d'ancrage, fournisseur d'ancrage interchangeable).
+**Dans le dépôt.** Triggers `journal_entry_immutable_trg` et `journal_line_immutable_trg` de `0001_core.sql`, `Ledger.verifyChain`.
+
+**Mécanisme exact, et sa limite.** L'inaltérabilité repose sur les triggers, pas sur les droits SQL : `0001_core.sql` accorde `SELECT, INSERT, UPDATE, DELETE` sur toutes les tables du schéma à `arcompt_app` et ne retire ces droits que sur `audit_log` et `account_balance` — `journal_entry` et `journal_line` restent modifiables du point de vue des privilèges, et ce sont les triggers qui refusent. Le trigger protège donc tout accès SQL, y compris hors application, mais un compte capable de désactiver les triggers (propriétaire du schéma, superutilisateur) n'est arrêté par rien.
+
+**Écart connu — séparation des rôles SQL non livrée.** `arcompt_app` est créé `NOLOGIN` et aucune migration ne crée de rôle de connexion membre de ce rôle ; `docker-compose.yml` et `.env.example` font pointer `DATABASE_URL` sur `arcompt`, le propriétaire du schéma. En l'état, l'application se connecte donc avec le propriétaire, qui peut faire du DDL et désactiver les triggers. Seul le harnais de test crée un rôle de connexion applicatif (`arcompt_app_login`, `packages/db/src/testing.ts`) : la séparation est vérifiée en test mais pas appliquée en exploitation. La corriger suppose de créer ce rôle de connexion, de l'utiliser dans `DATABASE_URL` et de retirer explicitement `UPDATE, DELETE` sur `journal_entry` et `journal_line`.
 
 ## 7. Protection des données
 
 - Transit : TLS 1.2+ partout, HSTS, mTLS entre services ; webhooks entrants (mobile money, messagerie) signés, vérifiés, protégés contre le rejeu (nonce/horodatage) ; un webhook invalide est rejeté et journalisé comme tentative d'attaque.
-- Repos : chiffrement des volumes et de l'object store par l'hébergeur ; chiffrement applicatif par enveloppe (clés dans un KMS) pour la paie, les identifiants fiscaux des tiers et les coordonnées bancaires ; clés hors base, rotation annuelle, séparées par environnement, jamais dans le code ni les images.
+- Repos : chiffrement des volumes et de l'object store par l'hébergeur ; chiffrement applicatif par enveloppe pour la paie, les identifiants fiscaux des tiers et les coordonnées bancaires ; clés hors base, rotation annuelle, séparées par environnement, jamais dans le code ni les images. **Cible ; voir ci-dessous l'écart avec l'implémentation.**
 - Minimisation, droit à l'export complet (réversibilité), suppression attestée hors périmètre fiscal.
 
-**Dans le dépôt.** `packages/payroll/src/crypto.ts` (AES-256-GCM, clé injectée par l'environnement, avertissement en dev), vérification HMAC des webhooks dans `packages/invoicing` (paiements) et `packages/whatsapp`, idempotence par identifiant d'événement.
+**Dans le dépôt.** `packages/payroll/src/crypto.ts` (AES-256-GCM, chiffrement par enveloppe avec clé de données par dossier dans `payroll_tenant_key`, rotation par `PayrollService.rotateTenantKey()`), vérification HMAC des webhooks dans `packages/invoicing` (paiements) et `packages/whatsapp`, idempotence par identifiant d'événement.
+
+**Ce qui est réellement chiffré.** Uniquement trois champs, tous côté paie : `base_salary_enc`, `bank_details_enc` et `social_security_number_enc` (`0005_payroll.sql`). **Les identifiants fiscaux ne sont pas chiffrés** : `company.tax_ids` (jsonb), `partner.tax_id` et `employee.tax_id` sont stockés en clair. Ils ne sont protégés que par la RLS, les droits de la base et le chiffrement de volume de l'hébergeur.
+
+**Pas de gestionnaire de clés.** `crypto.ts` définit l'interface `KeyProvider`, mais la seule implémentation livrée est `EnvKeyProvider` : la clé maître vient de la variable `PAYROLL_ENCRYPTION_KEY`. Aucun connecteur KMS (Cloudflare, AWS, Vault…) n'existe dans le dépôt ; « clés dans un KMS » décrit l'exploitation visée, pas le code. La variable doit donc être injectée depuis le gestionnaire de secrets de l'hébergeur et traitée comme telle.
 
 ## 8. Sécurité de la couche IA
 
@@ -105,7 +113,9 @@ WhatsApp : numéro vérifié avant traitement, actions sensibles conditionnées 
 
 Zero Trust (mTLS, micro-segmentation), WAF et limitation de débit par IP, compte et point d'accès (endpoint OCR/vision protégé), pas de surface d'administration publique (bastion MFA). Images minimales scannées, dépendances épinglées et auditées, rôle SQL applicatif sans DDL, migrations sous un compte distinct par la CI, secrets injectés au démarrage, détection de secrets dans les journaux (y compris les journaux IA). CI/CD avec revue obligatoire, tests d'isolation et d'invariants bloquants, déploiements signés. Observabilité : journaux structurés sans montants nominatifs hors contexte ni données de paie, OpenTelemetry, Sentry ; alertes temps réel (échecs d'authentification massifs, accès administrateur, tentatives inter-dossiers — un rejet RLS est un signal d'attaque —, webhooks invalides, pics d'appels IA, divergence paiements/écritures). Continuité : RPO ≤ 15 min, RTO ≤ 4 h, pas de maintenance autour des échéances fiscales, sauvegardes chiffrées en seconde région, restauration testée chaque trimestre, PITR, gestion de crise documentée.
 
-**Dans le dépôt.** Limitation de débit et en-têtes de sécurité dans `apps/api/src/security.ts`, alertes de sécurité dans `apps/api/src/telemetry.ts`, images `infra/docker`, workflow CI.
+**Dans le dépôt.** Limitation de débit et en-têtes de sécurité dans `apps/api/src/security.ts`, journaux structurés masqués et alertes de sécurité dans `apps/api/src/telemetry.ts` (OpenTelemetry et Sentry chargés dynamiquement si `OTEL_EXPORTER_OTLP_ENDPOINT` ou `SENTRY_DSN` est défini), images `infra/docker`, workflow CI.
+
+**Pas encore livré sur ce chapitre.** Le rôle SQL applicatif sans DDL n'est pas appliqué en exploitation (§ 6) ; sauvegardes, copies en seconde région, restaurations trimestrielles et exercices annuels de reprise sont des procédures manuelles, sans script ni automatisation dans le dépôt (voir `docs/OPERATIONS.md`) ; aucun `AlertSink` n'est branché par défaut vers une astreinte.
 
 ## 11. Mode hors ligne et client léger
 
@@ -117,13 +127,17 @@ AUDCIF/OHADA (conservation 10 ans, immutabilité, export complet), lois national
 
 ## 13. Les dix engagements non négociables
 
-1. Le grand livre validé est immuable, par les droits SQL, pas par discipline.
-2. Toute anomalie s'exprime par une contrepassation liée et tracée.
-3. `tenant_id` vient du jeton ; la RLS est la dernière ligne de défense, prouvée par des tests de fuite bloquants.
-4. L'IA ne produit que des propositions ; aucune sortie de modèle ne devient une écriture sans action humaine.
-5. Tout accès humain ou machine est unique, protégé par MFA, à moindre privilège et journalisé dans un journal chaîné.
-6. Les clés vivent hors de la base, dans un KMS, avec rotation ; le chiffrement applicatif protège la paie et les identifiants fiscaux.
-7. Toute action d'administrateur sur un dossier client est visible du client.
-8. Les webhooks de paiement sont signés, vérifiés et idempotents.
-9. Les sauvegardes sont chiffrées, hors site et restaurées par exercice trimestriel.
-10. La chaîne de hash est ancrée hors de la plateforme : l'immutabilité est prouvable.
+La colonne « État » dit ce que le dépôt tient aujourd'hui ; un engagement tenu partiellement est signalé comme tel, il n'est pas retiré.
+
+| # | Engagement | État |
+| --- | --- | --- |
+| 1 | Le grand livre validé est immuable, par la base et non par discipline. | Tenu par des triggers ; la séparation des rôles SQL qui le compléterait n'est pas livrée (§ 6) |
+| 2 | Toute anomalie s'exprime par une contrepassation liée et tracée. | Tenu |
+| 3 | Le dossier courant est vérifié côté serveur contre les appartenances de l'utilisateur ; la RLS est la dernière ligne de défense, prouvée par des tests de fuite bloquants. | Tenu (`company_member`, `pnpm test:tenancy`) |
+| 4 | L'IA ne produit que des propositions ; aucune sortie de modèle ne devient une écriture sans action humaine. | Tenu |
+| 5 | Tout accès humain ou machine est unique, à moindre privilège et journalisé dans un journal chaîné ; la MFA est exigée quand l'organisation la requiert. | Tenu côté API ; dépend d'un fournisseur d'identité configuré pour offrir un second facteur |
+| 6 | Les clés vivent hors de la base, avec rotation ; le chiffrement applicatif protège la paie. | Partiel : clé maître en variable d'environnement, pas de KMS ; les identifiants fiscaux ne sont pas chiffrés (§ 7) |
+| 7 | Toute action d'administrateur sur un dossier client est visible du client. | Tenu (`admin_access_log`, break-glass) ; l'envoi effectif de la notification suppose un `Notifier`, non livré |
+| 8 | Les webhooks de paiement sont signés, vérifiés et idempotents. | Tenu, mais contre un fournisseur simulé : aucun agrégateur réel n'est branché |
+| 9 | Les sauvegardes sont chiffrées, hors site et restaurées par exercice trimestriel. | Non outillé : procédure manuelle, aucun script ni automatisation dans le dépôt |
+| 10 | La chaîne de hash est ancrée hors de la plateforme : l'immutabilité est prouvable. | Conçu et testé (`packages/ledger/src/anchoring.ts`), jamais exécuté : aucun appelant, aucune table d'ancre, un seul publieur en mémoire |

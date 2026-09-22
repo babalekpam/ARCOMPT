@@ -46,7 +46,7 @@ flowchart TD
 | Packs pays | Taux, barèmes, modèles DSF, formats de dépôt | De code exécutable : données et règles déclaratives seulement |
 | Couche IA | Lecture de pièces, propositions, assistant | De comptabilisation sans validation humaine |
 
-**Dans le dépôt.** `packages/ledger` (moteur comptable), `packages/statements` (moteur d'états), `packages/rules` + `packages/country-packs` (packs pays), `packages/ai-gateway` (couche IA), `apps/api` (API + auth), `apps/web` (PWA). Les modules métier (facturation, trésorerie, paie, fiscalité) arrivent en phases 2 et 3 et ne pourront écrire qu'à travers `Ledger.createDraft` / `Ledger.post`.
+**Dans le dépôt.** `packages/ledger` (moteur comptable), `packages/statements` (moteur d'états), `packages/rules` + `packages/country-packs` (packs pays), `packages/ai-gateway` (couche IA), `apps/api` (API + auth), `apps/web` (PWA). Les modules métier sont en place — `packages/invoicing` (facturation et achats), `packages/treasury`, `packages/payroll`, `packages/tax`, `packages/assets`, `packages/closing`, via `packages/posting` — et n'écrivent qu'à travers `Ledger.createDraft` / `Ledger.post`. Il n'existe pas de module de stocks (voir § 7).
 
 ## 3. Stack technique
 
@@ -62,17 +62,26 @@ TypeScript de bout en bout sur PostgreSQL, en réutilisant l'infrastructure ARGI
 | ORM | SQL natif via `postgres` (+ Drizzle pour les requêtes applicatives) | Les agrégations comptables restent en SQL |
 | Files de tâches | BullMQ + Redis | OCR, génération de liasse, imports, relances |
 | Fichiers | Cloudflare R2 | Pièces justificatives, PDF, exports DSF |
-| Auth | Keycloak (OIDC), MFA, rôles par dossier | Gère cabinets multi-dossiers |
+| Auth | Keycloak (OIDC) pour l'authentification, rôles par dossier dans `company_member`, MFA exigée par l'API selon l'organisation | Gère cabinets multi-dossiers |
 | IA | API Claude (vision + texte) derrière une passerelle interne | Lecture de pièces en français, catégorisation, assistant |
-| Recherche sémantique | pgvector dans PostgreSQL | Mémoire des catégorisations passées |
+| Recherche sémantique | pgvector dans PostgreSQL | Mémoire des catégorisations passées (cible ; voir § 8 : non active) |
 | PDF / Excel | Gabarits HTML → PDF (Playwright), ExcelJS | Modèles officiels, fichiers DSF Excel |
 | WhatsApp / SMS | WhatsApp Business API via Twilio ou 360dialog | Canal de saisie et de relance |
 | Paiements | Agrégateur mobile money (IAPAY, CinetPay, PayDunya, Flutterwave) | Encaissement de factures et abonnements |
-| Observabilité | OpenTelemetry, Sentry, journaux structurés | Traçabilité des calculs et des appels IA |
+| Observabilité | Journaux structurés ; OpenTelemetry et Sentry pris en charge, activés par variable d'environnement | Traçabilité des calculs et des appels IA |
 
 **Hébergement.** Cloudflare en façade (CDN, WAF), application sur conteneurs, base Neon en région Europe. À vérifier par pays : certaines lois de protection des données (Sénégal, Côte d'Ivoire, Bénin) exigent une déclaration ou autorisation pour l'hébergement hors du territoire.
 
-**Dans le dépôt.** `Money` (`packages/ledger/src/money.ts`) : bigint à 4 décimales, jamais de flottant ; `NUMERIC(20,4)` en base ; les valeurs NUMERIC sont lues en chaînes. L'API est en Hono (routes Next.js + tRPC restent possibles côté front). BullMQ, R2, WhatsApp et paiements sont configurés dans `.env.example` mais branchés en phase 2.
+**Dans le dépôt.** `Money` (`packages/ledger/src/money.ts`) : bigint à 4 décimales, jamais de flottant ; `NUMERIC(20,4)` en base ; les valeurs NUMERIC sont lues en chaînes. L'API est en Hono (routes Next.js + tRPC restent possibles côté front).
+
+État des briques d'infrastructure :
+
+- **BullMQ + Redis** : branché (`packages/jobs`, adaptateur BullMQ si `REDIS_URL`, sinon exécution en processus).
+- **Cloudflare R2** : branché (`packages/storage/src/r2.ts` via l'API S3 ; repli sur disque local par `STORAGE_DIR`).
+- **WhatsApp** : branché (`packages/whatsapp`, fournisseur Meta Cloud API `meta-cloud.ts` et webhook signé).
+- **Paiements mobile money** : **pas d'agrégateur réel**. Seul `MockPaymentProvider` (`packages/invoicing/src/payment-provider.ts`) existe : les liens de paiement sont gardés en mémoire et les webhooks signés avec un secret local. `PAYMENT_PROVIDER` / `PAYMENT_API_KEY` ne sont donc consommés par aucun connecteur ; brancher IAPAY, CinetPay, PayDunya ou Flutterwave reste à faire.
+- **Recherche sémantique** : la colonne `embedding` (pgvector) et le chemin de recherche vectorielle existent (`packages/documents/src/memory.ts`), mais aucun embedding n'est calculé nulle part dans le dépôt et le seul appelant (`categorize.ts`) n'en passe jamais : le repli lexical (jetons Jaccard + trigrammes Dice) est toujours le chemin exécuté.
+- **Observabilité** : journaux structurés masqués (`apps/api/src/telemetry.ts`) ; OpenTelemetry et Sentry sont chargés dynamiquement et uniquement si `OTEL_EXPORTER_OTLP_ENDPOINT` ou `SENTRY_DSN` est défini.
 
 ## 4. Modèle de données comptable
 
@@ -134,10 +143,12 @@ Le suffixe `:D` ou `:C` ne retient que les soldes débiteurs ou créditeurs, par
 | Bilan (actif / passif) | Oui | Simplifié | Soldes de clôture, classes 1–5 |
 | Compte de résultat | Oui, avec soldes intermédiaires | Recettes / dépenses | Classes 6, 7, 8 |
 | Tableau des flux de trésorerie | Oui | Non | Variations N / N-1 + retraitements (CAFG, cessions) |
-| Notes annexes (environ 36) | Oui | 2 à 3 notes | Grand livre + modules |
+| Notes annexes (environ 36 au référentiel) | Oui | 2 à 3 notes | Grand livre + modules |
 | Liasse fiscale (DSF) | Selon pays | Selon pays | États OHADA + états fiscaux du pack pays |
 
 **Notes annexes : le différenciateur.** Trois familles : notes chiffrées dérivées du grand livre (calculées, rapprochées de leur poste), notes alimentées par un module (immobilisations, paie), notes narratives (brouillon IA à valider, jamais exporté sans relecture).
+
+**Couverture réelle.** Le référentiel SYSCOHADA révisé compte environ 36 notes ; `packages/statements/src/templates/syscohada-revise/notes.ts` est explicitement un **extrait** et en définit **16** (2, 3A, 3C, 6, 7, 8, 11, 13, 16A, 17, 18, 21, 24, 27A, 27B, 35). Les autres notes restent à écrire : une liasse produite aujourd'hui est incomplète sur ce point et doit être complétée à la main.
 
 **Contrôles bloquants** : total actif = total passif ; résultat du bilan = résultat du compte de résultat ; variation de trésorerie du TFT = trésorerie nette N − N-1 ; aucun solde orphelin ; total de chaque note = poste correspondant. **Alertes non bloquantes** : caisse créditrice, compte d'attente 47 non soldé, TVA de sens inhabituel, capitaux propres inférieurs à la moitié du capital (AUSCGIE).
 
@@ -149,7 +160,7 @@ Un pays = un pack de données versionné, chargé au démarrage et référencé 
 
 Dépôt électronique : aucun portail DGI n'expose d'API publique connue. La cible est de générer le fichier au format exact attendu par le portail, puis de guider le dépôt.
 
-## 7. Modules opérationnels (phases 2–3)
+## 7. Modules opérationnels
 
 Chaque module émet des événements métier qu'un « posting engine » transforme en écritures selon des modèles paramétrés. Le dirigeant de PME ne voit jamais un débit ou un crédit ; le comptable voit tout.
 
@@ -162,9 +173,11 @@ Chaque module émet des événements métier qu'un « posting engine » transfor
 | Paie | Salariés, bulletins, cotisations, livre de paie, déclarations sociales | 661 / 664 à 422, 431, 447 |
 | Fiscalité | TVA périodique, retenues, acomptes IS, DSF annuelle | Liquidation 443 / 445 à 444 |
 | Immobilisations | Fiche, plan d'amortissement, cessions | 681 à 28x ; alimente les notes annexes |
-| Stocks (phase 2) | Inventaire simple, variation de stock | 603x / 31x–38x |
+| Stocks (**non implémenté**) | Inventaire simple, variation de stock | 603x / 31x–38x |
 
-Facture électronique certifiée (FNE en Côte d'Ivoire, MECeF au Bénin…) : connecteur de certification par pays prévu dès la conception (`certified_invoice` dans le pack). Banque et mobile money : API des agrégateurs, import de relevés lus par l'IA, puis partenariats bancaires directs. Clôture assistée : liste de contrôle mensuelle et annuelle puis verrouillage de la période.
+Sauf la dernière ligne, ces modules existent dans le dépôt (voir le tableau d'état d'implémentation). **Les stocks n'existent pas** : aucun paquet, aucune table, aucun écran, aucune route. Seuls les comptes 31x–38x figurent au plan de comptes SYSCOHADA ; la ligne reste ici parce que le besoin est réel, pas parce que le code l'est.
+
+Facture électronique certifiée (FNE en Côte d'Ivoire, MECeF au Bénin…) : connecteur de certification par pays prévu dès la conception (`certified_invoice` dans le pack). Aucun connecteur réel n'est livré : `packages/invoicing/src/certification.ts` ne contient que `NullConnector` et `MockFneConnector` (simulateur activé par `CERTIFICATION_CONNECTOR=mock`). Banque et mobile money : API des agrégateurs, import de relevés lus par l'IA, puis partenariats bancaires directs — l'import et le rapprochement sont livrés, la connexion aux agrégateurs ne l'est pas. Clôture assistée : liste de contrôle mensuelle et annuelle puis verrouillage de la période.
 
 ## 8. Couche IA
 
@@ -186,11 +199,13 @@ flowchart LR
 | Capacité | Fonctionnement | Garde-fou |
 | --- | --- | --- |
 | Capture de pièces | Extraction en JSON strict (`DocumentExtractionSchema`) | Contrôle HT + TVA = TTC ; doublon par hash et par (tiers, montant, date) |
-| Catégorisation | Règles du dossier, puis plus proches voisins (pgvector), puis LLM avec le plan en contexte | Le compte proposé doit exister dans le plan ; sinon rejet |
+| Catégorisation | Règles du dossier, puis plus proches voisins (aujourd'hui lexicaux ; pgvector prévu), puis LLM avec le plan en contexte | Le compte proposé doit exister dans le plan ; sinon rejet |
 | Rapprochement bancaire | Appariement par montant, date, libellé ; LLM pour les libellés ambigus | Jamais de lettrage automatique sous un seuil de confiance |
 | Assistant | Appels d'outils typés en lecture seule | Pas de SQL libre ; filtré par tenant côté serveur |
 | Notes narratives | Brouillon à partir des données | Marqué « à valider », jamais exporté sans relecture |
 | Détection d'anomalies | Règles + écarts statistiques | Alerte seulement, aucune correction automatique |
+
+**Mémoire des catégorisations : état réel.** La recherche de plus proches voisins de `CategorizationMemoryStore.nearest()` n'emprunte le chemin pgvector que si un embedding lui est passé et si la colonne `embedding` existe. Le seul appelant (`packages/documents/src/categorize.ts`) n'en passe pas, et rien dans le dépôt ne calcule d'embedding : **la mémoire fonctionne uniquement par similarité lexicale** (jetons Jaccard, trigrammes Dice, tiers pondéré plus fort que le libellé). La recherche sémantique reste une cible, pas une fonction livrée.
 
 **Passerelle IA interne** (`packages/ai-gateway`) : un seul service encapsule les appels au modèle (minimisation des données, sorties JSON validées par schéma, journal de chaque appel dans `ai_call_log`, quotas par abonnement, fournisseur interchangeable).
 
@@ -198,8 +213,8 @@ flowchart LR
 
 | Domaine | Mesure |
 | --- | --- |
-| Isolation | RLS PostgreSQL sur `tenant_id` ; le tenant vient du jeton, jamais du client ; `pnpm test:tenancy` vérifie l'absence de fuite |
-| Accès | Keycloak OIDC, MFA obligatoire pour cabinets et administrateurs, rôles par dossier (dirigeant, comptable, caissier, auditeur en lecture seule) |
+| Isolation | RLS PostgreSQL sur `tenant_id` ; le dossier courant est vérifié contre les appartenances de l'utilisateur, jamais accepté sur parole du client ; `pnpm test:tenancy` vérifie l'absence de fuite |
+| Accès | Keycloak authentifie (OIDC) ; ARCOMPT autorise à partir de la table `company_member` : rôles par dossier (dirigeant, comptable, caissier, auditeur en lecture seule) modifiables depuis le portail avec effet immédiat. MFA exigée par l'API quand `organization.mfa_required` est vrai — le fournisseur d'identité doit être configuré pour proposer un second facteur |
 | Chiffrement | TLS partout ; chiffrement au repos ; champs sensibles de paie chiffrés au niveau applicatif |
 | Piste d'audit | `audit_log` en insertion seule, chaîné par hash ; export pour commissaire aux comptes |
 | Conservation | Pièces et livres conservés 10 ans (AUDCIF) ; export complet du dossier à tout moment |
@@ -238,6 +253,8 @@ L'exercice se verrouille seulement une fois l'accusé de dépôt joint au dossie
 | 3. Paie et fiscalité complète | 10–12 semaines | Paie par pays, déclarations, DSF, facture certifiée, assistant | PME + cabinets |
 | 4. Extension | Continu | Nouveaux packs pays, zone CEMAC, stocks, consolidation, SYCEBNL, API publique | Groupes, ONG |
 
+**Où en est-on.** Les livrables des phases 0 à 3 sont dans le dépôt, à trois réserves près : les connecteurs externes (paiement, certification, portails DGI) sont simulés, les packs pays restent en brouillon et les notes annexes sont partielles. La phase 4 n'est pas commencée. Le détail est dans « Ce qui n'est pas encore construit », en fin de document.
+
 | Risque | Impact | Parade |
 | --- | --- | --- |
 | Erreur dans un état ou une déclaration | Perte de confiance immédiate des cabinets | Expert-comptable référent par pays, balances de référence en tests, contrôles bloquants |
@@ -254,14 +271,14 @@ L'exercice se verrouille seulement une fois l'accusé de dépôt joint au dossie
 | Bloc | Paquets et fichiers | Statut |
 | --- | --- | --- |
 | Monorepo, outillage, CI | `package.json`, `vitest.workspace.ts`, `.github/workflows/ci.yml`, `infra/` | Fait |
-| Schéma et invariants | `packages/db/migrations/0001…0008`, tests `db` | Fait, testé contre PostgreSQL (RLS, triggers, chaînage) |
+| Schéma et invariants | `packages/db/migrations/0001…0009`, tests `db` | Fait, testé contre PostgreSQL (RLS, triggers, chaînage) |
 | Plan de comptes SYSCOHADA | `packages/db/src/chart.ts` | Fait (indicatif) |
-| Moteur comptable | `packages/ledger` | Fait : brouillon/validation, contrepassation, chaînage, balance, import, ancrage Merkle |
+| Moteur comptable | `packages/ledger` | Fait : brouillon/validation, contrepassation, chaînage, balance, import. Ancrage Merkle : code écrit et testé unitairement, mais jamais appelé ni publié (voir « Ce qui n'est pas encore construit ») |
 | Moteur d'états | `packages/statements` | Fait : bilan, CR, TFT, notes, contrôles, fixture de référence |
 | Rendu PDF / Excel | `packages/render` | Fait : états, balance, grand livre, facture, bulletin, rapprochement ; Chromium + ExcelJS |
-| Règles et packs pays | `packages/rules`, `packages/country-packs` | Fait : 8 packs en brouillon (CI, SN, TG, BJ, BF, ML, NE, CM) |
+| Règles et packs pays | `packages/rules`, `packages/country-packs` | Fait : 8 packs (CI, SN, TG, BJ, BF, ML, NE, CM), tous en `status: "DRAFT"`, aucun relu par un expert-comptable |
 | Posting engine | `packages/posting` | Fait : modèles paramétrés pour tous les événements métier |
-| Facturation et achats | `packages/invoicing` | Fait : devis, factures, avoirs, numérotation légale, certification (connecteur), règlements avec séparation des tâches, liens et webhooks mobile money signés et idempotents, balances âgées, relances |
+| Facturation et achats | `packages/invoicing` | Fait : devis, factures, avoirs, numérotation légale, règlements avec séparation des tâches, liens et webhooks mobile money signés et idempotents, balances âgées, relances. Certification et paiement : interfaces en place, connecteurs simulés seulement |
 | Trésorerie | `packages/treasury` | Fait : comptes, import CSV/SMS, rapprochement automatique borné, LLM sur ambiguïtés, caisse, prévision 13 semaines |
 | Paie | `packages/payroll` | Fait : salariés chiffrés (enveloppe, rotation), bulletins par pack, livre de paie, déclarations, écritures |
 | Immobilisations | `packages/assets` | Fait : plans linéaire/dégressif, dotations idempotentes, cessions, notes 3A/3C |
@@ -270,7 +287,27 @@ L'exercice se verrouille seulement une fois l'accusé de dépôt joint au dossie
 | Pièces, IA, assistant | `packages/documents`, `packages/storage`, `packages/jobs` | Fait : capture, extraction, propositions en tampon, file de revue, mémoire des corrections, assistant à outils typés, anomalies |
 | WhatsApp | `packages/whatsapp` | Fait : webhook signé, photo → proposition avec boutons, dépenses par texte, vérification du numéro |
 | Portail cabinets | `packages/portal` | Fait : organisation, invitations, tableau de bord multi-dossiers, file de revue, commentaires, pièces manquantes, dépôts, facturation dégressive, marque blanche, accès administrateur notifié, break-glass |
-| API | `apps/api` | Fait : auth dev/OIDC, limitation de débit, en-têtes, télémétrie, tous les modules montés, webhooks publics, worker de tâches |
-| Web | `apps/web` | Fait : auth Keycloak + dev, proxy, i18n FR/EN, PWA hors ligne chiffrée, et les écrans de tous les modules (facturation, achats, règlements, trésorerie, paie, fiscalité, immobilisations, clôture, pièces et IA, assistant, portail cabinets) ; 60 routes |
+| API | `apps/api` | Fait : auth dev/OIDC avec autorisation lue dans `company_member`, limitation de débit, en-têtes, journaux structurés et alertes, tous les modules montés, webhooks publics, worker de tâches |
+| Web | `apps/web` | Fait : auth Keycloak + dev, proxy, i18n FR/EN, PWA hors ligne chiffrée (manifeste, service worker, page hors ligne), et les écrans de tous les modules (facturation, achats, règlements, trésorerie, paie, fiscalité, immobilisations, clôture, pièces et IA, assistant, portail cabinets) ; 52 pages (`find apps/web/app -name page.tsx`) |
 | Tests de bout en bout | `e2e/` | Fait : parcours PME dans Chromium (connexion, écrans, facture, PDF, refus d'écriture déséquilibrée), exécuté en CI |
-| Mobile natif (Expo), vocal en langues locales, connecteurs DGI et opérateurs réels | — | Phase 4 : les interfaces (certification, paiement, WhatsApp, ancrage) sont en place avec des simulateurs |
+| Mobile natif (Expo), vocal en langues locales, connecteurs DGI et opérateurs réels | — | Non commencé. Les interfaces (certification, paiement, ancrage) existent, avec des simulateurs derrière |
+
+### Ce qui n'est pas encore construit
+
+Liste tenue à jour volontairement : tout ce qui est décrit plus haut comme cible et qui n'a pas d'implémentation réelle dans le dépôt.
+
+| Sujet | État réel |
+| --- | --- |
+| Stocks / inventaire | Aucun code : ni paquet, ni table, ni écran. Seuls les comptes 31x–38x existent au plan de comptes |
+| Encaissement mobile money | Aucun agrégateur réel ; seul `MockPaymentProvider` (liens en mémoire, webhooks signés localement) |
+| Facture certifiée (FNE, MECeF…) | Aucun connecteur réel ; `NullConnector` et `MockFneConnector` seulement |
+| Envoi d'e-mails et de SMS | Aucun expéditeur. Le `Notifier` du portail est un port : sans implémentation injectée, il journalise un avertissement et n'envoie rien. `packages/treasury/src/sms.ts` **lit** des SMS mobile money, il n'en envoie pas |
+| Gestionnaire de clés (KMS) | Interface `KeyProvider` présente, mais seule `EnvKeyProvider` est livrée : la clé maître vient de l'environnement |
+| Ancrage externe de la chaîne de hash | Racine de Merkle et preuves d'inclusion écrites et testées (`packages/ledger/src/anchoring.ts`), mais aucun appelant, aucune table d'ancre en migration et un seul publieur, `MemoryAnchorPublisher`, qui garde tout en mémoire. Rien n'est publié à ce jour |
+| Recherche sémantique (pgvector) | Chemin vectoriel présent mais jamais emprunté : aucun embedding n'est calculé. La mémoire des catégorisations est lexicale |
+| Notes annexes | 16 notes définies sur environ 36 au référentiel |
+| Application mobile native (Expo) | Non commencée ; seule la PWA existe |
+| Saisie vocale en langues locales | Non commencée |
+| Packs pays | 8 packs, tous en `DRAFT`, aucun `reviewed_by`, aucun publié ; une seule balance de référence (`fixtures/balances/demo-ci`) |
+| Séparation des rôles SQL en exploitation | `arcompt_app` est créé `NOLOGIN` et aucune migration ne crée de rôle de connexion membre de ce rôle : hors tests, l'application se connecte avec le propriétaire du schéma (voir `docs/SECURITY.md` § 6) |
+| Sauvegardes, restaurations et exercices de reprise | Procédures décrites dans `docs/OPERATIONS.md`, mais aucun script ni automatisation dans le dépôt |

@@ -78,8 +78,39 @@ export class ClamAvScanner implements AntivirusScanner {
   }
 }
 
+/**
+ * Garde-fou des replis simulés (voir apps/api/src/config.ts, même contrat).
+ * En production, un simulateur ne peut être choisi silencieusement : soit la
+ * dépendance réelle est configurée, soit l'opt-out `ALLOW_INSECURE_*=1` est
+ * posé explicitement. Hors production, on avertit et on continue.
+ */
+export function guardSimulatedDependency(opts: {
+  simulated: string;
+  missing: string;
+  optOut?: string;
+  env?: NodeJS.ProcessEnv;
+  warn?: (message: string) => void;
+}): void {
+  const env = opts.env ?? process.env;
+  const warn = opts.warn ?? ((message: string) => console.warn(message));
+  const raw = opts.optOut ? (env[opts.optOut] ?? "").trim().toLowerCase() : "";
+  const allowed = raw === "1" || raw === "true" || raw === "yes";
+  if (env.NODE_ENV === "production" && !allowed) {
+    const escape = opts.optOut ? ` Posez ${opts.optOut}=1 pour l'accepter explicitement.` : "";
+    throw new Error(`Configuration de production invalide : ${opts.missing} — sans cela, ${opts.simulated} serait simulé, ce qui est interdit en production.${escape}`);
+  }
+  warn(`[arcompt] SIMULATION : ${opts.simulated} (${opts.missing}). Jamais en production.`);
+}
+
+/** Antivirus réel si `CLAMAV_HOST` ; sinon scanner neutre, interdit en production sans `ALLOW_INSECURE_ANTIVIRUS=1`. */
 export function createScannerFromEnv(env: NodeJS.ProcessEnv = process.env): AntivirusScanner {
   if (env.CLAMAV_HOST) return new ClamAvScanner(env.CLAMAV_HOST, env.CLAMAV_PORT ? Number(env.CLAMAV_PORT) : 3310);
+  guardSimulatedDependency({
+    env,
+    simulated: "l'analyse antivirus des pièces téléversées (tous les fichiers seraient acceptés)",
+    missing: "CLAMAV_HOST est absent",
+    optOut: "ALLOW_INSECURE_ANTIVIRUS",
+  });
   return new NoopScanner();
 }
 

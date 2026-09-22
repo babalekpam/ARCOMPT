@@ -4,6 +4,7 @@ import { logger } from "hono/logger";
 import type { Sql } from "postgres";
 import { LedgerError, type Ledger } from "@arcompt/ledger";
 import { authMiddleware, type AuthOptions } from "./auth.js";
+import { resolveIdentity, touchLastActive, type TokenIdentityHints } from "./identity.js";
 import { rateLimit, securityHeaders } from "./security.js";
 import { BurstDetector, raiseSecurityAlert } from "./telemetry.js";
 import { accountsRoutes } from "./routes/accounts.js";
@@ -46,7 +47,22 @@ export function createApp(deps: AppDeps) {
   app.get("/health", (c) => c.json({ ok: true, service: "arcompt-api" }));
 
   const api = new Hono();
-  api.use("*", authMiddleware(deps.auth));
+  // Autorisation depuis la base : rôles et dossiers viennent de company_member,
+  // pas du jeton. Sans connexion PostgreSQL (tests API en mémoire), le mode dev
+  // reste seul utilisable.
+  const db = deps.db;
+  api.use(
+    "*",
+    authMiddleware({
+      ...deps.auth,
+      ...(db
+        ? {
+            resolveIdentity: (sub: string, hints: TokenIdentityHints) => resolveIdentity(db, sub, hints),
+            touchLastActive: (userId: string) => touchLastActive(db, userId),
+          }
+        : {}),
+    }),
+  );
   api.use("*", async (c, next) => {
     await next();
     if (c.res.status === 401 || c.res.status === 403) {

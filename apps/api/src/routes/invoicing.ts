@@ -7,9 +7,6 @@ import { PostingError } from "@arcompt/posting";
 import {
   InvoicingError,
   InvoicingService,
-  MockFneConnector,
-  MockPaymentProvider,
-  NullConnector,
   PaymentsService,
   PurchasesService,
   type CertificationConnector,
@@ -18,6 +15,7 @@ import {
 } from "@arcompt/invoicing";
 import { requireRole } from "../auth.js";
 import type { AppDeps } from "../app.js";
+import { certificationConnectorFromEnv, paymentProvidersFromEnv } from "../config.js";
 
 /**
  * Routes facturation, achats et règlements. Montées par l'application sous un
@@ -30,9 +28,9 @@ import type { AppDeps } from "../app.js";
  */
 export interface InvoicingRouteDeps extends AppDeps {
   invoicing?: {
-    /** Connecteur de facture certifiée ; défaut : MockFneConnector si CERTIFICATION_CONNECTOR=mock, sinon NullConnector. */
+    /** Connecteur de facture certifiée ; défaut : MockFneConnector si CERTIFICATION_CONNECTOR=mock (refusé en production), sinon NullConnector. */
     certification?: CertificationConnector;
-    /** Opérateurs de paiement par nom ; défaut : { mock } (secret PAYMENT_WEBHOOK_SECRET). */
+    /** Opérateurs de paiement par nom ; défaut : { mock } (secret PAYMENT_WEBHOOK_SECRET), refusé en production. */
     paymentProviders?: Record<string, PaymentProvider>;
     now?: () => Date;
   };
@@ -130,8 +128,11 @@ function invalid(c: Context, issues: unknown) {
 export function invoicingRoutes(deps: InvoicingRouteDeps) {
   const r = new Hono();
   const packs = new Map<string, CountryPack>();
-  const certification = deps.invoicing?.certification ?? (process.env.CERTIFICATION_CONNECTOR === "mock" ? new MockFneConnector() : new NullConnector());
-  const paymentProviders = deps.invoicing?.paymentProviders ?? { mock: new MockPaymentProvider({ secret: process.env.PAYMENT_WEBHOOK_SECRET ?? "mock-secret" }) };
+  // Connecteur et opérateurs simulés refusés en production (voir config.ts) :
+  // une certification fiscale inventée finit imprimée sur la facture client,
+  // un opérateur mock accepte des encaissements fictifs.
+  const certification = deps.invoicing?.certification ?? certificationConnectorFromEnv();
+  const paymentProviders = deps.invoicing?.paymentProviders ?? paymentProvidersFromEnv();
 
   /** Services liés au dossier du jeton : pack pays et devise lus sur `company`. */
   async function servicesFor(c: Context) {

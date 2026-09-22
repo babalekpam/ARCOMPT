@@ -107,6 +107,6 @@
     }
   ],
   "requiredActions": [
-    { "alias": "CONFIGURE_TOTP", "name": "Configure OTP", "enabled": true, "defaultAction": false }
+    { "alias": "CONFIGURE_TOTP", "name": "Configure OTP", "enabled": true, "defaultAction": true }
   ]
 }
