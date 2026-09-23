@@ -35,6 +35,7 @@ function app(
     clerkUserLookup: lookup,
   }));
   hono.get("/me", (c) => c.json(c.get("auth")));
+  hono.get("/v1/session/memberships", (c) => c.json(c.get("auth")));
   return hono;
 }
 
@@ -63,6 +64,43 @@ describe("Clerk API authentication", () => {
   it("rejects a verified non-session token without sid", async () => {
     verifyToken.mockResolvedValueOnce({ sub: "user_clerk", fva: [0, null] });
     expect((await request(app(async () => identity()))).status).toBe(401);
+  });
+
+  it("discovers only database memberships without a selected tenant", async () => {
+    const hono = app(async () => identity({
+      memberships: [{ companyId: TENANT, role: "OWNER" }, { companyId: OTHER, role: "REVIEWER" }],
+    }));
+    const headers = { authorization: "Bearer session-token" };
+    const response = await hono.request("/v1/session/memberships", { headers });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ companies: [
+      { id: TENANT, role: "OWNER" },
+      { id: OTHER, role: "REVIEWER" },
+    ], canBootstrap: false });
+    expect((await hono.request("/me", { headers })).status).toBe(403);
+    expect((await request(hono, "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")).status).toBe(403);
+  });
+
+  it("shows no tenant access for an unlinked signup, never grants it", async () => {
+    const hono = app(async () => null);
+    const headers = { authorization: "Bearer session-token" };
+    const response = await hono.request("/v1/session/memberships", { headers });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ companies: [], canBootstrap: false });
+    expect((await hono.request("/me", { headers: { ...headers, "x-tenant-id": TENANT } })).status).toBe(403);
+    expect((await hono.request("/v1/session/memberships")).status).toBe(401);
+  });
+
+  it("does not expose memberships for suspended or MFA-incomplete users", async () => {
+    const headers = { authorization: "Bearer session-token" };
+    const suspended = await app(async () => identity({ suspendedAt: new Date() }))
+      .request("/v1/session/memberships", { headers });
+    expect(suspended.status).toBe(403);
+    expect(((await suspended.json()) as { error: { code: string } }).error.code).toBe("ACCOUNT_SUSPENDED");
+    const mfa = await app(async () => identity({ mfaRequired: true }))
+      .request("/v1/session/memberships", { headers });
+    expect(mfa.status).toBe(403);
+    expect(((await mfa.json()) as { error: { code: string } }).error.code).toBe("MFA_REQUIRED");
   });
 
   it("keeps tenant authorization in the database", async () => {

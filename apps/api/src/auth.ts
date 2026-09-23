@@ -40,6 +40,10 @@ export interface AuthContext {
   platformAdmin?: boolean;
   /** Verified Clerk subject, for platform discovery callbacks only. */
   platformSub?: string;
+  /** Verified Clerk subject/profile for the tenantless bootstrap route only. */
+  clerkSub?: string;
+  clerkEmail?: string;
+  clerkDisplayName?: string;
 }
 
 export type Role = "OWNER" | "ACCOUNTANT" | "CASHIER" | "AUDITOR" | "REVIEWER";
@@ -162,7 +166,7 @@ export interface AuthOptions {
   /** Exact frontend origins allowed to mint the session token (`azp`). */
   authorizedParties?: string[];
   /** Injectable official Clerk user lookup, used only for first-login linking. */
-  clerkUserLookup?: (userId: string) => Promise<{ email?: string; emailVerified: boolean } | null>;
+  clerkUserLookup?: (userId: string) => Promise<{ email?: string; emailVerified: boolean; displayName?: string } | null>;
   /**
    * URL du trousseau imposée à la main, court-circuitant la découverte.
    * Par défaut la variable d'environnement `OIDC_JWKS_URI`.
@@ -180,6 +184,8 @@ export interface AuthOptions {
   resolvePlatformAdmin?: (sub: string) => Promise<PlatformAdminIdentity | null>;
   resolvePlatformCompany?: (sub: string, companyId: string) => Promise<{ companyId: string; organizationId: string } | null>;
   resolvePlatformCompanies?: (sub: string) => Promise<PlatformCompany[]>;
+  resolveBootstrapReplay?: (sub: string) => Promise<string | null>;
+  resolveBootstrapEligibility?: (sub: string, email: string) => Promise<string | null>;
   recordPlatformAccess?: (sub: string, companyId: string | null, method: string, path: string) => Promise<void>;
 }
 
@@ -237,7 +243,7 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
         const user = await createClerkClient({ secretKey: opts.clerkSecretKey! }).users.getUser(userId);
         const address = user.emailAddresses.find((entry) => entry.id === user.primaryEmailAddressId);
         return address
-          ? { email: address.emailAddress, emailVerified: address.verification?.status === "verified" }
+          ? { email: address.emailAddress, emailVerified: address.verification?.status === "verified", displayName: user.firstName ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ""}` : undefined }
           : null;
       }
     : null);
@@ -258,6 +264,8 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
     if (!token) return unauthorized(c, "Jeton Bearer requis");
 
     if (opts.mode === "clerk") {
+      const membershipsPath = c.req.method === "GET" &&
+        (c.req.path === "/v1/session/memberships" || c.req.path === "/session/memberships");
       let payload: JWTPayload & { fva?: unknown; azp?: unknown };
       try {
         payload = await verifyToken(token, {
@@ -274,8 +282,9 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
       if (!sub || typeof payload.sid !== "string" || payload.sid.length === 0) return unauthorized(c, "Jeton Clerk sans session (sub/sid)");
       const platformAdmin = opts.resolvePlatformAdmin ? await opts.resolvePlatformAdmin(sub) : null;
       if (platformAdmin) {
-        if (platformAdmin.suspendedAt) return forbidden(c, "Compte suspendu : contactez l'administrateur");
-        if (!hasClerkSecondFactor(payload.fva)) return forbidden(c, "Authentification multifacteur requise pour l'administration de la plateforme");
+        if (platformAdmin.suspendedAt) return forbidden(c, "Compte suspendu : contactez l'administrateur", "ACCOUNT_SUSPENDED");
+        if (!hasClerkSecondFactor(payload.fva)) return forbidden(c, "Authentification multifacteur requise pour l'administration de la plateforme", "MFA_REQUIRED");
+        if (membershipsPath) return c.json({ companies: [], canBootstrap: false });
         // Hono normally retains the mounted `/v1` prefix; accept the
         // sub-router form as well so this remains correct in isolated tests.
         const platformPath = c.req.path === "/v1/platform" || c.req.path.startsWith("/v1/platform/") || c.req.path === "/platform" || c.req.path.startsWith("/platform/");
@@ -306,25 +315,80 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
         });
         return next();
       }
-      const existing = resolve ? await resolve(sub, {}) : null;
+      let existing: Identity | null = null;
+      try {
+        existing = resolve ? await resolve(sub, {}) : null;
+      } catch {
+        return c.json({ error: { code: "IDENTITY_PROVIDER_UNAVAILABLE", message: "Résolution de l'identité indisponible" } }, 503);
+      }
       let identity = existing;
+      const bootstrapPath = c.req.method === "POST" && (c.req.path === "/v1/session/bootstrap" || c.req.path === "/session/bootstrap");
       if (!identity) {
         try {
           const account = await clerkLookup!(sub);
           if (account?.email && account.emailVerified) {
-            identity = await resolve!(sub, { email: account.email, emailVerified: true });
+             identity = await resolve!(sub, { email: account.email, emailVerified: true });
+             if (!identity && bootstrapPath) {
+               c.set("auth", { userId: "", tenantId: "", roles: [], clerkSub: sub, clerkEmail: account.email, ...(account.displayName ? { clerkDisplayName: account.displayName } : {}) });
+               return next();
+             }
           }
         } catch {
           // A provider lookup outage must not turn into an authorization grant.
           return c.json({ error: { code: "IDENTITY_PROVIDER_UNAVAILABLE", message: "Profil Clerk inexploitable" } }, 503);
         }
       }
-      if (!identity) return forbidden(c, "Compte inconnu dans ARCOMPT : aucun utilisateur ne correspond à ce sujet Clerk");
-      if (identity.suspendedAt) return forbidden(c, "Compte suspendu : contactez l'administrateur de votre organisation");
-      if (identity.memberships.length === 0) return forbidden(c, "Aucun dossier accessible : demandez à être ajouté comme membre");
-      if (identity.mfaRequired && !hasClerkSecondFactor(payload.fva)) {
-        return forbidden(c, "Authentification multifacteur requise par votre organisation : reconnectez-vous avec un second facteur");
+      // A signed-in person must be able to discover *their own* memberships
+      // before choosing a tenant. No other endpoint may skip tenant selection.
+      if (!identity) {
+        if (membershipsPath) {
+          try {
+            const account = await clerkLookup!(sub);
+            const state = account?.email && account.emailVerified && opts.resolveBootstrapEligibility
+              ? await opts.resolveBootstrapEligibility(sub, account.email)
+              : null;
+            return c.json({ companies: [], canBootstrap: state === "ELIGIBLE" });
+          } catch {
+            return c.json({ error: { code: "IDENTITY_PROVIDER_UNAVAILABLE", message: "Profil Clerk inexploitable" } }, 503);
+          }
+        }
+        return forbidden(c, "Compte inconnu dans ARCOMPT : aucun utilisateur ne correspond à ce sujet Clerk");
       }
+      if (identity.suspendedAt) return forbidden(c, "Compte suspendu : contactez l'administrateur de votre organisation", "ACCOUNT_SUSPENDED");
+      if (identity.mfaRequired && !hasClerkSecondFactor(payload.fva)) {
+        return forbidden(c, "Authentification multifacteur requise par votre organisation : reconnectez-vous avec un second facteur", "MFA_REQUIRED");
+      }
+      if (identity && bootstrapPath && opts.resolveBootstrapReplay) {
+        let replay: string | null;
+        try {
+          replay = await opts.resolveBootstrapReplay(sub);
+        } catch {
+          return c.json({ error: { code: "IDENTITY_PROVIDER_UNAVAILABLE", message: "Vérification du bootstrap indisponible" } }, 503);
+        }
+        if (replay) {
+          const account = await clerkLookup!(sub);
+          if (account?.email && account.emailVerified) {
+            c.set("auth", { userId: identity.userId, tenantId: "", roles: [], clerkSub: sub, clerkEmail: account.email, ...(account.displayName ? { clerkDisplayName: account.displayName } : {}) });
+            return next();
+          }
+        }
+      }
+      if (bootstrapPath && identity) return forbidden(c, "Compte déjà connu : utilisez votre dossier existant");
+      if (membershipsPath) {
+        try {
+          const account = await clerkLookup!(sub);
+          const state = account?.email && account.emailVerified && opts.resolveBootstrapEligibility
+            ? await opts.resolveBootstrapEligibility(sub, account.email)
+            : null;
+          return c.json({ companies: identity.memberships.map((membership) => ({
+          id: membership.companyId,
+          role: membership.role,
+          })), canBootstrap: state === "ELIGIBLE" });
+        } catch {
+          return c.json({ error: { code: "IDENTITY_PROVIDER_UNAVAILABLE", message: "Profil Clerk inexploitable" } }, 503);
+        }
+      }
+      if (identity.memberships.length === 0) return forbidden(c, "Aucun dossier accessible : demandez à être ajouté comme membre");
       if (!tenantHeader) return forbidden(c, "En-tête X-Tenant-Id requis");
       const membership = identity.memberships.find((m) => m.companyId === tenantHeader);
       if (!membership) return forbidden(c, "Dossier non autorisé pour cet utilisateur");
@@ -409,6 +473,6 @@ function unauthorized(c: Context, message: string) {
   return c.json({ error: { code: "UNAUTHORIZED", message } }, 401);
 }
 
-function forbidden(c: Context, message: string) {
-  return c.json({ error: { code: "FORBIDDEN", message } }, 403);
+function forbidden(c: Context, message: string, code = "FORBIDDEN") {
+  return c.json({ error: { code, message } }, 403);
 }

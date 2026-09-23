@@ -9,7 +9,7 @@ export function ClerkSignIn() {
       path="/login"
       routing="path"
       signUpUrl="/sign-up"
-      forceRedirectUrl="/dashboard"
+      forceRedirectUrl="/api/session/landing"
     />
   );
 }

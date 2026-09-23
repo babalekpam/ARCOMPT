@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Connexion" };
 // /login/sso-callback and /login/factor-one.
 export default async function LoginPage() {
   const existing = await getAuthContext();
-  if (existing) redirect("/dashboard");
+  if (existing) redirect(existing.mode === "clerk" ? "/api/session/landing" : "/dashboard");
   const { t } = await getT();
   const mode = config.authMode();
   return (

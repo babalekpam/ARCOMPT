@@ -18,13 +18,14 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Money } from "@/components/ui/Money";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { getPlatformAdmin } from "@/lib/platform";
+import { getPlatformAdmin, shouldShowPlatformPicker } from "@/lib/platform";
 import { redirect } from "next/navigation";
 
 export default async function DashboardPage({ searchParams }: { searchParams: SearchParams }) {
   const { t } = await getT();
   const auth = await requireAuthContext();
-  if (!auth.tenantId && (await getPlatformAdmin())) redirect("/platform");
+  if (shouldShowPlatformPicker(await getPlatformAdmin(), auth.tenantId)) redirect("/platform");
+  if (auth.mode === "clerk" && !auth.tenantId) redirect("/api/session/landing");
   const { fiscalYear, previousFiscalYear } = resolveFiscalYear(await searchParams);
   const currency = config.defaultCurrency();
   const [tb, st] = await Promise.all([

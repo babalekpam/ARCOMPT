@@ -273,10 +273,24 @@ export class OrganizationService {
 
     const userId = await withTenant(this.db, { tenantId: "", organizationId, ...(input.user.id ? { userId: input.user.id } : {}) }, async (tx) => {
       let user: Row | undefined;
+      const email = input.user.email ?? str(inv.email);
+      // Bootstrap and invitation acceptance must serialize on the verified
+      // email, even when RLS would otherwise hide the other organization.
+      await tx`SELECT pg_advisory_xact_lock(hashtext(lower(${email})))`;
+      // SECURITY DEFINER lookup deliberately performs the global collision
+      // check; its result is informational here, the invitation still owns
+      // the invited organization's membership decision.
+      const [eligibility] = await tx`SELECT state FROM auth_bootstrap_lookup(${input.user.keycloakSub ?? ""}, ${email})`;
       if (input.user.id) [user] = await tx`SELECT id FROM app_user WHERE id = ${input.user.id}`;
       if (!user && input.user.keycloakSub) [user] = await tx`SELECT id FROM app_user WHERE keycloak_sub = ${input.user.keycloakSub}`;
+      // A user already belonging to this organization may safely retry an
+      // invitation. A new row, however, is only legal for a globally eligible
+      // email: bootstrap/replay/linked/suspended/ambiguous identities must
+      // never be duplicated into the invited organization.
+      if (!user && eligibility?.state !== "ELIGIBLE") {
+        throw new PortalError("CONFLICT", "Cette adresse est déjà rattachée à un compte ARCOMPT");
+      }
       if (!user) {
-        const email = input.user.email ?? str(inv.email);
         [user] = await tx`
           INSERT INTO app_user (id, organization_id, keycloak_sub, email, display_name, last_active_at)
           VALUES (${input.user.id ?? randomUUID()}, ${organizationId}, ${input.user.keycloakSub ?? null}, ${email}, ${input.user.displayName ?? email}, now())

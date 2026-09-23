@@ -148,6 +148,18 @@ run("invitations et membres", () => {
     await expect(orgs.acceptInvitation({ token: "inconnu", user: {} })).rejects.toMatchObject({ code: "INVITATION_INVALID" });
   });
 
+  it("refuse l'acceptation après un bootstrap concurrent sans dupliquer l'utilisateur", async () => {
+    const email = "bootstrapped-invite@cabinet.test";
+    const clerkSub = "clerk_bootstrapped_invite";
+    await db`INSERT INTO onboarding_bootstrap (clerk_sub, company_id) VALUES (${clerkSub}, ${companyA})`;
+    const before = await db`SELECT count(*)::int AS n FROM app_user WHERE lower(email) = lower(${email})`;
+    const { token } = await orgs.invite(orgCtx, { email, role: "ACCOUNTANT", companyIds: [companyA] });
+    await expect(orgs.acceptInvitation({ token, user: { keycloakSub: clerkSub, email, displayName: "Should not exist" } }))
+      .rejects.toMatchObject({ code: "CONFLICT" });
+    const after = await db`SELECT count(*)::int AS n FROM app_user WHERE lower(email) = lower(${email})`;
+    expect(Number(after[0]!.n)).toBe(Number(before[0]!.n));
+  });
+
   it("refuse une invitation expirée ou vers un dossier étranger", async () => {
     const { invitation, token: t } = await orgs.invite(orgCtx, { email: "late@cabinet.test", role: "AUDITOR", companyIds: [companyA] });
     await db`UPDATE invitation SET expires_at = now() - interval '1 minute' WHERE id = ${invitation.id}`;

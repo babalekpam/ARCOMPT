@@ -30,6 +30,7 @@ import { treasuryRoutes } from "./routes/treasury.js";
 import { whatsappRoutes } from "./routes/whatsapp.js";
 import { whatsappLinkRoutes } from "./routes/whatsapp-link.js";
 import { platformRoutes } from "./routes/platform.js";
+import { sessionRoutes } from "./routes/session.js";
 
 export interface AppDeps {
   /** Fabrique un moteur comptable pour le contexte courant (adaptateur mémoire ou PostgreSQL). */
@@ -80,6 +81,14 @@ export function createApp(deps: AppDeps) {
             resolvePlatformAdmin: (sub: string) => resolvePlatformAdmin(db, sub),
             resolvePlatformCompany: (sub: string, companyId: string) => resolvePlatformCompany(db, sub, companyId),
             resolvePlatformCompanies: (sub: string) => resolvePlatformCompanies(db, sub),
+            resolveBootstrapReplay: async (sub: string) => {
+              const [row] = await db`SELECT auth_bootstrap_replay(${sub}) AS company_id`;
+              return row?.company_id ? String(row.company_id) : null;
+            },
+            resolveBootstrapEligibility: async (sub: string, email: string) => {
+              const [row] = await db`SELECT state FROM auth_bootstrap_lookup(${sub}, ${email})`;
+              return row?.state ? String(row.state) : null;
+            },
             recordPlatformAccess: (sub: string, companyId: string | null, method: string, path: string) => recordPlatformAccess(db, sub, companyId, method, path),
           }
         : {}),
@@ -111,6 +120,7 @@ export function createApp(deps: AppDeps) {
   api.route("/", documentsRoutes(deps)); // /documents, /proposals, /assistant, /anomalies
   api.route("/portal", portalRoutes(deps));
   api.route("/platform", platformRoutes(db ? (sub: string) => resolvePlatformCompanies(db, sub) : undefined));
+  api.route("/", sessionRoutes(deps));
   app.route("/v1", api);
 
   // Canaux entrants sans jeton : WhatsApp (signature Meta) et webhooks de paiement (HMAC + anti-rejeu).

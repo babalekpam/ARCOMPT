@@ -1,3 +1,5 @@
 - [Replit package and test toolchain](replit-toolchain.md) — use Corepack for the pinned pnpm; keep database-backed Vitest files serial in this environment.
 - [Clerk on Next.js deployment](clerk-next-deployment.md) — Next builds embed public proxy config; validate the escaped Clerk route and never assume runtime-only injection suffices.
 - [Platform administrator authority](platform-admin-authority.md) — full cross-company access is an explicit user choice; keep the principal separate from customers and enforce per-company RLS.
+- [Redirects behind the preview proxy](proxied-redirects.md) — server-side absolute redirects based on the request URL may point browsers at localhost; use same-origin relative locations.
+- [Self-service identity isolation](self-service-identity.md) — first-owner signup must detect global identity collisions and serialize with invitation acceptance before creating a new account.

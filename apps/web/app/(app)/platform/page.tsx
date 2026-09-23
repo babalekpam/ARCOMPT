@@ -10,7 +10,7 @@ import { PlatformCompanyList } from "@/components/platform/PlatformCompanyList";
 export default async function PlatformPage() {
   await requireAuthContext();
   if (!(await getPlatformAdmin())) redirect("/dashboard");
-  const result = await apiTry<{ companies: Company[] }>("/platform/companies");
+  const result = await apiTry<{ companies: Company[] }>("/platform/companies", { headers: { "X-Tenant-Id": "" } });
   return (
     <>
       <PageHeader title="Platform companies" subtitle="Choose a company to administer." />

@@ -10,11 +10,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuthContext } from "@/lib/auth";
 import { config } from "@/lib/config";
+import { acceptsMutationOrigin } from "@/lib/proxy-origin";
 
 const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 
 async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   if (!ALLOWED_METHODS.has(req.method)) return NextResponse.json({ error: { code: "METHOD", message: "Méthode non permise" } }, { status: 405 });
+  if (req.method !== "GET" && !acceptsMutationOrigin(req)) {
+    return NextResponse.json({ error: { code: "FORBIDDEN", message: "Origine non autorisée" } }, { status: 403 });
+  }
   const auth = await getAuthContext();
   if (!auth) return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Session absente" } }, { status: 401 });
   const { path } = await ctx.params;
