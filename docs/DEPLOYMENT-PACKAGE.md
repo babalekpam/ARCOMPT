@@ -160,7 +160,7 @@ Réunissez ce qu'aucun script ne peut fabriquer :
 | 7 | Éprouver la messagerie | `pnpm mail:check --to vous@exemple.com` | message reçu, `spf=pass` et `dkim=pass` dans l'en-tête |
 | 8 | Publier | selon la route | le site répond |
 | 9 | Brancher le domaine et les enregistrements DNS | GoDaddy | `pnpm preflight --url https://arcompt.com` |
-| 10 | Créer le premier compte, puis faire le parcours | `pnpm exec tsx scripts/create-test-account.mts` | § 7 |
+| 10 | Créer le premier OWNER sans données fictives, puis faire le parcours | `corepack pnpm exec tsx scripts/create-first-owner.mts` (aperçu, puis `--apply --confirm-db …`) | § 7 et `DEPLOYMENT-REPLIT.md` § 10 |
 
 **Étape 2 et étape 3 ne se permutent pas.** Les migrations créent le rôle de
 groupe `arcompt_app` et posent ses droits ; `provision-app-role` ne fait que lui

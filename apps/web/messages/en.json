@@ -76,6 +76,8 @@
   "login.title": "Sign in",
   "login.subtitle": "Access your accounting files.",
   "login.keycloak": "Sign in with Keycloak",
+  "login.resetPassword": "Forgot your password?",
+  "login.resetHint": "On the next page, choose the identity provider's password reset option.",
   "login.keycloakMissing": "Keycloak is not configured (KEYCLOAK_ISSUER, KEYCLOAK_CLIENT_ID, KEYCLOAK_CLIENT_SECRET).",
   "login.devTitle": "Developer sign-in",
   "login.devHint": "AUTH_MODE=dev: the API accepts X-User-Id, X-Tenant-Id and X-Organization-Id headers without a token.",

@@ -673,21 +673,61 @@ republiez.
 
 ### 10.1 Le compte côté ARCOMPT
 
-Depuis le Shell, **avec la `DATABASE_URL` de la base de production** :
+ARCOMPT n'a pas de super-administrateur global : le premier responsable est
+`OWNER` sur un dossier précis. Depuis le Shell, avec une `DATABASE_URL`
+pointant **le compte d'administration/migration de la base visée** (et non le
+rôle applicatif), préparez d'abord un aperçu en lecture seule :
 
 ```bash
-pnpm exec tsx scripts/create-test-account.mts --email prenom.nom@cabinet.ci
+corepack pnpm exec tsx scripts/create-first-owner.mts \
+  --email prenom.nom@cabinet.ci --name "Prénom Nom" \
+  --org "Cabinet Exemple" --kind FIRM --company "Société Exemple" \
+  --country ci --year 2026
 ```
 
-Le script crée une organisation, un dossier avec son plan de comptes, un
-exercice, deux tiers et quelques écritures — de quoi remplir les écrans dès la
-première connexion. Il est **rejouable** : relancé avec la même adresse, il ne
-crée rien et réimprime les informations.
+Vérifiez le nom de la base et les paramètres affichés, puis relancez **la même
+commande** avec `--apply --confirm-db NOM_DE_LA_BASE_AFFICHEE`. Rien n'est créé
+sans ces deux options. Le script crée l'organisation, le dossier, le plan de
+comptes et l'exercice, puis rattache l'utilisateur comme `OWNER` ; **aucun
+tiers, solde ni écriture de démonstration** n'est ajouté. Il refuse une adresse
+déjà attribuée à une autre configuration ou toute base déjà peuplée. Une
+relance identique reconnaît le compte existant sans ajouter de données.
+La création est atomique : en cas d'erreur, aucune organisation partielle n'est
+conservée. Une base déjà peuplée (notamment par un seed de démonstration) est
+refusée : utilisez une base vierge, sans supprimer les données existantes.
+Un cabinet (`--kind FIRM`) exige la MFA ; pour une PME autonome, utilisez
+`--kind COMPANY`. Les packs pays non publiés restent indicatifs.
+
+`scripts/create-test-account.mts` est réservé aux **tests** : il fabrique des
+tiers et des écritures fictifs et ne doit pas servir à initialiser un vrai
+dossier client. Le bootstrap n'annule aucun des contrôles `preflight` et ne
+remplace pas la configuration des services de production.
 
 ### 10.2 L'identité côté fournisseur
 
 Créez l'utilisateur avec **exactement la même adresse**, et **marquez-la
 vérifiée**. Sans cela le rattachement automatique est refusé, délibérément.
+Le bootstrap ne crée aucun mot de passe : l'identité et la MFA sont gérées par
+le fournisseur OIDC. N'utilisez jamais `AUTH_MODE=dev` en production.
+
+**Réinitialisation du mot de passe du premier OWNER (et des autres membres).**
+Configurez le fournisseur d'identité pour autoriser la récupération par e-mail
+vérifié. Avec Keycloak, activez **Forgot password** dans les paramètres du realm
+et configurez son propre serveur SMTP et son expéditeur : le SMTP d'ARCOMPT
+sert aux invitations, **pas** aux messages de réinitialisation Keycloak. Sur
+`/login`, cliquez « Mot de passe oublié ? », puis utilisez l'option de
+réinitialisation sur la page du fournisseur. Celui-ci envoie le lien temporaire
+et applique sa politique de mot de passe ; ARCOMPT ne reçoit ni le code ni le
+nouveau mot de passe. Un opérateur peut aussi déclencher une action temporaire
+**Update Password** dans la console du fournisseur pour le premier OWNER, sans
+transmettre un mot de passe permanent en clair.
+
+Avant de servir de vrais comptes, vérifiez avec une boîte e-mail de test que
+le message arrive, que le lien expire et ne fonctionne qu'une fois, que
+l'ancien mot de passe ne permet plus de se connecter, puis que le nouvel accès
+conserve la MFA et le rôle OWNER. Si le fournisseur ne propose pas de
+récupération par mot de passe (connexion SSO sans mot de passe local), utilisez
+son mécanisme de récupération propre ; ne créez pas de mot de passe ARCOMPT.
 
 ### 10.3 Le parcours qui prouve que la chaîne tient
 

@@ -3,6 +3,7 @@
   "enabled": true,
   "displayName": "ARCOMPT",
   "registrationAllowed": false,
+  "resetPasswordAllowed": true,
   "bruteForceProtected": true,
   "otpPolicyType": "totp",
   "roles": {

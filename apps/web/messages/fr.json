@@ -76,6 +76,8 @@
   "login.title": "Connexion",
   "login.subtitle": "Accédez à vos dossiers comptables.",
   "login.keycloak": "Se connecter avec Keycloak",
+  "login.resetPassword": "Mot de passe oublié ?",
+  "login.resetHint": "Sur la page suivante, choisissez la réinitialisation du mot de passe proposée par le fournisseur d'identité.",
   "login.keycloakMissing": "Keycloak n'est pas configuré (KEYCLOAK_ISSUER, KEYCLOAK_CLIENT_ID, KEYCLOAK_CLIENT_SECRET).",
   "login.devTitle": "Connexion de développement",
   "login.devHint": "AUTH_MODE=dev : l'API accepte les en-têtes X-User-Id, X-Tenant-Id et X-Organization-Id sans jeton.",

@@ -5,6 +5,11 @@
 - clients `arcompt-web` (code flow, secret de dev) et `arcompt-api` (bearer only) ;
 - deux utilisateurs de démonstration (`comptable` / `comptable`, `dirigeant` / `dirigeant`).
 
+Le realm de développement active le lien « Forgot password » sur la page
+Keycloak, mais l'envoi ne fonctionne qu'après configuration du SMTP **dans
+Keycloak** (distinct du SMTP de l'application). En production, vérifier le
+parcours de récupération chez le fournisseur avant d'ouvrir l'accès aux OWNER.
+
 ## Qui fait quoi
 
 **Keycloak authentifie, ARCOMPT autorise.** Le jeton ne sert qu'à prouver l'identité :

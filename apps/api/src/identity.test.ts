@@ -380,6 +380,14 @@ run("auth_link_subject — rattachement au premier accès", () => {
     expect(await subDe(ambigu1)).toBeNull();
     expect(await subDe(ambigu2)).toBeNull();
 
+    // Une ligne déjà rattachée n'autorise pas la prise d'une deuxième ligne
+    // non rattachée qui porte la même adresse.
+    const lie = await nouveau("partage@pme.ci", "sub-deja-lie");
+    const nonLie = await nouveau("partage@pme.ci");
+    expect(await linkSubject(appDb, "sub-second", "partage@pme.ci")).toBeNull();
+    expect(await subDe(lie)).toBe("sub-deja-lie");
+    expect(await subDe(nonLie)).toBeNull();
+
     // Adresse inconnue : rien à rattacher.
     expect(await linkSubject(appDb, "sub-inconnu", "personne@pme.ci")).toBeNull();
   });

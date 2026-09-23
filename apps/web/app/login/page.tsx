@@ -29,7 +29,7 @@ export default async function LoginPage() {
       <Card>
         <h1 className="text-lg font-semibold">{t("login.title")}</h1>
         <p className="mt-1 text-sm text-slate-500">{t("login.subtitle")}</p>
-        <div className="mt-5">{keycloakConfigured ? <KeycloakButton label={t("login.keycloak")} /> : <p className="text-xs text-slate-500">{t("login.keycloakMissing")}</p>}</div>
+        <div className="mt-5">{keycloakConfigured ? <KeycloakButton label={t("login.keycloak")} resetLabel={t("login.resetPassword")} resetHint={t("login.resetHint")} /> : <p className="text-xs text-slate-500">{t("login.keycloakMissing")}</p>}</div>
       </Card>
       {mode === "dev" ? (
         <Card className="mt-4">
