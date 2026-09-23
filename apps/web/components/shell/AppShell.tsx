@@ -18,7 +18,7 @@ export async function AppShell({ auth, children }: { auth: AuthContext; children
   return (
     <div className="min-h-screen md:grid md:grid-cols-[15rem_1fr]">
       <aside className="hidden border-r border-slate-200 bg-slate-50 p-3 md:flex md:flex-col dark:border-slate-800 dark:bg-slate-900/50">
-        <Link href="/" className="mb-4 flex items-center gap-2 px-3 py-2">
+        <Link href="/dashboard" className="mb-4 flex items-center gap-2 px-3 py-2">
           <BrandLockup name={t("app.name")} size="md" />
         </Link>
         <SideNav />
@@ -26,7 +26,7 @@ export async function AppShell({ auth, children }: { auth: AuthContext; children
       </aside>
       <div className="flex min-h-screen flex-col">
         <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b border-slate-200 bg-white/90 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
-          <Link href="/" className="flex items-center gap-2 md:hidden">
+          <Link href="/dashboard" className="flex items-center gap-2 md:hidden">
             <BrandLockup name={t("app.name")} size="sm" />
           </Link>
           <div className="ml-auto flex items-center gap-2">

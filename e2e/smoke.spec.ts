@@ -19,13 +19,13 @@ test.describe("parcours PME", () => {
   test("la page de connexion s'affiche sans session", async ({ browser }) => {
     const fresh = await browser.newContext();
     const page = await fresh.newPage();
-    await page.goto("/");
+    await page.goto("/dashboard");
     await expect(page).toHaveURL(/\/login/);
     await fresh.close();
   });
 
   test("tableau de bord, écritures et balance", async ({ page }) => {
-    await page.goto("/?fy=2025");
+    await page.goto("/dashboard?fy=2025");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.goto("/entries?fy=2025");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

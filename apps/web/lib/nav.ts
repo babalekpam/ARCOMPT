@@ -9,7 +9,7 @@ export interface NavItem {
 }
 
 export const MAIN_NAV: NavItem[] = [
-  { href: "/", labelKey: "nav.dashboard", icon: "▦" },
+  { href: "/dashboard", labelKey: "nav.dashboard", icon: "▦" },
   { href: "/entries", labelKey: "nav.entries", icon: "✎" },
   { href: "/invoices", labelKey: "nav.invoices", icon: "▣" },
   { href: "/expenses", labelKey: "nav.expenses", icon: "▧" },
@@ -44,5 +44,5 @@ export const SOON_MODULES: Record<string, string> = {
 };
 
 export function isActivePath(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  return pathname === href || pathname.startsWith(`${href}/`);
 }

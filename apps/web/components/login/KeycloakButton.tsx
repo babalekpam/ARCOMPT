@@ -9,7 +9,7 @@ export function KeycloakButton({ label }: { label: string }) {
     <form
       action={async () => {
         "use server";
-        await signIn("keycloak", { redirectTo: "/" });
+        await signIn("keycloak", { redirectTo: "/dashboard" });
       }}
     >
       <button type="submit" className={`${buttonClass("primary")} w-full`}>

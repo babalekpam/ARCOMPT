@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Connexion" };
 
 export default async function LoginPage() {
   const existing = await getAuthContext();
-  if (existing) redirect("/");
+  if (existing) redirect("/dashboard");
   const { t } = await getT();
   const mode = config.authMode();
   const kc = config.keycloak();

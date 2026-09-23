@@ -37,7 +37,7 @@ export function DevLoginForm() {
         setError(t("login.error", { message: body?.error?.message ?? res.statusText }));
         return;
       }
-      router.push("/");
+      router.push("/dashboard");
       router.refresh();
     } finally {
       setBusy(false);

@@ -16,7 +16,7 @@ export default async function ComingSoonPage({ params }: { params: Promise<{ mod
   return (
     <>
       <PageHeader title={t(key)} subtitle={t("soon.title")} />
-      <EmptyState title={t("soon.title")} body={t("soon.body", { module: t(key) })} action={<LinkButton href="/">{t("soon.back")}</LinkButton>} icon="◌" />
+      <EmptyState title={t("soon.title")} body={t("soon.body", { module: t(key) })} action={<LinkButton href="/dashboard">{t("soon.back")}</LinkButton>} icon="◌" />
     </>
   );
 }
