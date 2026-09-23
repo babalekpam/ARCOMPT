@@ -5,3 +5,4 @@
 - [Self-service identity isolation](self-service-identity.md) — first-owner signup must detect global identity collisions and serialize with invitation acceptance before creating a new account.
 - [Managed Publish schema round trips](publish-schema-roundtrip.md) — inspect generated SQL, not just the dev schema; bare boolean checks and custom security objects may not survive the diff.
 - [R2 placement for African documents](r2-placement.md) — prefer Western Europe hint over Automatic; proxy-origin creation placed Automatic in North America.
+- [R2 credential scope checks](r2-credential-scope.md) — test object operations and cross-bucket access; a working token may still cover unintended buckets.
