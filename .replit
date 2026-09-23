@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "postgresql-16", "python-base-3.13"]
+modules = ["nodejs-20", "python-base-3.13", "postgresql-16"]
 
 hidden = [".git", "node_modules", "dist", ".next", ".pnpm-store"]
 
