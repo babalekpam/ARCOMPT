@@ -55,7 +55,7 @@ export function MemberRow({ member, canEdit }: { member: CompanyMember; canEdit:
       <td className="py-1.5 pr-3">
         <span className="font-medium">{member.displayName ?? member.email ?? t("firm.members.external")}</span>
         {member.email && member.displayName ? <span className="ml-1 text-xs text-slate-500">{member.email}</span> : null}
-        <p className="font-mono text-[10px] text-slate-400">{member.userId}</p>
+        <p className="font-mono text-xs text-slate-500">{member.reference ?? t("firm.members.referenceUnavailable")}</p>
       </td>
       <td className="py-1.5 pr-3">
         {canEdit ? (
@@ -78,7 +78,7 @@ export function MemberRow({ member, canEdit }: { member: CompanyMember; canEdit:
           </Button>
         ) : null}
         <ConfirmDialog open={confirm} title={t("firm.members.remove")} confirmVariant="danger" busy={busy} onConfirm={() => void remove()} onCancel={() => !busy && setConfirm(false)}>
-          {t("firm.members.removeConfirm", { name: member.displayName ?? member.email ?? member.userId, company: member.companyName })}
+          {t("firm.members.removeConfirm", { name: member.displayName ?? member.email ?? member.reference ?? t("firm.members.external"), company: member.companyName })}
         </ConfirmDialog>
       </td>
     </tr>

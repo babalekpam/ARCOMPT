@@ -235,6 +235,15 @@ export function portalRoutes(deps: AppDeps, opts: PortalRouteOptions = {}) {
     return c.json(await orgs.acceptInvitation({ token: input.token, user }));
   }));
 
+  // Only the resolved signed-in member's reference; never accept a Clerk ID
+  // or a user ID supplied by the browser for this lookup.
+  r.get("/org/members/self-reference", h(async (c) => {
+    const auth = c.get("auth");
+    if (!auth.tenantId) return c.json({ reference: null });
+    const member = (await orgs.listMembers(await orgCtx(c), auth.tenantId)).find((m) => m.userId === auth.userId);
+    if (!member) throw new PortalError("FORBIDDEN", "Aucun membre dans ce dossier");
+    return c.json({ reference: member.reference });
+  }));
   r.get("/org/members", orgRole, h(async (c) => {
     const q = query(c, z.object({ companyId: uuid.optional() }));
     return c.json(await orgs.listMembers(await orgCtx(c), q.companyId));

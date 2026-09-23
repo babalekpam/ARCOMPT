@@ -6,6 +6,7 @@ import { requireAuthContext } from "@/lib/auth";
 import { config } from "@/lib/config";
 import type { SearchParams } from "@/lib/fiscal-year";
 import { getT } from "@/lib/i18n-server";
+import { getCurrentMemberReference } from "@/lib/member-reference";
 import type { Company, CountryPack, PackSummary } from "@/lib/types";
 import { packStatusTone } from "@/components/packs/helpers";
 import { LocaleSwitcher } from "@/components/shell/LocaleSwitcher";
@@ -32,6 +33,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   const company = list.find((c) => c.id === auth.tenantId);
   const packCode = (typeof sp.pack === "string" && /^[a-z]{2}$/i.test(sp.pack) ? sp.pack : (company?.countryCode ?? process.env.DEFAULT_COUNTRY_PACK ?? "ci")).toLowerCase();
   const [packs, pack] = await Promise.all([apiTry<{ packs: PackSummary[] }>("/packs"), apiTry<CountryPack>(`/packs/${packCode}`)]);
+  const memberReference = auth.tenantId ? await getCurrentMemberReference() : null;
 
   return (
     <>
@@ -43,7 +45,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
             {company ? <Row label={t("settings.company")} value={company.name} /> : null}
             <Row label={t("settings.tenantId")} value={auth.tenantId} mono />
             <Row label={t("settings.organizationId")} value={auth.organizationId} mono />
-            <Row label={t("settings.userId")} value={auth.displayName} />
+            <Row label={t("settings.userId")} value={memberReference ?? t("firm.members.referenceUnavailable")} mono />
             <Row label={t("settings.authMode")} value={<Badge tone={auth.mode === "dev" ? "warning" : "success"}>{auth.mode}</Badge>} />
             <Row label={t("settings.fiscalYear")} value={config.defaultFiscalYear()} />
             <Row label={t("common.currency")} value={config.defaultCurrency()} />

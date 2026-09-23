@@ -57,6 +57,7 @@
   "firm.dashboard.comments": "{n} commentaire(s) ouvert(s)",
   "firm.dashboard.missing": "{n} pièce(s) manquante(s)",
   "firm.members.title": "Membres et invitations",
+  "firm.members.referenceUnavailable": "Référence indisponible",
   "firm.members.subtitle": "Invitez vos collaborateurs par dossier et gérez leurs rôles.",
   "firm.members.byCompany": "Membres par dossier",
   "firm.members.hintOwner": "Changer un rôle ou retirer un membre prend effet immédiatement.",

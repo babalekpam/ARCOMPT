@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { canActAsOwner, dashboardUrgency, defaultFiscalYear, filingTone, groupMembersByCompany, isMonth, monthOf, quotaPercent, resolveMyRole, summarizeProposal } from "./helpers";
 import type { CompanyMember } from "./types";
 
-const member = (companyId: string, userId: string, role: CompanyMember["role"]): CompanyMember => ({ companyId, companyName: `Dossier ${companyId}`, userId, email: null, displayName: null, role });
+const member = (companyId: string, userId: string, role: CompanyMember["role"]): CompanyMember => ({ companyId, companyName: `Dossier ${companyId}`, userId, reference: null, email: null, displayName: null, role });
 
 describe("firm helpers", () => {
   it("propose un exercice civil et le mois courant", () => {

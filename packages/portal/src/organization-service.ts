@@ -320,14 +320,22 @@ export class OrganizationService {
 
   async listMembers(ctx: OrganizationContext, companyId?: string): Promise<CompanyMember[]> {
     const rows = await withTenant(this.db, orgCtx(ctx), (tx) =>
-      tx`SELECT m.company_id, c.name AS company_name, m.user_id, u.email, u.display_name, m.role
+      tx`SELECT m.company_id, c.name AS company_name, m.user_id, u.email, u.display_name, u.registration_number, m.role
          FROM company_member m
          JOIN company c ON c.id = m.company_id
          LEFT JOIN app_user u ON u.id = m.user_id
          WHERE c.organization_id = ${ctx.organizationId} ${companyId ? tx`AND m.company_id = ${companyId}` : tx``}
          ORDER BY c.name, u.email NULLS LAST, m.user_id`,
     );
-    return rows.map(mapMember);
+    // Fiscal years are tenant-isolated even when an owner may list members
+    // across every company in the organization.
+    const exerciseCodes = new Map(await Promise.all([...new Set(rows.map((r) => str(r.company_id)))].map(async (id) => {
+      const [year] = await withTenant(this.db, { tenantId: id, organizationId: ctx.organizationId, ...(ctx.userId ? { userId: ctx.userId } : {}) }, (tx) =>
+        tx`SELECT code FROM fiscal_year WHERE tenant_id = ${id}
+           ORDER BY (status = 'OPEN') DESC, start_date DESC LIMIT 1`);
+      return [id, year?.code ?? null] as const;
+    })));
+    return rows.map((r) => mapMember({ ...r, exercise_code: exerciseCodes.get(str(r.company_id)) ?? null }));
   }
 
   /** Change (ou crée) le rôle d'un membre sur un dossier ; audité. */
@@ -344,8 +352,12 @@ export class OrganizationService {
         tenantId: input.companyId, userId: ctx.userId ?? null, action: before ? "MEMBER_ROLE_SET" : "MEMBER_ADDED", entity: "company_member",
         entityId: `${input.companyId}:${input.userId}`, before: before ? { role: before.role } : null, after: { role: input.role },
       });
-      const [u] = await tx`SELECT email, display_name FROM app_user WHERE id = ${input.userId}`;
-      return mapMember({ company_id: input.companyId, company_name: company.name, user_id: input.userId, email: u?.email ?? null, display_name: u?.display_name ?? null, role: input.role });
+      const [u] = await tx`SELECT email, display_name, registration_number FROM app_user WHERE id = ${input.userId}`;
+      const [year] = await tx`SELECT code FROM fiscal_year WHERE tenant_id = ${input.companyId}
+        ORDER BY (status = 'OPEN') DESC, start_date DESC LIMIT 1`;
+      return mapMember({ company_id: input.companyId, company_name: company.name, user_id: input.userId,
+        email: u?.email ?? null, display_name: u?.display_name ?? null, registration_number: u?.registration_number,
+        exercise_code: year?.code ?? null, role: input.role });
     });
   }
 
@@ -419,8 +431,11 @@ export class OrganizationService {
          WHERE c.organization_id = ${ctx.organizationId}
          ORDER BY c.name, m.role, u.email NULLS LAST`,
     );
+    const members = new Map((await this.listMembers(ctx)).map((m) => [`${m.companyId}:${m.userId}`, m]));
     const now = Date.now();
     return rows.map((r) => {
+      const member = members.get(`${str(r.company_id)}:${str(r.user_id)}`);
+      if (!member) throw new Error("Member missing from entitlement review");
       const reasons: string[] = [];
       const lastActive = isoOrNull(r.last_active_at);
       if (r.suspended_at) reasons.push("SUSPENDED");
@@ -429,7 +444,7 @@ export class OrganizationService {
       if (r.role === "OWNER") reasons.push("OWNER");
       if (r.role === "REVIEWER") reasons.push("REVIEWER");
       if (r.email === null) reasons.push("EXTERNAL_ORGANIZATION");
-      return { ...mapMember(r), lastActiveAt: lastActive, suspendedAt: isoOrNull(r.suspended_at), reasons };
+      return { ...member, lastActiveAt: lastActive, suspendedAt: isoOrNull(r.suspended_at), reasons };
     });
   }
 
@@ -495,6 +510,30 @@ export function mapInvitation(r: Row): Invitation {
 }
 
 export function mapMember(r: Row): CompanyMember {
-  return { companyId: str(r.company_id), companyName: str(r.company_name), userId: str(r.user_id), email: strOrNull(r.email), displayName: strOrNull(r.display_name), role: str(r.role) as MemberRole };
+  // A member from a different organization may be visible through a
+  // company_member row while RLS intentionally hides their app_user details.
+  const registrationNumber = strOrNull(r.registration_number);
+  if ((r.email != null || r.display_name != null) && !registrationNumber) {
+    throw new Error("Missing platform registration number");
+  }
+  if (registrationNumber && !/^[1-9]\d*$/.test(registrationNumber)) throw new Error("Invalid platform registration number");
+  const exerciseCode = strOrNull(r.exercise_code);
+  return {
+    companyId: str(r.company_id), companyName: str(r.company_name), userId: str(r.user_id),
+    reference: exerciseCode && registrationNumber ? formatMemberReference(str(r.company_name), exerciseCode, registrationNumber) : null,
+    email: strOrNull(r.email), displayName: strOrNull(r.display_name), role: str(r.role) as MemberRole,
+  };
+}
+
+/** Display-only reference; authentication and authorization still use the opaque IDs. */
+export function formatMemberReference(companyName: string, exerciseCode: string, registrationNumber: string): string {
+  const part = (value: string) => value.normalize("NFKD").replace(/\p{M}/gu, "").toUpperCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "");
+  const company = part(companyName).slice(0, 32).replace(/-+$/g, "");
+  const exercise = part(exerciseCode);
+  if (!company || !exercise || !/^[1-9]\d*$/.test(registrationNumber)) {
+    throw new Error("Invalid member reference parts");
+  }
+  return `${company}-${exercise}-${registrationNumber.padStart(6, "0")}`;
 }
 

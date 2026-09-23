@@ -12,11 +12,14 @@ import { SideNav } from "./SideNav";
 import { UserMenu } from "./UserMenu";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { getPlatformAdmin } from "@/lib/platform";
+import { getCurrentMemberReference } from "@/lib/member-reference";
 
 /** Coque applicative : en-tête, barre latérale (≥ md), barre inférieure (< md). */
 export async function AppShell({ auth, children }: { auth: AuthContext; children: ReactNode }) {
   const { t } = await getT();
   const platformAdmin = await getPlatformAdmin();
+  const reference = !platformAdmin && auth.tenantId ? await getCurrentMemberReference() : null;
+  const displayName = platformAdmin ? t("settings.platformAdmin") : reference ?? t("firm.members.referenceUnavailable");
   return (
     <div className="min-h-screen md:grid md:grid-cols-[15rem_1fr]">
       <aside className="hidden border-r border-slate-200 bg-slate-50 p-3 md:flex md:flex-col dark:border-slate-800 dark:bg-slate-900/50">
@@ -34,7 +37,7 @@ export async function AppShell({ auth, children }: { auth: AuthContext; children
           <div className="ml-auto flex items-center gap-2">
             <CompanySwitcher tenantId={auth.tenantId} platformAdmin={platformAdmin} />
             <LocaleSwitcher compact />
-            <UserMenu displayName={auth.displayName} />
+            <UserMenu displayName={displayName} />
           </div>
         </header>
         <OfflineIndicator />

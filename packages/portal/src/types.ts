@@ -65,6 +65,8 @@ export interface CompanyMember {
   companyId: string;
   companyName: string;
   userId: string;
+  /** Company and current exercise may change; registration order does not. */
+  reference: string | null;
   /** Null si l'utilisateur appartient à une autre organisation (RLS). */
   email: string | null;
   displayName: string | null;

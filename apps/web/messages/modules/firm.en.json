@@ -57,6 +57,7 @@
   "firm.dashboard.comments": "{n} open comment(s)",
   "firm.dashboard.missing": "{n} missing document(s)",
   "firm.members.title": "Members and invitations",
+  "firm.members.referenceUnavailable": "Reference unavailable",
   "firm.members.subtitle": "Invite staff per company and manage their roles.",
   "firm.members.byCompany": "Members per company",
   "firm.members.hintOwner": "Changing a role or removing a member takes effect immediately.",

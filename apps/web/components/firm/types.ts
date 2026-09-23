@@ -50,6 +50,7 @@ export interface CompanyMember {
   companyId: string;
   companyName: string;
   userId: string;
+  reference: string | null;
   email: string | null;
   displayName: string | null;
   role: MemberRole;

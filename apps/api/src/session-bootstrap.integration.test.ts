@@ -63,6 +63,31 @@ run("session bootstrap against PostgreSQL/RLS", () => {
     expect(Number(n)).toBe(12);
   });
 
+  it("shows only the signed-in owner's company/exercise reference, not the Clerk subject", async () => {
+    const bootstrap = await app.request("/v1/session/bootstrap", { method: "POST", headers, body: body() });
+    const { companyId } = await bootstrap.json() as { companyId: string };
+    const requestReference = () => app.request("/v1/portal/org/members/self-reference", {
+      headers: { authorization: "Bearer session", "x-tenant-id": companyId },
+    });
+    const before = await requestReference();
+    expect(before.status).toBe(200);
+    const original = (await before.json() as { reference: string }).reference;
+    expect(original).toMatch(/^INTEGRATION-COMPANY-2025-\d{6,}$/);
+    const year = new Date().getUTCFullYear();
+    await db`INSERT INTO fiscal_year (tenant_id, code, start_date, end_date)
+      VALUES (${companyId}, ${String(year)}, ${`${year}-01-01`}, ${`${year}-12-31`})`;
+    const response = await requestReference();
+    expect(response.status).toBe(200);
+    const { reference } = await response.json() as { reference: string | null };
+    expect(reference).toMatch(new RegExp(`^INTEGRATION-COMPANY-${year}-\\d{6,}$`));
+    expect(reference?.split("-").at(-1)).toBe(original.split("-").at(-1));
+    expect(reference).not.toContain(sub);
+    const withoutCompany = await app.request("/v1/portal/org/members/self-reference", {
+      headers: { authorization: "Bearer session" },
+    });
+    expect(withoutCompany.status).toBe(403);
+  });
+
   it("rejects invalid dates and mismatched packs before any write", async () => {
     const badDate = await app.request("/v1/session/bootstrap", { method: "POST", headers, body: body({
       name: "Bad Date", fiscalYear: { code: "2025", startDate: "2025-02-30", endDate: "2025-12-31" },
