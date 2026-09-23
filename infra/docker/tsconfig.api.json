@@ -1,0 +1,24 @@
+{
+  // Compilation de TOUT le programme de l'API en une passe.
+  //
+  // Les paquets de `packages/*` publient leurs sources TypeScript
+  // (`"main": "./src/index.ts"`) : compiler `apps/api` seul ne suffirait pas, et
+  // TypeScript n'émet pas les fichiers atteints à travers `node_modules`. On les
+  // déclare donc explicitement comme racines du programme, ce qui produit une
+  // arborescence `<outDir>/{apps,packages,scripts}` calquée sur le dépôt.
+  //
+  // `infra/docker/assemble-api.mjs` en fait ensuite une arborescence exécutable.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": false,
+    // Pas de déclarations : rien ne consomme ce paquet en TypeScript.
+    "declaration": false,
+    // Conservées : NODE_OPTIONS=--enable-source-maps rend les traces lisibles.
+    "sourceMap": true,
+    "rootDir": "../..",
+    "outDir": "../../dist",
+    "types": ["node"]
+  },
+  "include": ["../../apps/api/src/**/*.ts", "../../packages/*/src/**/*.ts", "../../scripts/**/*.mts"],
+  "exclude": ["../../**/*.test.ts", "../../**/*.test.tsx", "../../**/*.test.mts", "../../**/*.spec.ts"]
+}

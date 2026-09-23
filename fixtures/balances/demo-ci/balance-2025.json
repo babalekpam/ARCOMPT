@@ -1,0 +1,181 @@
+{
+  "fiscalYear": "2025",
+  "currency": "XOF",
+  "system": "NORMAL",
+  "rows": [
+    {
+      "account": "101",
+      "label": "Capital social",
+      "debit": "0.0000",
+      "credit": "5000000.0000"
+    },
+    {
+      "account": "111",
+      "label": "Réserve légale",
+      "debit": "0.0000",
+      "credit": "120000.0000"
+    },
+    {
+      "account": "121",
+      "label": "Report à nouveau créditeur",
+      "debit": "0.0000",
+      "credit": "580000.0000"
+    },
+    {
+      "account": "131",
+      "label": "Résultat net : bénéfice",
+      "debit": "1200000.0000",
+      "credit": "1200000.0000"
+    },
+    {
+      "account": "162",
+      "label": "Emprunts et dettes auprès des établissements de crédit",
+      "debit": "400000.0000",
+      "credit": "2000000.0000"
+    },
+    {
+      "account": "244",
+      "label": "Matériel et mobilier",
+      "debit": "3800000.0000",
+      "credit": "1000000.0000"
+    },
+    {
+      "account": "2844",
+      "label": "Amortissements du matériel et mobilier",
+      "debit": "400000.0000",
+      "credit": "1200000.0000"
+    },
+    {
+      "account": "311",
+      "label": "Marchandises A",
+      "debit": "500000.0000",
+      "credit": "0.0000"
+    },
+    {
+      "account": "401",
+      "label": "Fournisseurs, dettes en compte",
+      "debit": "2916000.0000",
+      "credit": "3776000.0000"
+    },
+    {
+      "account": "411",
+      "label": "Clients",
+      "debit": "7080000.0000",
+      "credit": "5900000.0000"
+    },
+    {
+      "account": "422",
+      "label": "Personnel, rémunérations dues",
+      "debit": "1500000.0000",
+      "credit": "1500000.0000"
+    },
+    {
+      "account": "431",
+      "label": "Sécurité sociale",
+      "debit": "250000.0000",
+      "credit": "300000.0000"
+    },
+    {
+      "account": "441",
+      "label": "État, impôt sur les bénéfices",
+      "debit": "0.0000",
+      "credit": "300000.0000"
+    },
+    {
+      "account": "443",
+      "label": "État, TVA facturée",
+      "debit": "1080000.0000",
+      "credit": "1080000.0000"
+    },
+    {
+      "account": "444",
+      "label": "État, TVA due ou crédit de TVA",
+      "debit": "400000.0000",
+      "credit": "504000.0000"
+    },
+    {
+      "account": "445",
+      "label": "État, TVA récupérable",
+      "debit": "576000.0000",
+      "credit": "576000.0000"
+    },
+    {
+      "account": "465",
+      "label": "Associés, dividendes à payer",
+      "debit": "500000.0000",
+      "credit": "500000.0000"
+    },
+    {
+      "account": "521",
+      "label": "Banques locales",
+      "debit": "12400000.0000",
+      "credit": "6916000.0000"
+    },
+    {
+      "account": "601",
+      "label": "Achats de marchandises",
+      "debit": "2000000.0000",
+      "credit": "0.0000"
+    },
+    {
+      "account": "6031",
+      "label": "Variations des stocks de marchandises",
+      "debit": "0.0000",
+      "credit": "500000.0000"
+    },
+    {
+      "account": "622",
+      "label": "Locations et charges locatives",
+      "debit": "1200000.0000",
+      "credit": "0.0000"
+    },
+    {
+      "account": "661",
+      "label": "Rémunérations directes versées au personnel national",
+      "debit": "1500000.0000",
+      "credit": "0.0000"
+    },
+    {
+      "account": "664",
+      "label": "Charges sociales",
+      "debit": "300000.0000",
+      "credit": "0.0000"
+    },
+    {
+      "account": "671",
+      "label": "Intérêts des emprunts",
+      "debit": "150000.0000",
+      "credit": "0.0000"
+    },
+    {
+      "account": "681",
+      "label": "Dotations aux amortissements d'exploitation",
+      "debit": "600000.0000",
+      "credit": "0.0000"
+    },
+    {
+      "account": "706",
+      "label": "Services vendus",
+      "debit": "0.0000",
+      "credit": "6000000.0000"
+    },
+    {
+      "account": "812",
+      "label": "Valeurs comptables des cessions d'immobilisations corporelles",
+      "debit": "600000.0000",
+      "credit": "0.0000"
+    },
+    {
+      "account": "822",
+      "label": "Produits des cessions d'immobilisations corporelles",
+      "debit": "0.0000",
+      "credit": "700000.0000"
+    },
+    {
+      "account": "891",
+      "label": "Impôts sur les bénéfices de l'exercice",
+      "debit": "300000.0000",
+      "credit": "0.0000"
+    }
+  ]
+}

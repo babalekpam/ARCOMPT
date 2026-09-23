@@ -1,0 +1,130 @@
+name: Release
+
+# Construction et publication des images de production.
+#
+# Distinct de `ci.yml` à dessein : la CI vérifie le dépôt (lint, typecheck,
+# migrations, tests, e2e), ce workflow-ci fabrique et publie les artefacts
+# déployables. Un échec de CI n'empêche pas mécaniquement une publication : on
+# rattache donc ce workflow aux mêmes branches, et c'est la protection de
+# branche qui garantit qu'on ne pousse sur `master` qu'après une CI verte.
+#
+# Ce workflow NE DÉPLOIE RIEN et ne détient aucun accès au serveur : il pousse
+# des images dans le registre de conteneurs GitHub (GHCR), avec le seul
+# `GITHUB_TOKEN` fourni d'office. La mise en ligne reste une action délibérée de
+# l'exploitant (docs/DEPLOYMENT.md § « Mettre à jour »), qui se résume à :
+#
+#   1. régler API_IMAGE et WEB_IMAGE dans infra/env/prod.env sur le tag publié ;
+#   2. docker compose --env-file infra/env/prod.env -f docker-compose.prod.yml pull
+#   3. docker compose --env-file infra/env/prod.env -f docker-compose.prod.yml up -d
+#
+# Si un déploiement automatique est souhaité plus tard, il faudra ajouter à ce
+# dépôt des secrets d'accès au serveur (par exemple DEPLOY_SSH_HOST,
+# DEPLOY_SSH_USER, DEPLOY_SSH_KEY). Aucun n'est créé ni supposé ici.
+
+on:
+  push:
+    branches: [master, main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Étiquette supplémentaire à poser sur les images publiées"
+        required: false
+        type: string
+
+concurrency:
+  # Une publication à la fois par référence ; on ne coupe pas une publication en
+  # cours, sinon un tag peut rester à moitié poussé.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  images:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            dockerfile: infra/docker/api.Dockerfile
+          - name: web
+            dockerfile: infra/docker/web.Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Connexion au registre
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Le nom du dépôt peut contenir des majuscules ; un nom d'image, non.
+      - name: Nom de l'image
+        id: image
+        run: echo "name=${REGISTRY}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Étiquettes et métadonnées
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=long
+            type=raw,value=${{ inputs.tag }},enable=${{ inputs.tag != '' }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          labels: |
+            org.opencontainers.image.title=ARCOMPT ${{ matrix.name }}
+            org.opencontainers.image.description=ARCOMPT — comptabilité OHADA (SYSCOHADA révisé)
+
+      - name: Construction et publication
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Cache partagé entre exécutions : la réinstallation pnpm et la
+          # compilation TypeScript dominent le temps de construction.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+
+      - name: Taille de l'image publiée
+        run: |
+          docker image pull "${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}"
+          docker image ls --format '{{.Repository}}:{{.Tag}}\t{{.Size}}' \
+            | grep -F "${{ steps.image.outputs.name }}" || true
+
+      # Garde-fou : l'image API ne doit contenir ni compilateur, ni transpileur,
+      # ni gestionnaire de paquets. Si l'un d'eux réapparaît, la publication
+      # échoue ici plutôt qu'en production.
+      - name: Contrôle de l'image API
+        if: matrix.name == 'api'
+        run: |
+          image="${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}"
+          for outil in pnpm tsx tsc; do
+            if docker run --rm --entrypoint sh "$image" -c "command -v $outil" >/dev/null 2>&1; then
+              echo "::error::$outil est présent dans l'image d'exécution de l'API"
+              exit 1
+            fi
+          done
+          docker run --rm --entrypoint sh "$image" -c '
+            test ! -d node_modules/typescript || { echo "typescript embarque"; exit 1; }
+            test -f apps/api/src/server.js    || { echo "sortie compilee absente"; exit 1; }
+            test -f infra/docker/ops/migrate.mjs || { echo "lanceur de migrations absent"; exit 1; }
+            test "$(id -u)" -ne 0             || { echo "image executee en root"; exit 1; }
+          '

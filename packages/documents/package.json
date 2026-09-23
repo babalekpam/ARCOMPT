@@ -1,0 +1,28 @@
+{
+  "name": "@arcompt/documents",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pièces justificatives et capture IA : stockage, hash, extraction, propositions d'écriture, file de revue, mémoire de catégorisation, assistant.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@arcompt/ledger": "workspace:*",
+    "@arcompt/db": "workspace:*",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1",
+    "@arcompt/ai-gateway": "workspace:*",
+    "@arcompt/storage": "workspace:*",
+    "@arcompt/jobs": "workspace:*",
+    "@arcompt/statements": "workspace:*"
+  },
+  "author": "ARGILETTE LLC",
+  "license": "LicenseRef-ARGILETTE-Proprietary"
+}

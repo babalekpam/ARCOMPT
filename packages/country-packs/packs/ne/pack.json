@@ -1,0 +1,347 @@
+{
+  "code": "ne",
+  "name": "Niger",
+  "version": "2025.1",
+  "status": "DRAFT",
+  "identity": {
+    "currency": "XOF",
+    "languages": [
+      "fr"
+    ],
+    "tax_ids": [
+      {
+        "code": "NIF",
+        "label": "Numéro d'identification fiscale (DGI Niger) — format indicatif : à valider",
+        "pattern": "^[0-9]{4,8}(/[A-Z])?$",
+        "required": true
+      },
+      {
+        "code": "RCCM",
+        "label": "Registre du commerce et du crédit mobilier",
+        "required": false
+      }
+    ],
+    "accounting_systems": [
+      "NORMAL",
+      "SMT"
+    ],
+    "smt_threshold_revenue": "60000000",
+    "social_security_body": "Caisse nationale de sécurité sociale (CNSS Niger)",
+    "tax_authority": "Direction générale des impôts (DGI Niger)"
+  },
+  "vat": {
+    "rates": [
+      {
+        "code": "TVA19",
+        "label": "TVA taux normal 19 % (indicatif : à valider — CGI Niger)",
+        "rate": "0.19",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "code": "TVA5",
+        "label": "TVA taux réduit 5 % — certains produits de première nécessité (indicatif : à valider)",
+        "rate": "0.05",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2016-01-01"
+      },
+      {
+        "code": "EXO",
+        "label": "Exonéré",
+        "rate": "0",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      }
+    ],
+    "rules": [
+      {
+        "id": "vat.due",
+        "label": "TVA nette due (ou crédit si négatif)",
+        "expr": "tva_collectee - tva_deductible",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "taxes": {
+    "rules": [
+      {
+        "id": "is.rate",
+        "label": "Taux de l'impôt sur les sociétés 30 % (indicatif : à valider)",
+        "value": "0.30",
+        "valid_from": "2000-01-01",
+        "source": "CGI Niger, impôt sur les bénéfices — à confirmer par l'expert-comptable référent"
+      },
+      {
+        "id": "is.amount",
+        "label": "Impôt sur les sociétés",
+        "expr": "round(max(resultat_fiscal, 0) * is.rate, 0)",
+        "depends_on": [
+          "is.rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "imf.rate",
+        "label": "Impôt minimum forfaitaire, taux sur CA 1,5 % (indicatif : à valider — valeur incertaine)",
+        "value": "0.015",
+        "valid_from": "2000-01-01",
+        "source": "CGI Niger, IMF — à confirmer"
+      },
+      {
+        "id": "imf.min",
+        "label": "IMF plancher 150 000 (indicatif : à valider — valeur incertaine)",
+        "value": "150000",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "imf.amount",
+        "label": "Impôt minimum forfaitaire : 1,5 % du CA avec plancher",
+        "expr": "max(round(ca_annuel * imf.rate, 0), imf.min)",
+        "depends_on": [
+          "imf.rate",
+          "imf.min"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "is.due",
+        "label": "Impôt dû : le plus élevé de l'IS et de l'IMF",
+        "expr": "max(is.amount, imf.amount)",
+        "depends_on": [
+          "is.amount",
+          "imf.amount"
+        ],
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "payroll": {
+    "variables": [
+      "salaire_brut",
+      "tva_collectee",
+      "tva_deductible"
+    ],
+    "rules": [
+      {
+        "id": "payroll.cnss.employee_rate",
+        "label": "CNSS part salariale 5,25 % (pension) — indicatif : à valider",
+        "value": "0.0525",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employer_rate",
+        "label": "CNSS part patronale 15,4 % (prestations familiales 8,4 % + pension 5,25 % + accidents du travail 1,75 %) — indicatif : à valider",
+        "value": "0.154",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.plafond",
+        "label": "Plafond mensuel CNSS 500 000 (indicatif : à valider)",
+        "value": "500000",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.base",
+        "label": "Assiette CNSS plafonnée",
+        "expr": "min(salaire_brut, payroll.cnss.plafond)",
+        "depends_on": [
+          "payroll.cnss.plafond"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employee",
+        "label": "Cotisation CNSS salariale",
+        "expr": "round(payroll.cnss.base * payroll.cnss.employee_rate, 0)",
+        "depends_on": [
+          "payroll.cnss.base",
+          "payroll.cnss.employee_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employer",
+        "label": "Cotisation CNSS patronale",
+        "expr": "round(payroll.cnss.base * payroll.cnss.employer_rate, 0)",
+        "depends_on": [
+          "payroll.cnss.base",
+          "payroll.cnss.employer_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.its.abattement_rate",
+        "label": "Abattement forfaitaire pour frais professionnels 17 % (indicatif : à valider — valeur incertaine)",
+        "value": "0.17",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.its.base",
+        "label": "Base imposable ITS mensuelle : (brut − CNSS salarié) × (1 − abattement)",
+        "expr": "max((salaire_brut - payroll.cnss.employee) * (1 - payroll.its.abattement_rate), 0)",
+        "depends_on": [
+          "payroll.cnss.employee",
+          "payroll.its.abattement_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.its.bareme",
+        "label": "Barème progressif ITS mensuel (indicatif : à valider)",
+        "value": {
+          "kind": "bareme",
+          "tranches": [
+            {
+              "upTo": "25000",
+              "rate": "0.01"
+            },
+            {
+              "upTo": "50000",
+              "rate": "0.02"
+            },
+            {
+              "upTo": "100000",
+              "rate": "0.06"
+            },
+            {
+              "upTo": "150000",
+              "rate": "0.13"
+            },
+            {
+              "upTo": "300000",
+              "rate": "0.25"
+            },
+            {
+              "upTo": "400000",
+              "rate": "0.30"
+            },
+            {
+              "upTo": "700000",
+              "rate": "0.32"
+            },
+            {
+              "upTo": "1000000",
+              "rate": "0.34"
+            },
+            {
+              "rate": "0.35"
+            }
+          ]
+        },
+        "valid_from": "2000-01-01",
+        "source": "CGI Niger, impôt sur les traitements et salaires — barème indicatif à valider"
+      },
+      {
+        "id": "payroll.its",
+        "label": "Impôt sur les traitements et salaires (réduction pour charges de famille non modélisée)",
+        "expr": "round(tranche(payroll.its.base, payroll.its.bareme), 0)",
+        "depends_on": [
+          "payroll.its.base",
+          "payroll.its.bareme"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.net",
+        "label": "Net à payer : brut − CNSS salarié − ITS",
+        "expr": "salaire_brut - payroll.cnss.employee - payroll.its",
+        "depends_on": [
+          "payroll.cnss.employee",
+          "payroll.its"
+        ],
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "variables": [
+    "resultat_comptable",
+    "resultat_fiscal",
+    "ca_annuel",
+    "reintegrations",
+    "deductions"
+  ],
+  "dsf": {
+    "label": "Liasse fiscale et états financiers annuels (DGI Niger) — système normal",
+    "statements": [
+      "BILAN_ACTIF",
+      "BILAN_PASSIF",
+      "COMPTE_RESULTAT",
+      "TFT",
+      "NOTES"
+    ],
+    "adjustments": [
+      {
+        "id": "dsf.resultat_fiscal",
+        "label": "Résultat fiscal = résultat comptable + réintégrations − déductions",
+        "expr": "resultat_comptable + reintegrations - deductions",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "filing": [
+    {
+      "id": "dsf",
+      "label": "Dépôt des états financiers et de la déclaration de résultat",
+      "portal": "Télédéclaration DGI Niger (e-Taxes / SISIC) — nom de portail indicatif : à valider",
+      "format": "XLSX",
+      "api": false
+    },
+    {
+      "id": "vat",
+      "label": "Déclaration mensuelle de TVA",
+      "portal": "Télédéclaration DGI Niger (e-Taxes / SISIC) — nom de portail indicatif : à valider",
+      "format": "MANUAL",
+      "api": false
+    }
+  ],
+  "calendar": [
+    {
+      "id": "vat",
+      "label": "Déclaration et paiement de la TVA (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "salaires",
+      "label": "Versement de l'ITS retenu et des cotisations CNSS (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "is_acompte",
+      "label": "Acomptes d'IS (indicatif : à valider)",
+      "frequency": "QUARTERLY",
+      "due": "15"
+    },
+    {
+      "id": "dsf",
+      "label": "Dépôt de la déclaration de résultat et des états financiers (indicatif : à valider)",
+      "frequency": "ANNUAL",
+      "due": "04-30"
+    }
+  ],
+  "chart_overrides": [
+    {
+      "number": "4471",
+      "label": "État, impôt sur les traitements et salaires (ITS) retenu"
+    },
+    {
+      "number": "4311",
+      "label": "CNSS Niger, cotisations dues"
+    }
+  ],
+  "certified_invoice": {
+    "system": "SECeF (système électronique certifié de facturation, DGI Niger) — obligation progressive, indicatif : à valider",
+    "mandatory": true,
+    "connector": "secef-ne",
+    "since": "2023-01-01"
+  },
+  "notes": [
+    "Pack en brouillon : tous les taux, barèmes, plafonds, comptes et échéances sont indicatifs (« à valider ») et doivent être confirmés contre le CGI nigérien et les lois de finances, les textes CNSS et la pratique de la DGI par un expert-comptable inscrit à l'ONECCA-Niger avant toute utilisation.",
+    "Simplifications connues : ITS calculé sans réduction pour charges de famille ; abattement frais professionnels, taux et plancher de l'IMF particulièrement incertains.",
+    "La facturation SECeF est déployée par vagues d'assujettis : vérifier si le dossier y est soumis. Aucun portail DGI n'expose d'API publique connue : les fichiers sont générés puis déposés manuellement."
+  ]
+}

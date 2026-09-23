@@ -1,0 +1,84 @@
+# Reverse proxy ARCOMPT — terminaison TLS et certificats automatiques.
+#
+# Caddy demande, installe et renouvelle seul les certificats Let's Encrypt, à
+# condition que les trois noms ci-dessous pointent DÉJÀ sur l'adresse IP du
+# serveur et que les ports 80 et 443 soient joignables depuis Internet.
+#
+# Les valeurs {$…} viennent de l'environnement du conteneur (voir la section
+# `caddy` de docker-compose.prod.yml).
+
+{
+	# Adresse de contact Let's Encrypt : prévenue avant l'expiration d'un
+	# certificat qui n'aurait pas pu être renouvelé.
+	email {$ACME_EMAIL}
+	# Journal au format JSON : lisible par un collecteur, pas seulement par un humain.
+	log {
+		format json
+	}
+}
+
+# En-têtes de sécurité communs aux trois hôtes.
+(securite) {
+	header {
+		# HSTS : un an. À ne poser que si l'on est sûr de rester en HTTPS.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Ne pas annoncer le serveur.
+		-Server
+	}
+}
+
+# --- Application (PWA Next.js) ---------------------------------------------
+{$WEB_DOMAIN} {
+	import securite
+	encode zstd gzip
+	reverse_proxy web:3000
+	log {
+		format json
+	}
+}
+
+# --- www : redirection permanente vers le nom canonique ---------------------
+# L'application n'est servie que sous UN seul nom. Deux raisons de ne pas
+# servir les deux : les URI de redirection de Keycloak et le cookie de session
+# Auth.js sont attachés à un hôte précis — se connecter sur www puis naviguer
+# sur l'apex déconnecterait l'utilisateur.
+#
+# Ce bloc demande son PROPRE certificat pour www : l'enregistrement DNS `www`
+# doit donc exister et pointer sur ce serveur (voir docs/DEPLOYMENT.md § 4).
+www.{$WEB_DOMAIN} {
+	import securite
+	redir https://{$WEB_DOMAIN}{uri} permanent
+}
+
+# --- API -------------------------------------------------------------------
+# Exposée publiquement parce que les webhooks entrants (Meta WhatsApp,
+# opérateur de paiement) doivent l'atteindre. Toutes les routes métier exigent
+# un jeton ; le navigateur, lui, ne l'appelle jamais directement (il passe par
+# /api/proxy/… servi par Next).
+{$API_DOMAIN} {
+	import securite
+	encode zstd gzip
+	# Téléversement de pièces : la limite applicative est MAX_DOCUMENT_BYTES
+	# (15 Mio par défaut). On laisse un peu de marge pour l'enveloppe multipart.
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy api:4000
+	log {
+		format json
+	}
+}
+
+# --- Keycloak --------------------------------------------------------------
+# Le navigateur est redirigé ici pour se connecter : ce nom doit être public et
+# identique à KEYCLOAK_ISSUER, sinon les jetons sont refusés par l'API.
+{$AUTH_DOMAIN} {
+	import securite
+	reverse_proxy keycloak:8080
+	log {
+		format json
+	}
+}

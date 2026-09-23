@@ -1,0 +1,484 @@
+{
+  "code": "cm",
+  "name": "Cameroun",
+  "version": "2025.1",
+  "status": "DRAFT",
+  "identity": {
+    "currency": "XAF",
+    "languages": [
+      "fr",
+      "en"
+    ],
+    "tax_ids": [
+      {
+        "code": "NIU",
+        "label": "Numéro d'identifiant unique (lettre M ou P, 12 chiffres, lettre) — format indicatif : à valider",
+        "pattern": "^[MP][0-9]{12}[A-Z]$",
+        "required": true
+      },
+      {
+        "code": "RCCM",
+        "label": "Registre du commerce et du crédit mobilier",
+        "required": false
+      }
+    ],
+    "accounting_systems": [
+      "NORMAL",
+      "SMT"
+    ],
+    "smt_threshold_revenue": "60000000",
+    "social_security_body": "Caisse nationale de prévoyance sociale (CNPS)",
+    "tax_authority": "Direction générale des impôts (DGI Cameroun)"
+  },
+  "vat": {
+    "rates": [
+      {
+        "code": "TVA1925",
+        "label": "TVA taux normal 19,25 % (17,5 % + centimes additionnels communaux 10 %) — indicatif : à valider",
+        "rate": "0.1925",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "code": "TVA0",
+        "label": "TVA taux zéro — exportations et assimilés (indicatif : à valider)",
+        "rate": "0",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "code": "EXO",
+        "label": "Exonéré",
+        "rate": "0",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      }
+    ],
+    "rules": [
+      {
+        "id": "vat.due",
+        "label": "TVA nette due (ou crédit si négatif)",
+        "expr": "tva_collectee - tva_deductible",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "taxes": {
+    "rules": [
+      {
+        "id": "is.rate",
+        "label": "Taux de l'impôt sur les sociétés 30 % hors CAC (25 % pour CA ≤ 3 milliards depuis la LF 2022) — indicatif : à valider",
+        "value": "0.30",
+        "valid_from": "2015-01-01",
+        "source": "CGI Cameroun art. 17 — à confirmer par l'expert-comptable référent"
+      },
+      {
+        "id": "is.cac_rate",
+        "label": "Centimes additionnels communaux 10 % de l'IS (indicatif : à valider)",
+        "value": "0.10",
+        "valid_from": "2015-01-01"
+      },
+      {
+        "id": "is.amount",
+        "label": "Impôt sur les sociétés, CAC inclus (30 % × 1,10 = 33 %)",
+        "expr": "round(max(resultat_fiscal, 0) * is.rate * (1 + is.cac_rate), 0)",
+        "depends_on": [
+          "is.rate",
+          "is.cac_rate"
+        ],
+        "valid_from": "2015-01-01"
+      },
+      {
+        "id": "imf.rate",
+        "label": "Minimum de perception 2,2 % du CA, CAC inclus (2 % + 10 %) pour le régime du réel — indicatif : à valider",
+        "value": "0.022",
+        "valid_from": "2015-01-01",
+        "source": "CGI Cameroun art. 21 — à confirmer"
+      },
+      {
+        "id": "imf.amount",
+        "label": "Minimum de perception (acomptes mensuels de 2,2 % du CA)",
+        "expr": "round(ca_annuel * imf.rate, 0)",
+        "depends_on": [
+          "imf.rate"
+        ],
+        "valid_from": "2015-01-01"
+      },
+      {
+        "id": "is.due",
+        "label": "Impôt dû : le plus élevé de l'IS et du minimum de perception",
+        "expr": "max(is.amount, imf.amount)",
+        "depends_on": [
+          "is.amount",
+          "imf.amount"
+        ],
+        "valid_from": "2015-01-01"
+      }
+    ]
+  },
+  "payroll": {
+    "variables": [
+      "salaire_brut",
+      "tva_collectee",
+      "tva_deductible"
+    ],
+    "rules": [
+      {
+        "id": "payroll.cnps.employee_rate",
+        "label": "CNPS pension vieillesse (PVID), part salariale 4,2 % — indicatif : à valider",
+        "value": "0.042",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnps.employer_rate",
+        "label": "CNPS part patronale 12,95 % (PVID 4,2 % + prestations familiales 7 % + accidents du travail groupe A 1,75 %) — indicatif : à valider",
+        "value": "0.1295",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnps.plafond",
+        "label": "Plafond mensuel CNPS 750 000 (indicatif : à valider)",
+        "value": "750000",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnps.base",
+        "label": "Assiette CNPS plafonnée",
+        "expr": "min(salaire_brut, payroll.cnps.plafond)",
+        "depends_on": [
+          "payroll.cnps.plafond"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnps.employee",
+        "label": "Cotisation CNPS salariale (PVID)",
+        "expr": "round(payroll.cnps.base * payroll.cnps.employee_rate, 0)",
+        "depends_on": [
+          "payroll.cnps.base",
+          "payroll.cnps.employee_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnps.employer",
+        "label": "Cotisation CNPS patronale",
+        "expr": "round(payroll.cnps.base * payroll.cnps.employer_rate, 0)",
+        "depends_on": [
+          "payroll.cnps.base",
+          "payroll.cnps.employer_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.irpp.abattement_frais_rate",
+        "label": "Abattement forfaitaire pour frais professionnels 30 % du brut taxable — indicatif : à valider",
+        "value": "0.30",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.irpp.abattement_annuel",
+        "label": "Abattement annuel de 500 000 sur le revenu net (ramené au mois : ÷ 12) — indicatif : à valider",
+        "value": "500000",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.irpp.base",
+        "label": "Base imposable IRPP mensuelle : brut × 70 % − CNPS salarié − 500 000 ÷ 12",
+        "expr": "max(salaire_brut * (1 - payroll.irpp.abattement_frais_rate) - payroll.cnps.employee - payroll.irpp.abattement_annuel / 12, 0)",
+        "depends_on": [
+          "payroll.irpp.abattement_frais_rate",
+          "payroll.cnps.employee",
+          "payroll.irpp.abattement_annuel"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.its.bareme",
+        "label": "Barème progressif IRPP annuel (indicatif : à valider)",
+        "value": {
+          "kind": "bareme",
+          "tranches": [
+            {
+              "upTo": "2000000",
+              "rate": "0.10"
+            },
+            {
+              "upTo": "3000000",
+              "rate": "0.15"
+            },
+            {
+              "upTo": "5000000",
+              "rate": "0.25"
+            },
+            {
+              "rate": "0.35"
+            }
+          ]
+        },
+        "valid_from": "2000-01-01",
+        "source": "CGI Cameroun art. 69 — barème indicatif à valider"
+      },
+      {
+        "id": "payroll.irpp.principal",
+        "label": "IRPP principal sur salaires (barème annuel appliqué à la base mensuelle × 12, ramené au mois)",
+        "expr": "round(tranche(payroll.irpp.base * 12, payroll.its.bareme) / 12, 0)",
+        "depends_on": [
+          "payroll.irpp.base",
+          "payroll.its.bareme"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.irpp.cac_rate",
+        "label": "Centimes additionnels communaux 10 % de l'IRPP principal (indicatif : à valider)",
+        "value": "0.10",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.irpp.cac",
+        "label": "CAC sur IRPP",
+        "expr": "round(payroll.irpp.principal * payroll.irpp.cac_rate, 0)",
+        "depends_on": [
+          "payroll.irpp.principal",
+          "payroll.irpp.cac_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.its",
+        "label": "IRPP retenu sur salaires, CAC inclus (principal + 10 %)",
+        "expr": "round(tranche(payroll.irpp.base * 12, payroll.its.bareme) / 12, 0) + payroll.irpp.cac",
+        "depends_on": [
+          "payroll.irpp.base",
+          "payroll.its.bareme",
+          "payroll.irpp.cac"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cfc.employee_rate",
+        "label": "Crédit foncier (CFC), part salariale 1 % du brut taxable — indicatif : à valider",
+        "value": "0.01",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cfc.employer_rate",
+        "label": "Crédit foncier (CFC), part patronale 1,5 % — indicatif : à valider",
+        "value": "0.015",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cfc.employee",
+        "label": "CFC salarié",
+        "expr": "round(salaire_brut * payroll.cfc.employee_rate, 0)",
+        "depends_on": [
+          "payroll.cfc.employee_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cfc.employer",
+        "label": "CFC employeur",
+        "expr": "round(salaire_brut * payroll.cfc.employer_rate, 0)",
+        "depends_on": [
+          "payroll.cfc.employer_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.fne.employer_rate",
+        "label": "Fonds national de l'emploi (FNE), part patronale 1 % — indicatif : à valider",
+        "value": "0.01",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.fne.employer",
+        "label": "FNE employeur",
+        "expr": "round(salaire_brut * payroll.fne.employer_rate, 0)",
+        "depends_on": [
+          "payroll.fne.employer_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.rav.bareme",
+        "label": "Redevance audiovisuelle (RAV) : montant mensuel par tranche de salaire brut (le champ rate porte le montant en FCFA, barème non cumulatif) — indicatif : à valider",
+        "value": {
+          "kind": "bareme",
+          "tranches": [
+            {
+              "upTo": "50000",
+              "rate": "0"
+            },
+            {
+              "upTo": "100000",
+              "rate": "750"
+            },
+            {
+              "upTo": "200000",
+              "rate": "1950"
+            },
+            {
+              "upTo": "300000",
+              "rate": "3250"
+            },
+            {
+              "upTo": "400000",
+              "rate": "4550"
+            },
+            {
+              "upTo": "500000",
+              "rate": "5850"
+            },
+            {
+              "upTo": "600000",
+              "rate": "7150"
+            },
+            {
+              "upTo": "700000",
+              "rate": "8450"
+            },
+            {
+              "upTo": "800000",
+              "rate": "9750"
+            },
+            {
+              "upTo": "900000",
+              "rate": "11050"
+            },
+            {
+              "upTo": "1000000",
+              "rate": "12350"
+            },
+            {
+              "rate": "13000"
+            }
+          ]
+        },
+        "valid_from": "2000-01-01",
+        "source": "Loi 87/021 et CGI Cameroun (RAV) — montants indicatifs à valider"
+      },
+      {
+        "id": "payroll.rav",
+        "label": "Redevance audiovisuelle retenue",
+        "expr": "taux_tranche(salaire_brut, payroll.rav.bareme)",
+        "depends_on": [
+          "payroll.rav.bareme"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.net",
+        "label": "Net à payer : brut − CNPS salarié − IRPP (CAC inclus) − CFC salarié − RAV (taxe communale non modélisée)",
+        "expr": "salaire_brut - payroll.cnps.employee - payroll.its - payroll.cfc.employee - payroll.rav",
+        "depends_on": [
+          "payroll.cnps.employee",
+          "payroll.its",
+          "payroll.cfc.employee",
+          "payroll.rav"
+        ],
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "variables": [
+    "resultat_comptable",
+    "resultat_fiscal",
+    "ca_annuel",
+    "reintegrations",
+    "deductions"
+  ],
+  "dsf": {
+    "label": "Déclaration statistique et fiscale (DSF) — système normal / Statistical and tax return",
+    "statements": [
+      "BILAN_ACTIF",
+      "BILAN_PASSIF",
+      "COMPTE_RESULTAT",
+      "TFT",
+      "NOTES"
+    ],
+    "adjustments": [
+      {
+        "id": "dsf.resultat_fiscal",
+        "label": "Résultat fiscal = résultat comptable + réintégrations − déductions",
+        "expr": "resultat_comptable + reintegrations - deductions",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "filing": [
+    {
+      "id": "dsf",
+      "label": "Dépôt de la DSF (fichier importé sur le portail)",
+      "portal": "Télédéclaration DGI Cameroun",
+      "url": "https://teledeclaration-dgi.cm",
+      "format": "XLSX",
+      "api": false
+    },
+    {
+      "id": "vat",
+      "label": "Déclaration mensuelle de TVA et acomptes d'IS",
+      "portal": "Télédéclaration DGI Cameroun",
+      "url": "https://teledeclaration-dgi.cm",
+      "format": "MANUAL",
+      "api": false
+    }
+  ],
+  "calendar": [
+    {
+      "id": "vat",
+      "label": "Déclaration et paiement de la TVA (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "is_acompte",
+      "label": "Acompte mensuel d'IS de 2,2 % du CA (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "salaires",
+      "label": "Versement de l'IRPP retenu, CFC, FNE, RAV et cotisations CNPS (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "dsf",
+      "label": "Dépôt de la DSF et solde de l'IS (indicatif : à valider)",
+      "frequency": "ANNUAL",
+      "due": "03-15"
+    }
+  ],
+  "chart_overrides": [
+    {
+      "number": "4471",
+      "label": "État, IRPP retenu sur salaires"
+    },
+    {
+      "number": "4472",
+      "label": "État, centimes additionnels communaux (CAC) sur IRPP retenus"
+    },
+    {
+      "number": "4473",
+      "label": "État, crédit foncier (CFC) et FNE dus"
+    },
+    {
+      "number": "4311",
+      "label": "CNPS, cotisations dues"
+    }
+  ],
+  "certified_invoice": {
+    "system": "Aucune facture certifiée obligatoire connue (mentions obligatoires du CGI uniquement) — indicatif : à valider",
+    "mandatory": false
+  },
+  "notes": [
+    "Pack en brouillon : tous les taux, barèmes, plafonds, comptes et échéances sont indicatifs (« à valider ») et doivent être confirmés contre le CGI camerounais et les lois de finances, les textes CNPS et la pratique de la DGI par un expert-comptable inscrit à l'ONECCA avant toute utilisation. Interface disponible en français et en anglais.",
+    "Simplifications connues : IRPP calculé sans prise en compte des autres revenus catégoriels ; taxe communale (taxe de développement local) non modélisée ; taux d'accidents du travail CNPS fixé au groupe A (1,75 %) ; taux d'IS réduit 25 % (+ CAC) pour les CA ≤ 3 milliards non modélisé.",
+    "Le portail de télédéclaration DGI n'expose pas d'API publique connue : la DSF est générée puis importée manuellement."
+  ]
+}

@@ -1,0 +1,370 @@
+{
+  "code": "ml",
+  "name": "Mali",
+  "version": "2025.1",
+  "status": "DRAFT",
+  "identity": {
+    "currency": "XOF",
+    "languages": [
+      "fr"
+    ],
+    "tax_ids": [
+      {
+        "code": "NIF",
+        "label": "Numéro d'identification fiscale (9 chiffres suivis d'une lettre) — format indicatif : à valider",
+        "pattern": "^[0-9]{9}[A-Z]$",
+        "required": true
+      },
+      {
+        "code": "RCCM",
+        "label": "Registre du commerce et du crédit mobilier",
+        "required": false
+      }
+    ],
+    "accounting_systems": [
+      "NORMAL",
+      "SMT"
+    ],
+    "smt_threshold_revenue": "60000000",
+    "social_security_body": "Institut national de prévoyance sociale (INPS) et CANAM (assurance maladie obligatoire, AMO)",
+    "tax_authority": "Direction générale des impôts (DGI Mali)"
+  },
+  "vat": {
+    "rates": [
+      {
+        "code": "TVA18",
+        "label": "TVA taux normal 18 % (indicatif : à valider — CGI Mali)",
+        "rate": "0.18",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "code": "TVA5",
+        "label": "TVA taux réduit 5 % — matériel informatique, équipements solaires (indicatif : à valider)",
+        "rate": "0.05",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2014-01-01"
+      },
+      {
+        "code": "EXO",
+        "label": "Exonéré",
+        "rate": "0",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      }
+    ],
+    "rules": [
+      {
+        "id": "vat.due",
+        "label": "TVA nette due (ou crédit si négatif)",
+        "expr": "tva_collectee - tva_deductible",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "taxes": {
+    "rules": [
+      {
+        "id": "is.rate",
+        "label": "Taux de l'impôt sur les sociétés 30 % (indicatif : à valider)",
+        "value": "0.30",
+        "valid_from": "2000-01-01",
+        "source": "CGI Mali, impôt sur les sociétés — à confirmer par l'expert-comptable référent"
+      },
+      {
+        "id": "is.amount",
+        "label": "Impôt sur les sociétés",
+        "expr": "round(max(resultat_fiscal, 0) * is.rate, 0)",
+        "depends_on": [
+          "is.rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "imf.rate",
+        "label": "Impôt minimum forfaitaire, taux sur CA 1 % (indicatif : à valider)",
+        "value": "0.01",
+        "valid_from": "2000-01-01",
+        "source": "CGI Mali, IMF — à confirmer"
+      },
+      {
+        "id": "imf.min",
+        "label": "IMF plancher 1 236 000 pour le réel normal (indicatif : à valider — valeur incertaine)",
+        "value": "1236000",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "imf.amount",
+        "label": "Impôt minimum forfaitaire : 1 % du CA avec plancher",
+        "expr": "max(round(ca_annuel * imf.rate, 0), imf.min)",
+        "depends_on": [
+          "imf.rate",
+          "imf.min"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "is.due",
+        "label": "Impôt dû : le plus élevé de l'IS et de l'IMF",
+        "expr": "max(is.amount, imf.amount)",
+        "depends_on": [
+          "is.amount",
+          "imf.amount"
+        ],
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "payroll": {
+    "variables": [
+      "salaire_brut",
+      "tva_collectee",
+      "tva_deductible"
+    ],
+    "rules": [
+      {
+        "id": "payroll.inps.employee_rate",
+        "label": "INPS part salariale 3,6 % (retraite) — indicatif : à valider",
+        "value": "0.036",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.inps.employer_rate",
+        "label": "INPS part patronale 16,4 % (prestations familiales 8 % + retraite 5,4 % + accidents du travail 2 % + ANPE 1 %) — indicatif : à valider",
+        "value": "0.164",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.inps.plafond",
+        "label": "Plafond mensuel INPS : assiette non plafonnée selon nos informations, valeur sentinelle très élevée — indicatif : à valider",
+        "value": "999999999",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.inps.base",
+        "label": "Assiette INPS (plafonnée si un plafond est confirmé)",
+        "expr": "min(salaire_brut, payroll.inps.plafond)",
+        "depends_on": [
+          "payroll.inps.plafond"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.inps.employee",
+        "label": "Cotisation INPS salariale",
+        "expr": "round(payroll.inps.base * payroll.inps.employee_rate, 0)",
+        "depends_on": [
+          "payroll.inps.base",
+          "payroll.inps.employee_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.inps.employer",
+        "label": "Cotisation INPS patronale",
+        "expr": "round(payroll.inps.base * payroll.inps.employer_rate, 0)",
+        "depends_on": [
+          "payroll.inps.base",
+          "payroll.inps.employer_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.amo.employee_rate",
+        "label": "AMO (CANAM) part salariale 3,06 % — indicatif : à valider",
+        "value": "0.0306",
+        "valid_from": "2011-01-01"
+      },
+      {
+        "id": "payroll.amo.employer_rate",
+        "label": "AMO (CANAM) part patronale 3,5 % — indicatif : à valider",
+        "value": "0.035",
+        "valid_from": "2011-01-01"
+      },
+      {
+        "id": "payroll.amo.base",
+        "label": "Assiette AMO (salaire brut, non plafonnée selon nos informations)",
+        "expr": "salaire_brut",
+        "valid_from": "2011-01-01"
+      },
+      {
+        "id": "payroll.amo.employee",
+        "label": "Cotisation AMO salariale",
+        "expr": "round(payroll.amo.base * payroll.amo.employee_rate, 0)",
+        "depends_on": [
+          "payroll.amo.base",
+          "payroll.amo.employee_rate"
+        ],
+        "valid_from": "2011-01-01"
+      },
+      {
+        "id": "payroll.amo.employer",
+        "label": "Cotisation AMO patronale",
+        "expr": "round(payroll.amo.base * payroll.amo.employer_rate, 0)",
+        "depends_on": [
+          "payroll.amo.base",
+          "payroll.amo.employer_rate"
+        ],
+        "valid_from": "2011-01-01"
+      },
+      {
+        "id": "payroll.its.base",
+        "label": "Base imposable ITS mensuelle : brut − INPS salarié − AMO salarié (indicatif : à valider)",
+        "expr": "max(salaire_brut - payroll.inps.employee - payroll.amo.employee, 0)",
+        "depends_on": [
+          "payroll.inps.employee",
+          "payroll.amo.employee"
+        ],
+        "valid_from": "2011-01-01"
+      },
+      {
+        "id": "payroll.its.bareme",
+        "label": "Barème progressif ITS annuel (indicatif : à valider)",
+        "value": {
+          "kind": "bareme",
+          "tranches": [
+            {
+              "upTo": "330000",
+              "rate": "0"
+            },
+            {
+              "upTo": "578400",
+              "rate": "0.05"
+            },
+            {
+              "upTo": "1176400",
+              "rate": "0.12"
+            },
+            {
+              "upTo": "1789733",
+              "rate": "0.18"
+            },
+            {
+              "upTo": "2384195",
+              "rate": "0.26"
+            },
+            {
+              "upTo": "3494130",
+              "rate": "0.31"
+            },
+            {
+              "rate": "0.37"
+            }
+          ]
+        },
+        "valid_from": "2011-01-01",
+        "source": "CGI Mali, impôt sur les traitements et salaires — barème indicatif à valider"
+      },
+      {
+        "id": "payroll.its",
+        "label": "Impôt sur les traitements et salaires (barème annuel appliqué à la base mensuelle × 12, ramené au mois ; réduction pour charges de famille non modélisée)",
+        "expr": "round(tranche(payroll.its.base * 12, payroll.its.bareme) / 12, 0)",
+        "depends_on": [
+          "payroll.its.base",
+          "payroll.its.bareme"
+        ],
+        "valid_from": "2011-01-01"
+      },
+      {
+        "id": "payroll.net",
+        "label": "Net à payer : brut − INPS salarié − AMO salarié − ITS",
+        "expr": "salaire_brut - payroll.inps.employee - payroll.amo.employee - payroll.its",
+        "depends_on": [
+          "payroll.inps.employee",
+          "payroll.amo.employee",
+          "payroll.its"
+        ],
+        "valid_from": "2011-01-01"
+      }
+    ]
+  },
+  "variables": [
+    "resultat_comptable",
+    "resultat_fiscal",
+    "ca_annuel",
+    "reintegrations",
+    "deductions"
+  ],
+  "dsf": {
+    "label": "Liasse fiscale et états financiers annuels (DGI Mali) — système normal",
+    "statements": [
+      "BILAN_ACTIF",
+      "BILAN_PASSIF",
+      "COMPTE_RESULTAT",
+      "TFT",
+      "NOTES"
+    ],
+    "adjustments": [
+      {
+        "id": "dsf.resultat_fiscal",
+        "label": "Résultat fiscal = résultat comptable + réintégrations − déductions",
+        "expr": "resultat_comptable + reintegrations - deductions",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "filing": [
+    {
+      "id": "dsf",
+      "label": "Dépôt des états financiers et de la déclaration de résultat",
+      "portal": "eTax (télédéclaration DGI Mali) — nom de portail indicatif : à valider",
+      "format": "XLSX",
+      "api": false
+    },
+    {
+      "id": "vat",
+      "label": "Déclaration mensuelle de TVA",
+      "portal": "eTax (télédéclaration DGI Mali) — nom de portail indicatif : à valider",
+      "format": "MANUAL",
+      "api": false
+    }
+  ],
+  "calendar": [
+    {
+      "id": "vat",
+      "label": "Déclaration et paiement de la TVA (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "salaires",
+      "label": "Versement de l'ITS retenu et des cotisations INPS/AMO (indicatif : à valider)",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "is_acompte",
+      "label": "Acomptes d'IS (indicatif : à valider)",
+      "frequency": "QUARTERLY",
+      "due": "15"
+    },
+    {
+      "id": "dsf",
+      "label": "Dépôt de la déclaration de résultat et des états financiers (indicatif : à valider)",
+      "frequency": "ANNUAL",
+      "due": "04-30"
+    }
+  ],
+  "chart_overrides": [
+    {
+      "number": "4471",
+      "label": "État, impôt sur les traitements et salaires (ITS) retenu"
+    },
+    {
+      "number": "4311",
+      "label": "INPS, cotisations dues"
+    },
+    {
+      "number": "4312",
+      "label": "CANAM (AMO), cotisations dues"
+    }
+  ],
+  "notes": [
+    "Pack en brouillon : tous les taux, barèmes, plafonds, comptes et échéances sont indicatifs (« à valider ») et doivent être confirmés contre le CGI malien et les lois de finances, les textes INPS/CANAM et la pratique de la DGI par un expert-comptable inscrit à l'ONECCA-Mali avant toute utilisation.",
+    "Simplifications connues : ITS calculé sans réduction pour charges de famille ; assiette ITS (déduction ou non de l'AMO) et plancher de l'IMF particulièrement incertains ; taux d'accidents du travail INPS fixé à 2 % (varie selon l'activité).",
+    "Aucune facture normalisée obligatoire connue au Mali ; aucun portail DGI n'expose d'API publique connue : les fichiers sont générés puis déposés manuellement."
+  ]
+}
