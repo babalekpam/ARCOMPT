@@ -4,6 +4,8 @@ import { resolveFiscalYear, type SearchParams } from "@/lib/fiscal-year";
 import { formatDate } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { ApiErrorNotice } from "@/components/ApiErrorNotice";
+import { packRefusal } from "@/lib/api";
+import { PackNotice } from "@/components/packs/PackNotice";
 import { SubNav } from "@/components/payroll/SubNav";
 import { DsfForm } from "@/components/tax/DsfForm";
 import { dsfExportHref, dsfQuery, returnTone } from "@/components/tax/helpers";
@@ -28,6 +30,11 @@ export default async function DsfPage({ searchParams }: { searchParams: SearchPa
   const qs = dsfQuery(params);
   const res = await apiTry<DsfResponse>(`/tax/dsf/${encodeURIComponent(fiscalYear)}${qs ? `?${qs}` : ""}`);
   const failing = res.ok ? res.data.statements.controls.filter((c) => !c.ok) : [];
+  // Trois cas : liasse officielle, liasse produite sous échappement (elle part
+  // marquée « NON OFFICIEL »), et refus net — l'export ne vaut alors pas d'être
+  // proposé, il répondrait le même refus dans un onglet vide.
+  const refused = !res.ok && packRefusal(res.error) !== null;
+  const nonOfficial = res.ok && res.data.official === false;
 
   return (
     <>
@@ -35,12 +42,18 @@ export default async function DsfPage({ searchParams }: { searchParams: SearchPa
         title={t("tax.dsf.title")}
         subtitle={t("tax.dsf.subtitle", { fy: fiscalYear })}
         actions={
-          <LinkButton href={dsfExportHref(fiscalYear, params)} variant="secondary" size="sm" external>
-            {t("tax.dsf.exportExcel")}
-          </LinkButton>
+          refused ? null : (
+            <div className="text-right">
+              <LinkButton href={dsfExportHref(fiscalYear, params)} variant="secondary" size="sm" external>
+                {nonOfficial ? t("tax.dsf.exportExcelNonOfficial") : t("tax.dsf.exportExcel")}
+              </LinkButton>
+              {nonOfficial ? <p className="mt-1 max-w-xs text-[11px] leading-snug text-slate-500">{t("tax.dsf.exportNonOfficialHint", { fy: fiscalYear })}</p> : null}
+            </div>
+          )
         }
       />
       <SubNav items={TAX_NAV} />
+      {res.ok && res.data.official === false ? <PackNotice surface="dsf" pack={`${res.data.packCode.toUpperCase()} ${res.data.packVersion}`} className="mt-4" /> : null}
       <Card>
         <CardTitle hint={t("tax.dsf.paramsHint")}>{t("tax.dsf.params")}</CardTitle>
         <DsfForm fiscalYear={fiscalYear} previous={previousFiscalYear ?? ""} reintegrations={reintegrations} deductions={deductions} />

@@ -150,6 +150,14 @@ export interface PayslipView {
     advances: Array<PayslipLine & { formatted: string }>;
   };
   totals: PayslipTotals;
+  /**
+   * Faux quand le pack pays n'est ni PUBLISHED ni revu : les cotisations
+   * affichées sont indicatives. Le bulletin n'est pas refusé pour autant, mais
+   * il doit porter la mention — y compris à l'impression, qui *est* le bulletin
+   * remis au salarié.
+   */
+  official: boolean;
+  packNotice: string | null;
 }
 
 export interface PayrollBookRow {

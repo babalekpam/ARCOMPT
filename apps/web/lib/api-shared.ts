@@ -25,6 +25,23 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Refus d'un document légal produit depuis un pack pays non publié
+ * (`PACK_NOT_PUBLISHED`, HTTP 409). Le message du serveur est exact mais long :
+ * l'interface en garde le pack et son statut, et dit le reste en une phrase.
+ *
+ * `null` pour toute autre erreur — le message brut de l'API reste alors le
+ * meilleur que nous ayons.
+ */
+export function packRefusal(err: unknown): { pack: string; status: string } | null {
+  if (!(err instanceof ApiError) || err.code !== "PACK_NOT_PUBLISHED") return null;
+  const d = (err.details ?? {}) as { pack?: unknown; status?: unknown };
+  return {
+    pack: typeof d.pack === "string" && d.pack.length > 0 ? d.pack : "—",
+    status: typeof d.status === "string" && d.status.length > 0 ? d.status : "—",
+  };
+}
+
 export async function parseApiResponse<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
   const text = await res.text();

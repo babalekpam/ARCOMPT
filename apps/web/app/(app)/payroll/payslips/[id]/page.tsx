@@ -3,6 +3,8 @@ import { apiTry } from "@/lib/api";
 import { formatDate } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { ApiErrorNotice } from "@/components/ApiErrorNotice";
+import { PackNotice } from "@/components/packs/PackNotice";
+import { payslipDraftPack } from "@/components/payroll/helpers";
 import { PrintButton } from "@/components/payroll/PrintButton";
 import type { PayslipLine, PayslipView } from "@/components/payroll/types";
 import { LinkButton } from "@/components/ui/Button";
@@ -43,8 +45,13 @@ export default async function PayslipPage({ params }: { params: Promise<{ id: st
 function PayslipSheet({ view, locale, t }: { view: PayslipView; locale: "fr" | "en"; t: (k: string, p?: Record<string, string | number | undefined>) => string }) {
   const c = view.company.currency;
   const s = view.sections;
+  // La mention est *dans* l'article : c'est lui que la boîte d'impression
+  // reproduit (seul l'en-tête de page porte `print:hidden`), donc le bulletin
+  // ne peut pas être imprimé sans elle.
+  const draftPack = payslipDraftPack(view);
   return (
     <article className="mx-auto max-w-4xl space-y-4 print:max-w-none">
+      {draftPack ? <PackNotice surface="payslip" pack={draftPack} /> : null}
       <Card>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>

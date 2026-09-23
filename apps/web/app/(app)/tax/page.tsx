@@ -4,6 +4,8 @@ import { config } from "@/lib/config";
 import { formatDate } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { ApiErrorNotice } from "@/components/ApiErrorNotice";
+import { loadCompanyPack } from "@/components/packs/context";
+import { PackNotice } from "@/components/packs/PackNotice";
 import { SubNav } from "@/components/payroll/SubNav";
 import { returnTone } from "@/components/tax/helpers";
 import { TAX_NAV } from "@/components/tax/nav";
@@ -17,12 +19,15 @@ import { PageHeader } from "@/components/ui/PageHeader";
 export default async function TaxPage() {
   const { t, locale } = await getT();
   const currency = config.defaultCurrency();
-  const returns = await apiTry<TaxReturn[]>("/tax/vat/returns");
+  const [returns, pack] = await Promise.all([apiTry<TaxReturn[]>("/tax/vat/returns"), loadCompanyPack()]);
 
   return (
     <>
       <PageHeader title={t("tax.title")} subtitle={t("tax.subtitle")} />
       <SubNav items={TAX_NAV} />
+      {/* Une seule mention pour l'écran : la position de la période se calcule,
+          mais aucune déclaration n'en sortira tant que le pack est un brouillon. */}
+      {pack.draft ? <PackNotice surface="vat" pack={pack.draft.pack} className="mb-4" /> : null}
       <Card>
         <CardTitle hint={t("tax.vat.computeHint")}>{t("tax.vat.newReturn")}</CardTitle>
         <VatComputeForm />
@@ -51,7 +56,10 @@ export default async function TaxPage() {
                         {formatDate(locale, r.periodFrom)} → {formatDate(locale, r.periodTo)}
                       </Link>
                     </td>
-                    <td className="py-1.5 pr-3"><Badge tone={returnTone(r.status)}>{t(`tax.returnStatus.${r.status}`)}</Badge></td>
+                    <td className="py-1.5 pr-3">
+                      <Badge tone={returnTone(r.status)}>{t(`tax.returnStatus.${r.status}`)}</Badge>
+                      {r.official === false ? <Badge tone="warning" className="ml-1">{t("tax.vat.nonOfficial")}</Badge> : null}
+                    </td>
                     <td className="py-1.5 pr-3 text-right"><Money value={r.amountDue} currency={currency} dashForZero /></td>
                     <td className="py-1.5 pr-3 text-xs text-slate-500">{r.filingReference ?? "—"}</td>
                     <td className="py-1.5 text-xs text-slate-500">{formatDate(locale, r.updatedAt)}</td>

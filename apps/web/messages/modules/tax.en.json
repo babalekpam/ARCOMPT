@@ -113,5 +113,8 @@
   "tax.calendar.emptyBody": "The company's country pack defines no calendar for this year.",
   "tax.calendar.dueDate": "Due date",
   "tax.calendar.obligation": "Obligation",
-  "tax.calendar.frequency": "Frequency"
+  "tax.calendar.frequency": "Frequency",
+  "tax.vat.nonOfficial": "Unofficial",
+  "tax.dsf.exportExcelNonOfficial": "Export Excel (unofficial)",
+  "tax.dsf.exportNonOfficialHint": "The workbook will be named « dsf-{fy}-NON-OFFICIEL.xlsx » and marked as an unofficial document: it cannot be filed."
 }

@@ -58,7 +58,7 @@ export default async function ExpenseDetailPage({ params, searchParams }: { para
       {editing ? (
         <Card className="mb-4">
           <CardTitle>{t("invoicing.edit")}</CardTitle>
-          <PurchaseDocumentForm rates={ctx.rates} currency={doc.currency} existing={doc} />
+          <PurchaseDocumentForm rates={ctx.rates} currency={doc.currency} existing={doc} packDraft={ctx.packDraft} />
         </Card>
       ) : null}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

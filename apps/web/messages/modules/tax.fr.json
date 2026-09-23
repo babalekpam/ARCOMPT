@@ -113,5 +113,8 @@
   "tax.calendar.emptyBody": "Le pack pays du dossier ne définit pas de calendrier pour cette année.",
   "tax.calendar.dueDate": "Échéance",
   "tax.calendar.obligation": "Obligation",
-  "tax.calendar.frequency": "Fréquence"
+  "tax.calendar.frequency": "Fréquence",
+  "tax.vat.nonOfficial": "Non officielle",
+  "tax.dsf.exportExcelNonOfficial": "Exporter Excel (non officiel)",
+  "tax.dsf.exportNonOfficialHint": "Le classeur sera nommé « dsf-{fy}-NON-OFFICIEL.xlsx » et marqué document non officiel : il ne peut pas être déposé."
 }

@@ -17,6 +17,12 @@ export interface TaxReturn {
   paymentEntryId: string | null;
   filingReference: string | null;
   filedAt: string | null;
+  /**
+   * Faux quand la déclaration a été calculée depuis un pack pays non publié :
+   * les taux appliqués sont indicatifs et la déclaration ne peut pas être
+   * remise à l'administration.
+   */
+  official: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,6 +105,10 @@ export interface DsfResponse {
   label: string;
   statements: StatementsOutput;
   fiscal: DsfFiscal;
+  /** Vrai seulement si le pack pays est publié et revu. */
+  official: boolean;
+  /** Mention portée par la liasse et son classeur quand elle n'est pas officielle. */
+  notice: string | null;
 }
 
 export type DeadlineStatus = "UPCOMING" | "DUE_SOON" | "OVERDUE" | "DONE";

@@ -267,5 +267,17 @@
   "pwa.updateAvailable": "A new version is available.",
   "pwa.reload": "Reload",
   "nav.assets": "Fixed assets",
-  "nav.closing": "Closing"
+  "nav.closing": "Closing",
+  "pack.notice.vat.title": "Pack {pack} awaiting validation",
+  "pack.notice.vat.body": "This pack's VAT rates are indicative: they have not yet been validated by a chartered accountant of the country. The period position remains available, but no return produced from this pack can be submitted to the tax authority.",
+  "pack.notice.vatReturn.title": "Unofficial return — pack {pack} awaiting validation",
+  "pack.notice.vatReturn.body": "This computation uses indicative rates that no chartered accountant of the country has validated. The return cannot be submitted to the tax authority as it stands.",
+  "pack.notice.dsf.title": "Unofficial filing — pack {pack} awaiting validation",
+  "pack.notice.dsf.body": "The tax reconciliation and the tax due shown here rest on indicative scales that no chartered accountant of the country has validated. This filing cannot be submitted to the tax authority.",
+  "pack.notice.payslip.title": "Unofficial payslip — pack {pack} awaiting validation",
+  "pack.notice.payslip.body": "The contributions, deductions and net pay on this payslip are computed with indicative rates that no chartered accountant of the country has validated. This payslip is not a supporting document for any tax or social security body.",
+  "pack.badge.draft": "Pack {status}",
+  "pack.badge.nonOfficial": "Unofficial",
+  "pack.rates.draft": "VAT rates from pack {pack}, awaiting validation: indicative values.",
+  "common.packNotPublished": "Refused: pack {pack} is at status {status}. A chartered accountant of the country must validate its rates and scales, and the pack must reach PUBLISHED, before any legal document can be produced from it."
 }

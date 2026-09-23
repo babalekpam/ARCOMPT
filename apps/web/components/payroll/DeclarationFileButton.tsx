@@ -25,7 +25,7 @@ export function DeclarationFileButton({ declaration }: { declaration: PayrollDec
       setOpen(false);
       router.refresh();
     } catch (e) {
-      setError(errorMessage(e));
+      setError(errorMessage(e, t));
     } finally {
       setBusy(false);
     }

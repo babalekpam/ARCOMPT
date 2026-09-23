@@ -36,7 +36,7 @@ export function IsInstalmentsForm({ defaultFiscalYear, currency }: { defaultFisc
       setResult(res.computation);
       router.refresh();
     } catch (err) {
-      setError(errorMessage(err));
+      setError(errorMessage(err, t));
     } finally {
       setBusy(false);
     }

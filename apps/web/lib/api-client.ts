@@ -5,7 +5,8 @@
  * jeton. Fournit un hook `useMutation` minimal pour les îlots clients.
  */
 import { useCallback, useState } from "react";
-import { ApiError, parseApiResponse } from "./api-shared";
+import { ApiError, packRefusal, parseApiResponse } from "./api-shared";
+import type { Translator } from "./i18n";
 
 export { ApiError };
 
@@ -68,8 +69,18 @@ export function useMutation<TVars, TData>(fn: (vars: TVars) => Promise<TData>) {
   return { ...state, mutate, reset, isLoading: state.status === "loading" };
 }
 
-/** Message d'erreur affichable, quelle que soit la cause. */
-export function errorMessage(err: unknown): string {
+/**
+ * Message d'erreur affichable, quelle que soit la cause.
+ *
+ * Avec un `t`, le refus d'un pack non publié est rendu en une phrase courte
+ * plutôt qu'avec le paragraphe du serveur ; les autres erreurs gardent leur
+ * message brut, qui reste le plus informatif.
+ */
+export function errorMessage(err: unknown, t?: Translator): string {
+  if (t) {
+    const refusal = packRefusal(err);
+    if (refusal) return t("common.packNotPublished", refusal);
+  }
   if (err instanceof ApiError) return `${err.message} (${err.code})`;
   if (err instanceof Error) return err.message;
   return String(err);

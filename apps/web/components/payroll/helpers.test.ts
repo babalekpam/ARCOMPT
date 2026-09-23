@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildComputeInputs, emptyVariableRow, employeeName, isMasked, parseAmount, periodLabel, rowFromInputs, runTone } from "./helpers";
+import { buildComputeInputs, emptyVariableRow, employeeName, isMasked, parseAmount, payslipDraftPack, periodLabel, rowFromInputs, runTone } from "./helpers";
 
 describe("payroll helpers", () => {
   it("détecte les valeurs masquées", () => {
@@ -48,5 +48,17 @@ describe("payroll helpers", () => {
     expect(runTone("COMPUTED")).toBe("info");
     expect(runTone("PAID")).toBe("success");
     expect(employeeName({ firstName: "Awa", lastName: "Diop" })).toBe("DIOP Awa");
+  });
+
+  it("nomme le pack d'un bulletin non officiel et se tait sinon", () => {
+    const view = { company: { countryCode: "ci" }, run: { packVersion: "2025.1" } };
+    expect(payslipDraftPack({ ...view, official: false, packNotice: "Pack ci@2025.1 au statut DRAFT…" })).toBe("CI 2025.1");
+    // Une mention sans drapeau, ou un drapeau sans mention : la mention sort quand même.
+    expect(payslipDraftPack({ ...view, official: true, packNotice: "Pack ci@2025.1 au statut DRAFT…" })).toBe("CI 2025.1");
+    expect(payslipDraftPack({ ...view, official: false, packNotice: null })).toBe("CI 2025.1");
+    expect(payslipDraftPack({ ...view, official: true, packNotice: null })).toBeNull();
+    expect(payslipDraftPack({ ...view, official: true, packNotice: "   " })).toBeNull();
+    // Champs absents (API plus ancienne) : rien à dire, on n'invente pas une alerte.
+    expect(payslipDraftPack(view)).toBeNull();
   });
 });

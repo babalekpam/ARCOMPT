@@ -5,6 +5,7 @@ import { config } from "@/lib/config";
 import type { SearchParams } from "@/lib/fiscal-year";
 import { getT } from "@/lib/i18n-server";
 import type { Company, CountryPack, PackSummary } from "@/lib/types";
+import { packStatusTone } from "@/components/packs/helpers";
 import { LocaleSwitcher } from "@/components/shell/LocaleSwitcher";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardTitle } from "@/components/ui/Card";
@@ -61,7 +62,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
             <dl className="divide-y divide-slate-100 dark:divide-slate-800">
               <Row label={t("settings.packCode")} value={`${pack.data.code.toUpperCase()} — ${pack.data.name}`} />
               <Row label={t("settings.packVersion")} value={pack.data.version} />
-              <Row label={t("settings.packStatus")} value={<Badge tone={pack.data.status === "PUBLISHED" ? "success" : pack.data.status === "REVIEWED" ? "info" : "warning"}>{pack.data.status}</Badge>} />
+              <Row label={t("settings.packStatus")} value={<Badge tone={packStatusTone(pack.data.status)}>{pack.data.status}</Badge>} />
               <Row label={t("settings.packCurrency")} value={pack.data.identity.currency} />
               <Row label={t("settings.packSystems")} value={pack.data.identity.accounting_systems.join(", ")} />
               <Row label={t("settings.packAuthority")} value={pack.data.identity.tax_authority} />

@@ -267,5 +267,17 @@
   "pwa.updateAvailable": "Une nouvelle version est disponible.",
   "pwa.reload": "Recharger",
   "nav.assets": "Immobilisations",
-  "nav.closing": "Clôture"
+  "nav.closing": "Clôture",
+  "pack.notice.vat.title": "Pack {pack} en cours de validation",
+  "pack.notice.vat.body": "Les taux de TVA de ce pack sont indicatifs : ils n'ont pas encore été validés par un expert-comptable du pays. La position de la période reste consultable, mais aucune déclaration tirée de ce pack ne peut être remise à l'administration.",
+  "pack.notice.vatReturn.title": "Déclaration non officielle — pack {pack} en cours de validation",
+  "pack.notice.vatReturn.body": "Ce calcul repose sur des taux indicatifs, non validés par un expert-comptable du pays. La déclaration ne peut pas être remise à l'administration en l'état.",
+  "pack.notice.dsf.title": "Liasse non officielle — pack {pack} en cours de validation",
+  "pack.notice.dsf.body": "Le passage fiscal et l'impôt affichés reposent sur des barèmes indicatifs, non validés par un expert-comptable du pays. La liasse ne peut pas être déposée auprès de l'administration.",
+  "pack.notice.payslip.title": "Bulletin non officiel — pack {pack} en cours de validation",
+  "pack.notice.payslip.body": "Les cotisations, retenues et le net figurant sur ce bulletin sont calculés avec des taux indicatifs, non validés par un expert-comptable du pays. Ce bulletin ne vaut pas justificatif auprès d'une administration ni d'un organisme social.",
+  "pack.badge.draft": "Pack {status}",
+  "pack.badge.nonOfficial": "Non officiel",
+  "pack.rates.draft": "Taux de TVA du pack {pack}, en cours de validation : valeurs indicatives.",
+  "common.packNotPublished": "Refusé : le pack {pack} est au statut {status}. Un expert-comptable du pays doit valider ses taux et barèmes, et le pack passer en PUBLISHED, avant qu'un document légal puisse en être tiré."
 }

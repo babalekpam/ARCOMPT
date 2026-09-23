@@ -4,6 +4,9 @@ import { config } from "@/lib/config";
 import { formatDate } from "@/lib/i18n";
 import { getT } from "@/lib/i18n-server";
 import { ApiErrorNotice } from "@/components/ApiErrorNotice";
+import { loadCompanyPack } from "@/components/packs/context";
+import { packLabel } from "@/components/packs/helpers";
+import { PackNotice } from "@/components/packs/PackNotice";
 import { parseVatComputation, returnTone } from "@/components/tax/helpers";
 import type { TaxReturn, VatCodeAmount } from "@/components/tax/types";
 import { VatReturnActions } from "@/components/tax/VatReturnActions";
@@ -21,6 +24,11 @@ export default async function VatReturnPage({ params }: { params: Promise<{ id: 
   const res = await apiTry<TaxReturn>(`/tax/vat/returns/${id}`);
   if (!res.ok && "status" in res.error && res.error.isNotFound) notFound();
   const comp = res.ok ? parseVatComputation(res.data.data) : null;
+  // `official` est porté par la déclaration elle-même : il dit avec quel pack
+  // elle a été calculée, ce qui reste vrai même si le pack est publié depuis.
+  // Le pack n'est chargé que pour le nommer.
+  const pack = res.ok && res.data.official === false ? await loadCompanyPack() : null;
+  const packName = pack ? (pack.ref ? packLabel(pack.ref) : pack.packCode.toUpperCase()) : "";
 
   return (
     <>
@@ -36,6 +44,7 @@ export default async function VatReturnPage({ params }: { params: Promise<{ id: 
       {!res.ok ? <ApiErrorNotice error={res.error} /> : null}
       {res.ok ? (
         <>
+          {res.data.official === false ? <PackNotice surface="vatReturn" pack={packName} className="mb-4" /> : null}
           <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <Badge tone={returnTone(res.data.status)}>{t(`tax.returnStatus.${res.data.status}`)}</Badge>
             {res.data.entryId ? (

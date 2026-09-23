@@ -18,7 +18,7 @@ export default async function NewExpensePage({ searchParams }: { searchParams: S
     <>
       <PageHeader title={kind === "EXPENSE_CLAIM" ? t("invoicing.expense.newClaim") : t("invoicing.expense.newInvoice")} subtitle={t("invoicing.form.subtitle", { pack: ctx.packCode.toUpperCase(), currency: ctx.currency })} />
       <Card>
-        <PurchaseDocumentForm rates={ctx.rates} currency={ctx.currency} initialKind={kind} documentId={documentId} />
+        <PurchaseDocumentForm rates={ctx.rates} currency={ctx.currency} initialKind={kind} documentId={documentId} packDraft={ctx.packDraft} />
       </Card>
     </>
   );

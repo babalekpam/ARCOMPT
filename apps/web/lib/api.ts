@@ -7,11 +7,11 @@
  * - `apiTry` renvoie un résultat discriminé pour les écrans qui doivent rester
  *   utilisables quand l'API est absente (états vides plutôt qu'un crash).
  */
-import { ApiError, parseApiResponse } from "./api-shared";
+import { ApiError, packRefusal, parseApiResponse } from "./api-shared";
 import { getAuthContext } from "./auth";
 import { config } from "./config";
 
-export { ApiError };
+export { ApiError, packRefusal };
 export type { ApiErrorBody } from "./api-shared";
 
 export class ApiUnreachableError extends Error {
@@ -70,8 +70,18 @@ export async function apiTry<T>(path: string, init: ApiInit = {}): Promise<ApiRe
   }
 }
 
-/** Message lisible pour une erreur d'API (les écrans le passent à t()). */
-export function describeApiError(err: ApiError | ApiUnreachableError): { key: "common.apiError" | "common.unreachable"; params: Record<string, string> } {
+export type ApiNoticeKey = "common.apiError" | "common.unreachable" | "common.packNotPublished";
+
+/**
+ * Message lisible pour une erreur d'API (les écrans le passent à t()).
+ *
+ * Le refus d'un pack non publié est le seul code traduit à part : c'est une
+ * décision que l'utilisateur doit comprendre, pas une panne, et le message du
+ * serveur est trop long pour un bandeau.
+ */
+export function describeApiError(err: ApiError | ApiUnreachableError): { key: ApiNoticeKey; params: Record<string, string> } {
   if (err instanceof ApiUnreachableError) return { key: "common.unreachable", params: { url: config.apiUrl() } };
+  const refusal = packRefusal(err);
+  if (refusal) return { key: "common.packNotPublished", params: refusal };
   return { key: "common.apiError", params: { code: err.code, message: err.message } };
 }

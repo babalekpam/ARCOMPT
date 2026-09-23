@@ -35,7 +35,7 @@ export function VatReturnActions({ taxReturn }: { taxReturn: TaxReturn }) {
       setDialog(null);
       router.refresh();
     } catch (e) {
-      setError(errorMessage(e));
+      setError(errorMessage(e, t));
     } finally {
       setBusy(false);
     }

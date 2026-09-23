@@ -31,7 +31,7 @@ const newLine = (): LineState => ({ key: generateClientId(), productId: "", labe
  * brouillon (POST /v1/sales) ; l'émission se fait depuis la fiche du document.
  * Avec `existing`, met à jour le brouillon (PUT /v1/sales/:id).
  */
-export function SalesDocumentForm({ rates, currency, initialKind = "INVOICE", existing }: { rates: PackVatRate[]; currency: string; initialKind?: SalesKind; existing?: SalesDocument }) {
+export function SalesDocumentForm({ rates, currency, initialKind = "INVOICE", existing, packDraft = null }: { rates: PackVatRate[]; currency: string; initialKind?: SalesKind; existing?: SalesDocument; packDraft?: string | null }) {
   const t = useT();
   const router = useRouter();
   const [kind, setKind] = useState<SalesKind>(existing?.kind ?? initialKind);
@@ -141,6 +141,9 @@ export function SalesDocumentForm({ rates, currency, initialKind = "INVOICE", ex
       <fieldset>
         <legend className="mb-2 text-sm font-semibold">{t("invoicing.form.lines")}</legend>
         {rates.length === 0 ? <Alert tone="warning" className="mb-2">{t("invoicing.form.noRates")}</Alert> : null}
+        {/* Les taux proposés ci-dessous viennent du pack : on le dit là où on les
+            choisit, en une ligne, sans transformer la facturation en avertissement. */}
+        {packDraft && rates.length > 0 ? <p className="mb-2 text-xs text-slate-500">{t("invoicing.form.packDraft", { pack: packDraft })}</p> : null}
         <div className="space-y-2">
           <div className="hidden grid-cols-[1.2fr_1.6fr_5rem_1fr_6rem_7rem_1fr_auto] gap-2 text-xs uppercase tracking-wide text-slate-500 lg:grid">
             <span>{t("invoicing.form.product")}</span>

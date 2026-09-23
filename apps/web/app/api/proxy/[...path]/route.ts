@@ -44,6 +44,11 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   if (ct) res.headers.set("content-type", ct);
   const cd = upstream.headers.get("content-disposition");
   if (cd) res.headers.set("content-disposition", cd);
+  // Marque des documents produits depuis un pack non publié : elle doit
+  // traverser le proxy, sans quoi un fichier téléchargé par l'application perd
+  // ce que l'API avait pris soin de dire.
+  const official = upstream.headers.get("x-arcompt-official");
+  if (official) res.headers.set("x-arcompt-official", official);
   res.headers.set("cache-control", "no-store");
   return res;
 }

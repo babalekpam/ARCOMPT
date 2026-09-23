@@ -103,6 +103,22 @@ export function buildComputeInputs(rows: VariableRow[], labels: { bonus: string;
   return { inputs, invalid };
 }
 
+/**
+ * Pack d'un bulletin non officiel, nommé comme la mention l'affiche
+ * (« CI 2025.1 ») ; `null` quand le bulletin fait autorité.
+ *
+ * Un bulletin n'est jamais refusé — c'est aussi une pièce comptable — mais
+ * quand le pack pays n'est pas publié, l'API le marque `official: false` et
+ * fournit `packNotice`. L'un ou l'autre suffit à déclencher la mention : mieux
+ * vaut l'imprimer une fois de trop que de remettre au salarié un bulletin qui
+ * se donne pour officiel.
+ */
+export function payslipDraftPack(view: { official?: boolean; packNotice?: string | null; company: { countryCode: string }; run: { packVersion: string } }): string | null {
+  const draft = view.official === false || (typeof view.packNotice === "string" && view.packNotice.trim().length > 0);
+  if (!draft) return null;
+  return `${view.company.countryCode.toUpperCase()} ${view.run.packVersion}`;
+}
+
 export function employeeName(e: { firstName: string; lastName: string }): string {
   return `${e.lastName.toUpperCase()} ${e.firstName}`.trim();
 }

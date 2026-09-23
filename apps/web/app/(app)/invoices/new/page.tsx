@@ -14,7 +14,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: S
     <>
       <PageHeader title={kind === "QUOTE" ? t("invoicing.newQuote") : t("invoicing.newInvoice")} subtitle={t("invoicing.form.subtitle", { pack: ctx.packCode.toUpperCase(), currency: ctx.currency })} />
       <Card>
-        <SalesDocumentForm rates={ctx.rates} currency={ctx.currency} initialKind={kind} />
+        <SalesDocumentForm rates={ctx.rates} currency={ctx.currency} initialKind={kind} packDraft={ctx.packDraft} />
       </Card>
     </>
   );

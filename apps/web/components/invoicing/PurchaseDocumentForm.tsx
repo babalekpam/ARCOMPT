@@ -29,7 +29,7 @@ const newLine = (): LineState => ({ key: generateClientId(), accountNumber: "", 
  * aperçu HT / TVA / TTC. Enregistre un brouillon (POST /v1/purchases) ou met à
  * jour un brouillon existant (PUT). `documentId` relie une pièce capturée.
  */
-export function PurchaseDocumentForm({ rates, currency, initialKind = "SUPPLIER_INVOICE", existing, documentId }: { rates: PackVatRate[]; currency: string; initialKind?: PurchaseKind; existing?: PurchaseDocument; documentId?: string }) {
+export function PurchaseDocumentForm({ rates, currency, initialKind = "SUPPLIER_INVOICE", existing, documentId, packDraft = null }: { rates: PackVatRate[]; currency: string; initialKind?: PurchaseKind; existing?: PurchaseDocument; documentId?: string; packDraft?: string | null }) {
   const t = useT();
   const router = useRouter();
   const [kind, setKind] = useState<PurchaseKind>(existing?.kind ?? initialKind);
@@ -117,6 +117,8 @@ export function PurchaseDocumentForm({ rates, currency, initialKind = "SUPPLIER_
 
       <fieldset>
         <legend className="mb-2 text-sm font-semibold">{t("invoicing.form.lines")}</legend>
+        {/* Même discrétion qu'en vente : une ligne, là où le taux se choisit. */}
+        {packDraft && rates.length > 0 ? <p className="mb-2 text-xs text-slate-500">{t("invoicing.form.packDraft", { pack: packDraft })}</p> : null}
         <div className="space-y-2">
           <div className="hidden grid-cols-[minmax(9rem,1fr)_2fr_1fr_8rem_1fr_auto] gap-2 text-xs uppercase tracking-wide text-slate-500 sm:grid">
             <span>{t("common.account")}</span>

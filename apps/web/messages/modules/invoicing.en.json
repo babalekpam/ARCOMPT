@@ -228,5 +228,6 @@
   "invoicing.purchaseStatus.POSTED": "Posted",
   "invoicing.purchaseStatus.PARTIALLY_PAID": "Partially paid",
   "invoicing.purchaseStatus.PAID": "Paid",
-  "invoicing.purchaseStatus.CANCELLED": "Cancelled"
+  "invoicing.purchaseStatus.CANCELLED": "Cancelled",
+  "invoicing.form.packDraft": "Rates from pack {pack}, awaiting validation: indicative."
 }

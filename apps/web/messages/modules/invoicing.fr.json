@@ -228,5 +228,6 @@
   "invoicing.purchaseStatus.POSTED": "Comptabilisé",
   "invoicing.purchaseStatus.PARTIALLY_PAID": "Partiellement payé",
   "invoicing.purchaseStatus.PAID": "Payé",
-  "invoicing.purchaseStatus.CANCELLED": "Annulé"
+  "invoicing.purchaseStatus.CANCELLED": "Annulé",
+  "invoicing.form.packDraft": "Taux du pack {pack}, en cours de validation : indicatifs."
 }
