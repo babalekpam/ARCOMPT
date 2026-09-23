@@ -117,7 +117,6 @@ describe("loadConfig — production incomplète", () => {
       "R2_ACCOUNT_ID",
       "CLAMAV_HOST",
       "WHATSAPP_TOKEN",
-      "WHATSAPP_APP_SECRET",
     ];
     for (const variable of expected) {
       expect(problems.some((p) => p.includes(variable)), `${variable} devrait être signalé`).toBe(true);
@@ -153,6 +152,16 @@ describe("loadConfig — production incomplète", () => {
 
   it("refuse l'opérateur de paiement simulé, sans opt-out possible", () => {
     expect(problemsOf(productionEnv({ PAYMENT_PROVIDER: "mock", ALLOW_INSECURE_PAYMENTS: "1" })).join("\n")).toContain("PAYMENT_PROVIDER");
+  });
+
+  it("n'exige le secret WhatsApp que si le canal est réellement configuré", () => {
+    // Exiger ce secret d'un déploiement sans WhatsApp empêchait de démarrer
+    // sans bénéfice, et poussait à inventer une valeur.
+    const sansCanal = loadConfig(productionEnv({ WHATSAPP_TOKEN: "", WHATSAPP_PHONE_ID: "", WHATSAPP_APP_SECRET: "", ALLOW_INSECURE_WHATSAPP: "1" }), { warn: () => {} });
+    expect(sansCanal.degraded.join("\n")).toContain("WhatsApp");
+
+    const avecCanal = problemsOf(productionEnv({ WHATSAPP_TOKEN: "t", WHATSAPP_PHONE_ID: "p", WHATSAPP_APP_SECRET: "" }));
+    expect(avecCanal.join("\n")).toContain("WHATSAPP_APP_SECRET");
   });
 
   it("sans opérateur de paiement, démarre en mode dégradé plutôt que d'échouer", () => {

@@ -226,8 +226,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
       `WHATSAPP_TOKEN / WHATSAPP_PHONE_ID : absents — le canal WhatsApp serait simulé et avalerait silencieusement tous les messages sortants. Posez ${INSECURE_OPT_OUT.whatsapp}=1 pour l'accepter explicitement.`,
     );
   }
-  if (!present(env.WHATSAPP_APP_SECRET)) {
-    problems.push("WHATSAPP_APP_SECRET : absent — la signature HMAC des webhooks Meta ne serait pas vérifiée.");
+  // Le secret de signature n'a de sens que si le canal est réellement branché.
+  // L'exiger d'un déploiement qui n'utilise pas WhatsApp — le cas courant —
+  // empêchait de démarrer sans aucun bénéfice, et poussait à inventer une
+  // valeur, ce qui est pire que de ne pas en avoir.
+  if (!whatsappSimulated && !present(env.WHATSAPP_APP_SECRET)) {
+    problems.push("WHATSAPP_APP_SECRET : absent alors que le canal WhatsApp est configuré — la signature HMAC des webhooks Meta ne serait pas vérifiée.");
+  } else if (whatsappSimulated) {
+    degraded.push("Canal WhatsApp désactivé : WHATSAPP_TOKEN / WHATSAPP_PHONE_ID sont absents.");
   }
 
   if (isProduction && problems.length > 0) throw new ConfigError(problems);
