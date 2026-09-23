@@ -4,6 +4,7 @@ import { buildEntry, computeDocumentTotals, currencyDecimals, type EventLine, ty
 import { BaseService, InvoicingError, assertDate, dateText, daysBetween, isoText, money } from "./base.js";
 import { certificationRequired, toCertification } from "./certification.js";
 import { applyToSalesInvoice, loadSalesDocument } from "./documents.js";
+import type { DunningDispatch } from "./dunning.js";
 import { mapProduct, mapSalesDocument, outstandingOf } from "./mappers.js";
 import {
   AGING_BUCKETS,
@@ -367,18 +368,107 @@ export class InvoicingService extends BaseService {
     });
   }
 
+  /**
+   * Relance une facture échue : remise au canal demandé, PUIS enregistrement.
+   *
+   * L'ordre est le fond de cette méthode. La ligne `dunning` est ce que l'écran
+   * des créances échues présente comme « relance de niveau N envoyée le … » et
+   * ce sur quoi s'appuie le niveau suivant ; elle ne doit donc exister que si
+   * le message a été accepté par le serveur de messagerie (ou par le canal
+   * choisi). En cas d'échec, rien n'est enregistré comme envoyé — mais la
+   * tentative, elle, est consignée dans `dunning_log` (statut FAILED) : on perd
+   * l'envoi, jamais sa trace.
+   */
   async recordDunning(documentId: string, input: DunningInput): Promise<Dunning> {
     if (!Number.isInteger(input.level) || input.level < 1 || input.level > 5) throw new InvoicingError("VALIDATION", "Niveau de relance entre 1 et 5");
-    return this.tx(async (tx) => {
+    const asOf = this.today();
+
+    // 1. Contrôles et destinataire, sans rien écrire.
+    const prepared = await this.tx(async (tx) => {
       const doc = await loadSalesDocument(tx, this.tenantId, documentId);
       if (doc.kind !== "INVOICE" || !["SENT", "PARTIALLY_PAID"].includes(doc.status)) throw new InvoicingError("INVALID_STATUS", "Seule une facture non soldée se relance");
+      const [partner] = await tx`SELECT name, contact FROM partner WHERE id = ${doc.partnerId} AND tenant_id = ${this.tenantId}`;
+      const [company] = await tx`SELECT name FROM company WHERE id = ${this.tenantId}`;
+      const contact = (partner?.contact ?? {}) as Record<string, unknown>;
+      const recipient = String((input.channel === "WHATSAPP" ? (contact.whatsapp ?? contact.phone) : contact.email) ?? "").trim();
+      if (recipient === "") {
+        throw new InvoicingError("VALIDATION", `Le tiers ${doc.partnerName} n'a pas de contact ${input.channel === "WHATSAPP" ? "WhatsApp" : "e-mail"} : la relance n'a pas de destinataire.`);
+      }
+      const dueDate = doc.dueDate ?? doc.issueDate;
+      return {
+        partnerId: doc.partnerId,
+        dispatch: {
+          tenantId: this.tenantId,
+          documentId,
+          level: input.level,
+          channel: input.channel,
+          recipient,
+          invoiceNumber: doc.number ?? documentId,
+          partnerName: doc.partnerName,
+          companyName: String(company?.name ?? doc.partnerName),
+          dueDate,
+          daysOverdue: Math.max(daysBetween(dueDate, asOf), 0),
+          outstanding: doc.outstanding.toString(),
+          currency: doc.currency,
+          ...(input.message ? { message: input.message } : {}),
+        } satisfies DunningDispatch,
+      };
+    });
+
+    // 2. Remise au canal. Sans expéditeur branché, on refuse : enregistrer une
+    //    relance que personne n'a envoyée revient à mentir à l'utilisateur.
+    const sender = this.deps.dunningSender;
+    if (!sender) {
+      await this.logDunningAttempt(prepared.partnerId, prepared.dispatch, "FAILED", { reason: "aucun expéditeur de relance configuré" });
+      throw new InvoicingError("DUNNING_NOT_SENT", "Aucun expéditeur de relance n'est configuré : la relance n'a pas été envoyée, elle n'a donc pas été enregistrée.", {
+        documentId,
+        channel: input.channel,
+      });
+    }
+    let externalId: string | undefined;
+    try {
+      externalId = (await sender.send(prepared.dispatch)).externalId;
+    } catch (e) {
+      await this.logDunningAttempt(prepared.partnerId, prepared.dispatch, "FAILED", { reason: (e as Error).message });
+      throw new InvoicingError("DUNNING_NOT_SENT", `Relance non envoyée (${input.channel}) : ${(e as Error).message}`, { documentId, channel: input.channel });
+    }
+
+    // 3. Enregistrement : à partir d'ici, « envoyée » est vrai.
+    return this.tx(async (tx) => {
       const [r] = await tx`
         INSERT INTO dunning (tenant_id, sales_document_id, level, channel, message, sent_by, sent_at)
         VALUES (${this.tenantId}, ${documentId}, ${input.level}, ${input.channel}, ${input.message ?? null}, ${this.ctx.userId}, ${this.now().toISOString()})
         RETURNING *`;
+      await tx`
+        INSERT INTO dunning_log (tenant_id, partner_id, reference, channel, level, status, detail)
+        VALUES (${this.tenantId}, ${prepared.partnerId}, ${prepared.dispatch.invoiceNumber}, ${input.channel}, ${input.level}, 'SENT',
+                ${tx.json({ documentId, recipient: prepared.dispatch.recipient, ...(externalId ? { externalId } : {}) })})`;
       await this.audit(tx, "dunning.send", "sales_document", documentId, { level: input.level, channel: input.channel });
       return { id: r!.id as string, salesDocumentId: documentId, level: Number(r!.level), channel: r!.channel as Dunning["channel"], sentAt: isoText(r!.sent_at), message: (r!.message as string | null) ?? null };
     });
+  }
+
+  /**
+   * Consigne une tentative de relance dans `dunning_log`, hors transaction
+   * métier : c'est la mémoire de ce qui a été tenté quand l'envoi a échoué.
+   * Son propre échec ne masque jamais l'erreur d'origine — il s'affiche.
+   */
+  private async logDunningAttempt(
+    partnerId: string,
+    dispatch: DunningDispatch,
+    status: "SENT" | "FAILED" | "SKIPPED",
+    detail: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      await this.tx(
+        (tx) => tx`
+          INSERT INTO dunning_log (tenant_id, partner_id, reference, channel, level, status, detail)
+          VALUES (${this.tenantId}, ${partnerId}, ${dispatch.invoiceNumber}, ${dispatch.channel}, ${dispatch.level}, ${status},
+                  ${tx.json({ documentId: dispatch.documentId, recipient: dispatch.recipient, ...detail })})`,
+      );
+    } catch (e) {
+      console.warn(`[arcompt] journal des relances non écrit (facture ${dispatch.invoiceNumber}, dossier ${this.tenantId}) : ${(e as Error).message}`);
+    }
   }
 
   // -------------------------------------------------------------------------

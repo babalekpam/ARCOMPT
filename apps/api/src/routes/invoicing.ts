@@ -10,12 +10,15 @@ import {
   PaymentsService,
   PurchasesService,
   type CertificationConnector,
+  type DunningSender,
   type InvoicingDeps,
   type PaymentProvider,
 } from "@arcompt/invoicing";
+import { createProviderFromEnv } from "@arcompt/whatsapp";
 import { requireRole } from "../auth.js";
 import type { AppDeps } from "../app.js";
 import { certificationConnectorFromEnv, paymentProvidersFromEnv } from "../config.js";
+import { createDunningSender, createMailer } from "../notifications.js";
 
 /**
  * Routes facturation, achats et règlements. Montées par l'application sous un
@@ -32,6 +35,8 @@ export interface InvoicingRouteDeps extends AppDeps {
     certification?: CertificationConnector;
     /** Opérateurs de paiement par nom ; défaut : { mock } (secret PAYMENT_WEBHOOK_SECRET), refusé en production. */
     paymentProviders?: Record<string, PaymentProvider>;
+    /** Expéditeur des relances ; défaut : e-mail (SMTP_*) et WhatsApp selon l'environnement. */
+    dunningSender?: DunningSender;
     now?: () => Date;
   };
 }
@@ -133,6 +138,11 @@ export function invoicingRoutes(deps: InvoicingRouteDeps) {
   // un opérateur mock accepte des encaissements fictifs.
   const certification = deps.invoicing?.certification ?? certificationConnectorFromEnv();
   const paymentProviders = deps.invoicing?.paymentProviders ?? paymentProvidersFromEnv();
+  // Expéditeur des relances : sans lui, `recordDunning` refuse d'écrire une
+  // ligne « relance envoyée » qu'aucun message n'accompagne.
+  const dunningSender =
+    deps.invoicing?.dunningSender ??
+    createDunningSender({ mailer: createMailer({ ...(deps.quiet ? { quiet: true } : {}) }), whatsapp: createProviderFromEnv() });
 
   /** Services liés au dossier du jeton : pack pays et devise lus sur `company`. */
   async function servicesFor(c: Context) {
@@ -153,6 +163,7 @@ export function invoicingRoutes(deps: InvoicingRouteDeps) {
       currency: String(company.currency),
       certification,
       paymentProviders,
+      dunningSender,
       ...(deps.invoicing?.now ? { now: deps.invoicing.now } : {}),
     };
     const ctx = { tenantId: auth.tenantId, userId: auth.userId, ...(auth.organizationId ? { organizationId: auth.organizationId } : {}) };

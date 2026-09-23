@@ -54,6 +54,7 @@ describe("opérateur de paiement", () => {
 
   it("les routes se montent en production sans opérateur : l'encaissement est coupé, la facturation reste servie", () => {
     process.env.NODE_ENV = "production";
+    mailConfigured();
     vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(() => publicWebhookRoutes(deps)).not.toThrow();
     expect(() => invoicingRoutes(deps)).not.toThrow();
@@ -62,9 +63,54 @@ describe("opérateur de paiement", () => {
   it("les routes refusent de se monter si le simulateur est explicitement réclamé", () => {
     process.env.NODE_ENV = "production";
     process.env.PAYMENT_PROVIDER = "mock";
+    mailConfigured();
     vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(() => publicWebhookRoutes(deps)).toThrow(/PAYMENT_PROVIDER/);
     expect(() => invoicingRoutes(deps)).toThrow(/PAYMENT_PROVIDER/);
+  });
+});
+
+/** Serveur d'envoi réel : ce que la production doit avoir pour monter les routes. */
+function mailConfigured(): void {
+  process.env.SMTP_HOST = "smtp.exemple.test";
+  process.env.MAIL_FROM_ADDRESS = "compta@exemple.test";
+}
+
+describe("canal e-mail", () => {
+  it("refuse en production un expéditeur muet, en nommant les variables manquantes", () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.SMTP_HOST;
+    delete process.env.MAIL_FROM_ADDRESS;
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Une relance enregistrée que rien n'a envoyée est un mensonge affiché à
+    // l'utilisateur : la route ne se monte pas.
+    expect(() => invoicingRoutes(deps)).toThrow(/SMTP_HOST/);
+    expect(() => invoicingRoutes(deps)).toThrow(/ALLOW_INSECURE_MAIL/);
+  });
+
+  it("accepte l'expéditeur muet en production si ALLOW_INSECURE_MAIL=1", () => {
+    process.env.NODE_ENV = "production";
+    process.env.ALLOW_INSECURE_MAIL = "1";
+    delete process.env.SMTP_HOST;
+    delete process.env.MAIL_FROM_ADDRESS;
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(() => invoicingRoutes(deps)).not.toThrow();
+  });
+
+  it("hors production, l'expéditeur muet reste en place et s'annonce", () => {
+    delete process.env.SMTP_HOST;
+    delete process.env.MAIL_FROM_ADDRESS;
+    const logged: string[] = [];
+    vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => void logged.push(args.map(String).join(" ")));
+    expect(() => invoicingRoutes({ auth: { mode: "dev" as const }, quiet: false, ledgerFor: () => ({}) } as never)).not.toThrow();
+    expect(logged.join("\n")).toContain("SMTP_HOST");
+  });
+
+  it("une configuration d'envoi à moitié posée est refusée, même hors production", () => {
+    process.env.SMTP_HOST = "smtp.exemple.test";
+    delete process.env.MAIL_FROM_ADDRESS;
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(() => invoicingRoutes(deps)).toThrow(/MAIL_FROM_ADDRESS/);
   });
 });
 

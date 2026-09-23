@@ -6,6 +6,12 @@ export interface OutboundMessage {
   to: string;
   subject?: string;
   body: string;
+  /**
+   * Variante HTML du corps, produite par les modèles de `@arcompt/mailer`.
+   * Elle ne porte rien de plus que `body` : un canal qui l'ignore (WhatsApp)
+   * ou un client qui ne l'affiche pas ne perd aucune information.
+   */
+  html?: string;
   tenantId: string;
   /** Identifiant métier (demande de pièce) pour la traçabilité. */
   reference?: string;

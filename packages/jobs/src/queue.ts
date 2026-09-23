@@ -9,7 +9,12 @@ export interface JobPayloads {
   "document.extract": { tenantId: string; userId: string; documentId: string; organizationId?: string };
   "render.pdf": { tenantId: string; kind: string; params: Record<string, unknown> };
   "import.statement": { tenantId: string; userId: string; documentId: string };
-  "dunning.send": { tenantId: string; invoiceId: string; channel: "EMAIL" | "WHATSAPP" | "SMS" };
+  /**
+   * Relance d'une facture échue. `userId` porte l'auteur : la ligne `dunning`
+   * l'exige (`sent_by`), une relance étant toujours imputable à quelqu'un.
+   * Sans `level`, le niveau suivant est déduit des relances déjà envoyées.
+   */
+  "dunning.send": { tenantId: string; userId: string; invoiceId: string; channel: "EMAIL" | "WHATSAPP" | "SMS"; level?: number; message?: string };
   "whatsapp.reply": { to: string; text: string };
 }
 

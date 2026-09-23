@@ -4,6 +4,7 @@ import { withTenant } from "@arcompt/db";
 import type { CountryPack } from "@arcompt/country-packs";
 import { DEFAULT_TEMPLATES, type PostingContext, type PostingEventKind, type PostingTemplate } from "@arcompt/posting";
 import type { CertificationConnector } from "./certification.js";
+import type { DunningSender } from "./dunning.js";
 import type { PaymentProvider } from "./payment-provider.js";
 import type { PaymentKind, PurchaseKind, SalesKind, TenantContext } from "./types.js";
 
@@ -21,7 +22,8 @@ export type InvoicingErrorCode =
   | "SAME_USER"
   | "INVALID_SIGNATURE"
   | "REPLAY"
-  | "DUPLICATE";
+  | "DUPLICATE"
+  | "DUNNING_NOT_SENT";
 
 /** Erreur métier du module : le code se traduit en statut HTTP côté API. */
 export class InvoicingError extends Error {
@@ -47,6 +49,9 @@ export class InvoicingError extends Error {
         return 401;
       case "SAME_USER":
         return 403;
+      // Le canal de relance n'a pas accepté le message : la panne est en aval.
+      case "DUNNING_NOT_SENT":
+        return 502;
       case "VALIDATION":
       case "PROVIDER_UNKNOWN":
         return 400;
@@ -67,6 +72,11 @@ export interface InvoicingDeps {
   certification?: CertificationConnector;
   /** Opérateurs de paiement (mobile money) indexés par nom. */
   paymentProviders?: Record<string, PaymentProvider>;
+  /**
+   * Expéditeur des relances. Sans lui, `recordDunning` refuse : une ligne de
+   * relance ne doit jamais dire « envoyée » quand rien n'est parti.
+   */
+  dunningSender?: DunningSender;
   /** Modèles d'imputation surchargés par le dossier. */
   templates?: Partial<Record<PostingEventKind, PostingTemplate>>;
   /** Comptes par rôle propres au dossier (voir PostingContext). */

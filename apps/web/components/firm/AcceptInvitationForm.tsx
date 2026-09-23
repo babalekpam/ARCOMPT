@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { apiClient, errorMessage } from "@/lib/api-client";
 import { useT } from "@/lib/i18n-client";
 import { Alert } from "@/components/ui/Alert";
@@ -18,6 +18,22 @@ export function AcceptInvitationForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AcceptResult | null>(null);
+
+  /**
+   * Le courriel d'invitation place le code dans le FRAGMENT de l'adresse
+   * (`#token=…`). Un fragment ne part jamais vers un serveur : ni journaux
+   * d'accès, ni en-tête Referer vers un tiers. On le lit ici, puis on l'efface
+   * de la barre d'adresse pour qu'il ne reste pas dans l'historique partagé
+   * d'un poste. Sans fragment, le champ reste vide et se saisit à la main.
+   */
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash.startsWith("#")) return;
+    const fromLink = new URLSearchParams(hash.slice(1)).get("token");
+    if (!fromLink) return;
+    setToken(fromLink);
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }, []);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

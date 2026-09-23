@@ -11,8 +11,12 @@ import {
   type MemberRole,
   type Notifier,
 } from "@arcompt/portal";
+import { invitationMail, legalFooterFromEnv } from "@arcompt/mailer";
+import { createProviderFromEnv } from "@arcompt/whatsapp";
 import { requireRole, type AuthContext } from "../auth.js";
 import type { AppDeps } from "../app.js";
+import { createMailer, createNotifier } from "../notifications.js";
+import { log } from "../telemetry.js";
 
 /**
  * Portail cabinets : organisation, dossiers, invitations, membres, tableau de
@@ -24,14 +28,23 @@ import type { AppDeps } from "../app.js";
  * n'en porte pas, elle est résolue depuis le dossier courant par la fonction
  * SECURITY DEFINER organization_of_company(tenant).
  *
- * Le Notifier (WhatsApp / e-mail) est injecté ; sans lui, les messages sont
- * seulement journalisés. L'accès d'urgence (break-glass) et
- * recordAdminAccess() sont des opérations d'exploitation (AccessService),
- * exposées ici en lecture seule pour les dossiers.
+ * Le Notifier (e-mail / WhatsApp) est construit depuis l'environnement, sauf
+ * injection explicite (tests). Il ne peut plus être muet : un canal non
+ * configuré lève, et le service appelant répond NOTIFY_FAILED sans marquer la
+ * demande comme envoyée. L'accès d'urgence (break-glass) et recordAdminAccess()
+ * sont des opérations d'exploitation (AccessService), exposées ici en lecture
+ * seule pour les dossiers.
  */
 export interface PortalRouteOptions {
   notifier?: Notifier;
+  /** Base des liens envoyés aux invités ; défaut : `APP_URL`. */
+  appUrl?: string;
+  /** Mentions légales en pied des e-mails ; défaut : `MAIL_LEGAL_FOOTER`. */
+  legalFooter?: string;
 }
+
+/** Page du portail web qui porte le formulaire « Accepter une invitation ». */
+export const INVITATION_ACCEPT_PATH = "/firm/members";
 
 const uuid = z.string().uuid();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -80,15 +93,27 @@ export function portalRoutes(deps: AppDeps, opts: PortalRouteOptions = {}) {
     r.all("*", (c) => c.json({ error: { code: "UNAVAILABLE", message: "Portail indisponible : base de données non configurée" } }, 503));
     return r;
   }
-  const notifier: Notifier = opts.notifier ?? {
-    async send(m) {
-      if (!deps.quiet) console.warn(`[portal] aucun Notifier configuré, message ${m.channel} vers ${m.to} non envoyé (${m.reference ?? "-"})`);
-      return {};
-    },
-  };
+  const legalFooter = opts.legalFooter ?? legalFooterFromEnv();
+  const appUrl = (opts.appUrl ?? process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  // Sans injection, on prend les canaux réels de l'environnement. En
+  // production, `createMailerFromEnv` refuse de rendre un expéditeur muet sans
+  // ALLOW_INSECURE_MAIL=1 : le portail ne peut plus enregistrer des envois qui
+  // n'ont pas eu lieu.
+  const notifier: Notifier =
+    opts.notifier ??
+    createNotifier({
+      mailer: createMailer({ ...(deps.quiet ? { quiet: true } : {}) }),
+      whatsapp: createProviderFromEnv(),
+      legalFooter,
+    });
   const orgs = new OrganizationService(db);
-  const portal = new PortalService(db, { notifier });
-  const access = new AccessService(db, notifier);
+  const portal = new PortalService(db, { notifier, legalFooter });
+  const access = new AccessService(db, notifier, {
+    legalFooter,
+    warn: (message: string) => {
+      if (!deps.quiet) log("warn", "portal.notify_failed", { detail: message });
+    },
+  });
 
   const orgRole = requireRole("OWNER", "ACCOUNTANT", "REVIEWER");
   const ownerRole = requireRole("OWNER");
@@ -145,7 +170,54 @@ export function portalRoutes(deps: AppDeps, opts: PortalRouteOptions = {}) {
   }));
 
   r.get("/org/invitations", orgRole, h(async (c) => c.json(await orgs.listInvitations(await orgCtx(c), { pending: c.req.query("pending") === "true" }))));
-  r.post("/org/invitations", writeRole, h(async (c) => c.json(await orgs.invite(await orgCtx(c), strip(await body(c, InviteSchema))), 201)));
+  /**
+   * Crée l'invitation PUIS l'envoie à l'invité.
+   *
+   * Le jeton en clair n'existe qu'ici : jusqu'à présent, il n'apparaissait que
+   * dans cette réponse, à charge pour l'inviteur de le recopier et de le
+   * transmettre par ses propres moyens. Il part maintenant par e-mail.
+   *
+   * L'invitation reste créée si l'envoi échoue — le jeton est dans la réponse,
+   * l'inviteur peut encore le transmettre — mais la réponse dit franchement
+   * que rien n'est parti, et pourquoi.
+   */
+  r.post("/org/invitations", writeRole, h(async (c) => {
+    const ctx = await orgCtx(c);
+    const input = strip(await body(c, InviteSchema));
+    const created = await orgs.invite(ctx, input);
+    const organization = await orgs.getOrganization(ctx).catch(() => null);
+    const delivery: { sent: boolean; channel: "EMAIL"; error?: string } = { sent: false, channel: "EMAIL" };
+    try {
+      const mail = invitationMail({
+        organizationName: organization?.name ?? "Votre organisation",
+        role: created.invitation.role,
+        companyCount: created.invitation.companyIds.length,
+        // Le code voyage dans le FRAGMENT, jamais dans la requête : un fragment
+        // n'est pas transmis au serveur, il n'apparaît donc ni dans les journaux
+        // d'accès ni dans l'en-tête Referer vers un tiers. Le formulaire le
+        // récupère côté navigateur puis l'efface de la barre d'adresse. Le code
+        // reste écrit plus bas dans le message, pour qui ouvre le lien ailleurs.
+        acceptUrl: `${appUrl}${INVITATION_ACCEPT_PATH}#token=${encodeURIComponent(created.token)}`,
+        token: created.token,
+        expiresAt: created.invitation.expiresAt,
+        legalFooter,
+      });
+      await notifier.send({
+        channel: "EMAIL",
+        to: created.invitation.email,
+        subject: mail.subject,
+        body: mail.text,
+        html: mail.html,
+        tenantId: input.companyIds[0]!,
+        reference: `invitation:${created.invitation.id}`,
+      });
+      delivery.sent = true;
+    } catch (e) {
+      delivery.error = (e as Error).message;
+      if (!deps.quiet) log("warn", "portal.invitation.not_sent", { invitationId: created.invitation.id, detail: delivery.error });
+    }
+    return c.json({ ...created, delivery }, 201);
+  }));
   // Acceptation : utilisateur connecté + jeton ; aucun rôle requis (il n'est pas encore membre).
   r.post("/org/invitations/accept", h(async (c) => {
     const auth = c.get("auth");

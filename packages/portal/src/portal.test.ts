@@ -319,6 +319,10 @@ run("accès administrateur et accès d'urgence", () => {
     expect(record.notifiedAt).not.toBeNull();
     expect(notifier.sent[0]).toMatchObject({ channel: "EMAIL", to: "owner@cabinet.test", tenantId: companyA, reference: `admin-access:${record.id}` });
     expect(notifier.sent[0]!.body).toContain("un technicien a accédé à votre dossier");
+    expect(notifier.sent[0]!.subject).toBe("Accès technique à votre dossier Alpha SARL");
+    // Modèle complet : motif de réception et mentions légales, version HTML incluse.
+    expect(notifier.sent[0]!.body).toContain("Vous recevez ce message");
+    expect(notifier.sent[0]!.html).toContain("<p>");
     expect((await access.listAdminAccess(companyA)).map((r) => r.id)).toContain(record.id);
     expect(await access.listAdminAccess(companyB)).toEqual([]);
     expect(await auditActions(companyA)).toContain("ADMIN_ACCESS");
@@ -338,8 +342,13 @@ run("accès administrateur et accès d'urgence", () => {
     expect(approved).toMatchObject({ status: "APPROVED", approverId: admin2, active: true });
     await expect(access.approveBreakGlass({ tenantId: companyA, requestId: req.id, approverId: admin2 })).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(access.recordAdminAccess(companyA, admin2, "Accès urgence", { breakGlassRequestId: req.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    notifier.sent.length = 0;
     const { record } = await access.recordAdminAccess(companyA, admin1, "Accès urgence", { breakGlassRequestId: req.id });
     expect(record.breakGlassRequestId).toBe(req.id);
+    // L'accès d'urgence a son propre message : il dit l'approbation par un
+    // second administrateur et la fin de l'accès.
+    expect(notifier.sent[0]!.subject).toBe("Accès d'urgence à votre dossier Alpha SARL");
+    expect(notifier.sent[0]!.body).toContain("approuvé par un second");
     expect((await access.listBreakGlass(companyA, { activeOnly: true })).map((b) => b.id)).toEqual([req.id]);
     const revoked = await access.revokeBreakGlass({ tenantId: companyA, requestId: req.id, userId: admin2 });
     expect(revoked).toMatchObject({ status: "REVOKED", active: false });

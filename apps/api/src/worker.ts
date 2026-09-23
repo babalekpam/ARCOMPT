@@ -1,8 +1,12 @@
 import type { Sql } from "postgres";
-import { createDb } from "@arcompt/db";
+import { loadPack, type CountryPack } from "@arcompt/country-packs";
+import { createDb, withTenant } from "@arcompt/db";
 import { createDocumentsServiceFromEnv } from "@arcompt/documents";
+import { InvoicingError, InvoicingService } from "@arcompt/invoicing";
 import { createQueueFromEnv } from "@arcompt/jobs";
+import { Ledger, PostgresStore } from "@arcompt/ledger";
 import { createProviderFromEnv } from "@arcompt/whatsapp";
+import { createDunningSender, createMailer } from "./notifications.js";
 import { initTelemetry, log } from "./telemetry.js";
 
 /**
@@ -14,6 +18,35 @@ await initTelemetry();
 const db = createDb();
 const queue = createQueueFromEnv();
 const whatsapp = createProviderFromEnv();
+// Construit au démarrage : en production, un expéditeur muet fait échouer le
+// lancement (sauf ALLOW_INSECURE_MAIL=1), plutôt que d'avaler les relances.
+const mailer = createMailer();
+const dunningSender = createDunningSender({ mailer, whatsapp });
+
+const packs = new Map<string, CountryPack>();
+
+/** Service de facturation du dossier, avec l'expéditeur de relances branché. */
+async function invoicingFor(tenantId: string, userId: string): Promise<InvoicingService> {
+  const [company] = await withTenant(db, { tenantId, userId }, (tx) => tx`SELECT country_code, currency FROM company WHERE id = ${tenantId}`);
+  if (!company) throw new InvoicingError("NOT_FOUND", `Dossier ${tenantId} introuvable`);
+  const code = String(company.country_code).toLowerCase();
+  let pack = packs.get(code);
+  if (!pack) {
+    pack = loadPack(code);
+    packs.set(code, pack);
+  }
+  const currency = String(company.currency);
+  const ledger = new Ledger(new PostgresStore(db as unknown as Sql, { userId }), { baseCurrency: currency });
+  return new InvoicingService({ db: db as unknown as Sql, ledger, pack, currency, dunningSender }, { tenantId, userId });
+}
+
+/** Niveau suivant : une relance de plus que la dernière, plafonnée à la mise en demeure. */
+async function nextDunningLevel(tenantId: string, invoiceId: string): Promise<number> {
+  const [row] = await withTenant(db, { tenantId }, (tx) =>
+    tx`SELECT coalesce(max(level), 0) AS level FROM dunning WHERE tenant_id = ${tenantId} AND sales_document_id = ${invoiceId}`,
+  );
+  return Math.min(Number(row?.level ?? 0) + 1, 3);
+}
 
 queue.process("document.extract", async (payload) => {
   const ctx = { tenantId: payload.tenantId, userId: payload.userId, ...(payload.organizationId ? { organizationId: payload.organizationId } : {}) };
@@ -31,9 +64,38 @@ queue.process("whatsapp.reply", async (payload) => {
   await whatsapp.sendText(payload.to, payload.text);
 });
 
-queue.process("dunning.send", async (payload) => {
-  // Les relances sont journalisées par le module facturation ; l'envoi effectif dépend du canal configuré.
-  log("info", "job.dunning.send", { tenantId: payload.tenantId, invoiceId: payload.invoiceId, channel: payload.channel });
+/**
+ * Relance d'une facture échue.
+ *
+ * `InvoicingService.recordDunning` remet d'abord le message au canal, puis
+ * seulement écrit la ligne `dunning` : si l'envoi échoue, rien n'est enregistré
+ * comme envoyé et la tentative part dans `dunning_log` (statut FAILED).
+ *
+ * Chemin d'échec : une panne du canal (DUNNING_NOT_SENT) est relancée — la
+ * tâche remonte l'erreur, la file réessaie avec son délai croissant. Une erreur
+ * définitive (facture soldée, tiers sans contact, dossier inconnu) ne se répare
+ * pas par une nouvelle tentative : elle est journalisée en erreur et la tâche
+ * s'arrête là, plutôt que de tourner jusqu'à épuisement des essais.
+ */
+queue.process("dunning.send", async (payload, ctx) => {
+  const invoicing = await invoicingFor(payload.tenantId, payload.userId);
+  const level = payload.level ?? (await nextDunningLevel(payload.tenantId, payload.invoiceId));
+  try {
+    const dunning = await invoicing.recordDunning(payload.invoiceId, {
+      level,
+      channel: payload.channel,
+      ...(payload.message ? { message: payload.message } : {}),
+    });
+    log("info", "job.dunning.send.done", { tenantId: payload.tenantId, invoiceId: payload.invoiceId, channel: payload.channel, level: dunning.level });
+  } catch (e) {
+    const code = e instanceof InvoicingError ? e.code : "UNKNOWN";
+    const detail = e instanceof Error ? e.message : String(e);
+    if (code === "DUNNING_NOT_SENT" || code === "UNKNOWN") {
+      log("warn", "job.dunning.send.retry", { tenantId: payload.tenantId, invoiceId: payload.invoiceId, attempt: ctx.attempt, code, detail });
+      throw e; // panne du canal : la file réessaiera
+    }
+    log("error", "job.dunning.send.abandoned", { tenantId: payload.tenantId, invoiceId: payload.invoiceId, code, detail });
+  }
 });
 
 queue.process("import.statement", async (payload) => {

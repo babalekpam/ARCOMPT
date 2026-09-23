@@ -62,6 +62,9 @@ importers:
       '@arcompt/ledger':
         specifier: workspace:*
         version: link:../../packages/ledger
+      '@arcompt/mailer':
+        specifier: workspace:*
+        version: link:../../packages/mailer
       '@arcompt/payroll':
         specifier: workspace:*
         version: link:../../packages/payroll
@@ -283,6 +286,16 @@ importers:
         specifier: ^3.4.5
         version: 3.4.9
 
+  packages/mailer:
+    dependencies:
+      nodemailer:
+        specifier: ^6.9.16
+        version: 6.10.1
+    devDependencies:
+      '@types/nodemailer':
+        specifier: ^6.4.17
+        version: 6.4.24
+
   packages/payroll:
     dependencies:
       '@arcompt/country-packs':
@@ -321,6 +334,9 @@ importers:
       '@arcompt/ledger':
         specifier: workspace:*
         version: link:../ledger
+      '@arcompt/mailer':
+        specifier: workspace:*
+        version: link:../mailer
       postgres:
         specifier: ^3.4.5
         version: 3.4.9
@@ -1967,6 +1983,9 @@ packages:
   '@types/node@22.20.4':
     resolution: {integrity: sha512-zJRE40jpHtKqE/C4fgHrAKQLJuSpzEnP9ff9Y7YtoR3Wd2pwqzlekDeEuUQXjRd+QCYnVnNwuJYmhdk9XV8gvA==}
 
+  '@types/nodemailer@6.4.24':
+    resolution: {integrity: sha512-Ww4u0rT9wQNXh4JiQaIwx3QWdcOFXzOjQA2zc+jtFYNmQiT4mIUqcDin51bDFdkzKubFnQCZNK7FIHlPKQ/q9w==}
+
   '@types/pg-pool@2.0.7':
     resolution: {integrity: sha512-U4CwmGVQcbEuqpyju8/ptOKg6gEC+Tqsvj2xS9o1g71bUh8twxnC6ZL5rZKCsGN0iyH0CwgUyc9VR5owNQF9Ng==}
 
@@ -2996,6 +3015,10 @@ packages:
   node-releases@2.0.56:
     resolution: {integrity: sha512-x0InOIyzgdk+eyaWaRJFH5snEtiImgBgblZ2CyPrLmqqcuMQkEvcDPHbzqbD8eDsSeJbVOjn+crzyzHaM4D+/A==}
     engines: {node: '>=18'}
+
+  nodemailer@6.10.1:
+    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
+    engines: {node: '>=6.0.0'}
 
   normalize-path@3.0.0:
     resolution: {integrity: sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA==}
@@ -5140,6 +5163,10 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/nodemailer@6.4.24':
+    dependencies:
+      '@types/node': 22.20.4
+
   '@types/pg-pool@2.0.7':
     dependencies:
       '@types/pg': 8.15.6
@@ -6161,6 +6188,8 @@ snapshots:
     optional: true
 
   node-releases@2.0.56: {}
+
+  nodemailer@6.10.1: {}
 
   normalize-path@3.0.0: {}
 

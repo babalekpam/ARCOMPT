@@ -1,4 +1,5 @@
 import { withTenant, type Db } from "@arcompt/db";
+import { adminAccessMail, breakGlassMail, legalFooterFromEnv } from "@arcompt/mailer";
 import { PortalError } from "./errors.js";
 import type { Notifier } from "./notifier.js";
 import { audit, int, iso, isoOrNull, str, strOrNull, type Row } from "./sql.js";
@@ -44,7 +45,17 @@ export class AccessService {
   constructor(
     private readonly db: Db,
     private readonly notifier: Notifier,
+    private readonly opts: {
+      /** Mentions légales en pied des e-mails ; défaut : `MAIL_LEGAL_FOOTER`. */
+      legalFooter?: string;
+      /** Puits des avertissements (notification non remise) ; défaut : console.warn. */
+      warn?: (message: string) => void;
+    } = {},
   ) {}
+
+  private warn(message: string): void {
+    (this.opts.warn ?? ((m: string) => console.warn(m)))(message);
+  }
 
   /**
    * Journalise l'accès d'un administrateur au dossier et prévient ses
@@ -54,15 +65,17 @@ export class AccessService {
    */
   async recordAdminAccess(companyId: string, adminUserId: string, reason: string, opts: { breakGlassRequestId?: string } = {}): Promise<{ record: AdminAccessRecord; notified: string[] }> {
     if (reason.trim().length < 5) throw new PortalError("VALIDATION", "Motif d'accès requis (5 caractères minimum)");
-    const { record, organizationId } = await withTenant(this.db, { tenantId: companyId, userId: adminUserId }, async (tx) => {
+    const { record, organizationId, breakGlassExpiresAt } = await withTenant(this.db, { tenantId: companyId, userId: adminUserId }, async (tx) => {
       const [company] = await tx`SELECT organization_id, name FROM company WHERE id = ${companyId}`;
       if (!company) throw new PortalError("NOT_FOUND", "Dossier introuvable");
+      let breakGlassExpiresAt: string | null = null;
       if (opts.breakGlassRequestId) {
         const [bg] = await tx`SELECT * FROM break_glass_request WHERE id = ${opts.breakGlassRequestId} AND tenant_id = ${companyId}`;
         if (!bg) throw new PortalError("NOT_FOUND", "Demande d'accès d'urgence introuvable");
         const b = mapBreakGlass(bg);
         if (!b.active) throw new PortalError("FORBIDDEN", "Accès d'urgence non approuvé ou expiré");
         if (b.requesterId !== adminUserId) throw new PortalError("FORBIDDEN", "Accès d'urgence demandé par un autre administrateur");
+        breakGlassExpiresAt = b.expiresAt;
       }
       const [row] = await tx`
         INSERT INTO admin_access_log (tenant_id, admin_user_id, reason, break_glass_request_id)
@@ -71,7 +84,7 @@ export class AccessService {
         tenantId: companyId, userId: adminUserId, action: "ADMIN_ACCESS", entity: "admin_access_log", entityId: str(row!.id),
         after: { reason, breakGlassRequestId: opts.breakGlassRequestId ?? null },
       });
-      return { record: mapAdminAccess(row!), organizationId: str(company.organization_id) };
+      return { record: mapAdminAccess(row!), organizationId: str(company.organization_id), breakGlassExpiresAt };
     });
 
     // Dirigeants du dossier : membres OWNER dont le compte est lisible (même organisation).
@@ -80,20 +93,30 @@ export class AccessService {
          JOIN app_user u ON u.id = m.user_id JOIN company c ON c.id = m.company_id
          WHERE m.company_id = ${companyId} AND m.role = 'OWNER' AND u.suspended_at IS NULL`,
     );
+    const legalFooter = this.opts.legalFooter ?? legalFooterFromEnv();
     const notified: string[] = [];
     for (const o of owners) {
       try {
+        // Un accès d'urgence n'est pas un accès ordinaire : le dirigeant doit
+        // lire qu'un second administrateur l'a approuvé et quand il prend fin.
+        const mail = breakGlassExpiresAt
+          ? breakGlassMail({ companyName: str(o.company_name), accessedAt: record.accessedAt, reason, expiresAt: breakGlassExpiresAt, legalFooter })
+          : adminAccessMail({ companyName: str(o.company_name), accessedAt: record.accessedAt, reason, legalFooter });
         await this.notifier.send({
           channel: "EMAIL",
           to: str(o.email),
-          subject: `Accès technique à votre dossier ${str(o.company_name)}`,
-          body: `Bonjour, un technicien a accédé à votre dossier ${str(o.company_name)} le ${record.accessedAt}. Motif : ${reason}. Cet accès est journalisé et consultable dans votre portail.`,
+          subject: mail.subject,
+          body: mail.text,
+          html: mail.html,
           tenantId: companyId,
           reference: `admin-access:${record.id}`,
         });
         notified.push(str(o.id));
-      } catch {
-        // L'échec d'une notification ne masque jamais l'accès : il reste journalisé, notified_count le reflète.
+      } catch (e) {
+        // L'échec d'une notification ne masque jamais l'accès : il reste
+        // journalisé et notified_count le reflète. Il ne reste pas muet pour
+        // autant — un dirigeant non prévenu est un fait d'exploitation.
+        this.warn(`[arcompt] notification d'accès administrateur non remise (dossier ${companyId}, accès ${record.id}) : ${(e as Error).message}`);
       }
     }
     const [updated] = await withTenant(this.db, { tenantId: companyId, userId: adminUserId }, (tx) =>

@@ -2,6 +2,7 @@ import type { Sql } from "postgres";
 import { z } from "zod";
 import { withTenant, type Db } from "@arcompt/db";
 import { loadPack as defaultLoadPack, type CountryPack } from "@arcompt/country-packs";
+import { legalFooterFromEnv, missingDocumentMail } from "@arcompt/mailer";
 import { computeDegressiveInvoice, type DegressiveInvoice, type PricingMode } from "./billing.js";
 import { nextDeadlines } from "./deadlines.js";
 import { PortalError } from "./errors.js";
@@ -58,6 +59,8 @@ export interface PortalServiceOptions {
   notifier: Notifier;
   loadPack?: (code: string) => CountryPack;
   now?: () => Date;
+  /** Mentions légales en pied des e-mails ; défaut : `MAIL_LEGAL_FOOTER`. */
+  legalFooter?: string;
   /** Horizon des échéances affichées sur le tableau de bord (jours). */
   deadlineHorizonDays?: number;
 }
@@ -217,12 +220,28 @@ export class PortalService {
       return { row: row!, partnerName, brand };
     });
     const request = mapMissingDocument(row);
+    // L'e-mail reprend le modèle complet (motif de réception, mentions
+    // légales) ; WhatsApp garde la phrase courte, qui est ce qu'on lit sur un
+    // téléphone. Les deux disent la même chose.
+    const mail =
+      request.channel === "EMAIL"
+        ? missingDocumentMail({
+            ...(partnerName ? { partnerName } : {}),
+            senderName: brand.sender,
+            companyName: brand.company,
+            description,
+            legalFooter: this.opts.legalFooter ?? legalFooterFromEnv(),
+          })
+        : null;
     try {
       await this.opts.notifier.send({
         channel: request.channel,
         to: request.recipient,
-        subject: `${brand.sender} : pièce manquante`,
-        body: `Bonjour${partnerName ? ` ${partnerName}` : ""}, ${brand.sender} a besoin de la pièce suivante pour le dossier ${brand.company} : ${description}. Merci de la transmettre en réponse à ce message.`,
+        subject: mail?.subject ?? `${brand.sender} : pièce manquante`,
+        body:
+          mail?.text ??
+          `Bonjour${partnerName ? ` ${partnerName}` : ""}, ${brand.sender} a besoin de la pièce suivante pour le dossier ${brand.company} : ${description}. Merci de la transmettre en réponse à ce message.`,
+        ...(mail ? { html: mail.html } : {}),
         tenantId: ctx.tenantId,
         reference: `missing-document:${request.id}`,
       });

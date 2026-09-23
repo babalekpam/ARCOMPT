@@ -16,6 +16,7 @@ export default defineWorkspace([
   { test: { name: "closing", root: "packages/closing", include: ["src/**/*.test.ts"], testTimeout: 60000 } },
   { test: { name: "documents", root: "packages/documents", include: ["src/**/*.test.ts"], testTimeout: 60000 } },
   { test: { name: "storage", root: "packages/storage", include: ["src/**/*.test.ts"], testTimeout: 60000 } },
+  { test: { name: "mailer", root: "packages/mailer", include: ["src/**/*.test.ts"] } },
   { test: { name: "jobs", root: "packages/jobs", include: ["src/**/*.test.ts"], testTimeout: 60000 } },
   { test: { name: "render", root: "packages/render", include: ["src/**/*.test.ts"], testTimeout: 60000 } },
   { test: { name: "portal", root: "packages/portal", include: ["src/**/*.test.ts"], testTimeout: 60000 } },

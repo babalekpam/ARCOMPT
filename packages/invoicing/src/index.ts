@@ -1,6 +1,7 @@
 export * from "./types.js";
 export { InvoicingError, type InvoicingErrorCode, type InvoicingDeps, type SequenceKind, EVENT_KIND_BY_PURCHASE, EVENT_KIND_BY_PAYMENT } from "./base.js";
 export * from "./certification.js";
+export * from "./dunning.js";
 export * from "./payment-provider.js";
 export { outstandingOf } from "./mappers.js";
 export { settlementStatus } from "./documents.js";

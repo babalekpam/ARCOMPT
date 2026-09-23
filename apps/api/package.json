@@ -21,6 +21,7 @@
     "@arcompt/invoicing": "workspace:*",
     "@arcompt/jobs": "workspace:*",
     "@arcompt/ledger": "workspace:*",
+    "@arcompt/mailer": "workspace:*",
     "@arcompt/payroll": "workspace:*",
     "@arcompt/portal": "workspace:*",
     "@arcompt/posting": "workspace:*",

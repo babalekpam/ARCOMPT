@@ -67,6 +67,7 @@ TypeScript de bout en bout sur PostgreSQL, en réutilisant l'infrastructure ARGI
 | Recherche sémantique | pgvector dans PostgreSQL | Mémoire des catégorisations passées (cible ; voir § 8 : non active) |
 | PDF / Excel | Gabarits HTML → PDF (Playwright), ExcelJS | Modèles officiels, fichiers DSF Excel |
 | WhatsApp / SMS | WhatsApp Business API via Twilio ou 360dialog | Canal de saisie et de relance |
+| E-mail | Relais SMTP, fournisseur indifférent (`SMTP_*`, `MAIL_*`) | Invitations, demandes de pièces, notifications d'accès, relances |
 | Paiements | Agrégateur mobile money (IAPAY, CinetPay, PayDunya, Flutterwave) | Encaissement de factures et abonnements |
 | Observabilité | Journaux structurés ; OpenTelemetry et Sentry pris en charge, activés par variable d'environnement | Traçabilité des calculs et des appels IA |
 
@@ -79,6 +80,7 @@ TypeScript de bout en bout sur PostgreSQL, en réutilisant l'infrastructure ARGI
 - **BullMQ + Redis** : branché (`packages/jobs`, adaptateur BullMQ si `REDIS_URL`, sinon exécution en processus).
 - **Cloudflare R2** : branché (`packages/storage/src/r2.ts` via l'API S3 ; repli sur disque local par `STORAGE_DIR`).
 - **WhatsApp** : branché (`packages/whatsapp`, fournisseur Meta Cloud API `meta-cloud.ts` et webhook signé).
+- **E-mail** : branché (`packages/mailer`, transport SMTP sur nodemailer, modèles français dans `templates.ts`). Aucun fournisseur n'est nommé par le code : `SMTP_*` et `MAIL_*` suffisent à en changer. Sans eux, l'expéditeur est neutre (rien ne part, tout est journalisé) et la production refuse de démarrer, sauf `ALLOW_INSECURE_MAIL=1`. L'envoi depuis un domaine suppose ses enregistrements SPF et DKIM (voir `docs/OPERATIONS.md`).
 - **Paiements mobile money** : **pas d'agrégateur réel**. Seul `MockPaymentProvider` (`packages/invoicing/src/payment-provider.ts`) existe : les liens de paiement sont gardés en mémoire et les webhooks signés avec un secret local. `PAYMENT_PROVIDER` / `PAYMENT_API_KEY` ne sont donc consommés par aucun connecteur ; brancher IAPAY, CinetPay, PayDunya ou Flutterwave reste à faire.
 - **Recherche sémantique** : la colonne `embedding` (pgvector) et le chemin de recherche vectorielle existent (`packages/documents/src/memory.ts`), mais aucun embedding n'est calculé nulle part dans le dépôt et le seul appelant (`categorize.ts`) n'en passe jamais : le repli lexical (jetons Jaccard + trigrammes Dice) est toujours le chemin exécuté.
 - **Observabilité** : journaux structurés masqués (`apps/api/src/telemetry.ts`) ; OpenTelemetry et Sentry sont chargés dynamiquement et uniquement si `OTEL_EXPORTER_OTLP_ENDPOINT` ou `SENTRY_DSN` est défini.
@@ -301,7 +303,7 @@ Liste tenue à jour volontairement : tout ce qui est décrit plus haut comme cib
 | Stocks / inventaire | Aucun code : ni paquet, ni table, ni écran. Seuls les comptes 31x–38x existent au plan de comptes |
 | Encaissement mobile money | Aucun agrégateur réel ; seul `MockPaymentProvider` (liens en mémoire, webhooks signés localement) |
 | Facture certifiée (FNE, MECeF…) | Aucun connecteur réel ; `NullConnector` et `MockFneConnector` seulement |
-| Envoi d'e-mails et de SMS | Aucun expéditeur. Le `Notifier` du portail est un port : sans implémentation injectée, il journalise un avertissement et n'envoie rien. `packages/treasury/src/sms.ts` **lit** des SMS mobile money, il n'en envoie pas |
+| Envoi de SMS | Aucun expéditeur : le canal `SMS` d'une relance est refusé, jamais simulé. `packages/treasury/src/sms.ts` **lit** des SMS mobile money, il n'en envoie pas |
 | Gestionnaire de clés (KMS) | Interface `KeyProvider` présente, mais seule `EnvKeyProvider` est livrée : la clé maître vient de l'environnement |
 | Ancrage externe de la chaîne de hash | Racine de Merkle et preuves d'inclusion écrites et testées (`packages/ledger/src/anchoring.ts`), mais aucun appelant, aucune table d'ancre en migration et un seul publieur, `MemoryAnchorPublisher`, qui garde tout en mémoire. Rien n'est publié à ce jour |
 | Recherche sémantique (pgvector) | Chemin vectoriel présent mais jamais emprunté : aucun embedding n'est calculé. La mémoire des catégorisations est lexicale |

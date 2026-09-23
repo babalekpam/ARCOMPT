@@ -7,6 +7,7 @@ import { seedCompany, withTenant, type Db } from "@arcompt/db";
 import {
   InvoicingError,
   InvoicingService,
+  MemoryDunningSender,
   MockFneConnector,
   MockPaymentProvider,
   NullConnector,
@@ -466,9 +467,10 @@ run("isolation, balance âgée, relances", () => {
   it("balance âgée des créances par tranche 0-30 / 31-60 / 61-90 / 90+", async () => {
     // Dossier dédié pour un résultat déterministe.
     const tenantC = (await seedCompany(db, { organizationId: orgId, name: "C", countryCode: "CI", currency: "XOF", packVersion: "ci@2025.1", fiscalYear: { code: "2025", startDate: "2025-01-01", endDate: "2025-12-31" } })).companyId;
-    const [c1] = await withTenant(db, { tenantId: tenantC }, (tx) => tx`INSERT INTO partner (tenant_id, type, name, collective_account) VALUES (${tenantC}, 'CUSTOMER', 'Gamma', '411') RETURNING id`);
-    const [c2] = await withTenant(db, { tenantId: tenantC }, (tx) => tx`INSERT INTO partner (tenant_id, type, name, collective_account) VALUES (${tenantC}, 'CUSTOMER', 'Delta', '411') RETURNING id`);
-    const { invoicing, payments } = services({ tenantId: tenantC, userId: userA, organizationId: orgId });
+    const [c1] = await withTenant(db, { tenantId: tenantC }, (tx) => tx`INSERT INTO partner (tenant_id, type, name, collective_account, contact) VALUES (${tenantC}, 'CUSTOMER', 'Gamma', '411', '{"email": "gamma@client.test"}') RETURNING id`);
+    const [c2] = await withTenant(db, { tenantId: tenantC }, (tx) => tx`INSERT INTO partner (tenant_id, type, name, collective_account, contact) VALUES (${tenantC}, 'CUSTOMER', 'Delta', '411', '{"email": "delta@client.test", "whatsapp": "+2250700000002"}') RETURNING id`);
+    const dunningSender = new MemoryDunningSender();
+    const { invoicing, payments } = services({ tenantId: tenantC, userId: userA, organizationId: orgId }, { dunningSender });
     const mk = async (partnerId: string, issue: string, due: string, price: string) =>
       invoicing.issue((await invoicing.createDraft({ kind: "INVOICE", partnerId, issueDate: issue, dueDate: due, lines: [{ label: "L", quantity: "1", unitPrice: price, accountNumber: "706", vatCode: "EXO" }] })).id);
     const asOf = "2025-10-01";
@@ -500,9 +502,39 @@ run("isolation, balance âgée, relances", () => {
     expect(overdue[0]?.daysOverdue).toBe(139);
     expect(overdue[0]?.suggestedLevel).toBe(1);
     await invoicing.recordDunning(overdue[0]!.documentId, { level: 1, channel: "WHATSAPP", message: "Rappel" });
+    // La ligne n'est écrite qu'après remise au canal : l'expéditeur a bien reçu
+    // la facture, le destinataire et le reste dû.
+    expect(dunningSender.last()).toMatchObject({
+      channel: "WHATSAPP",
+      level: 1,
+      recipient: "+2250700000002",
+      partnerName: "Delta",
+      companyName: "C",
+      outstanding: "800.0000",
+      currency: "XOF",
+      dueDate: "2025-05-15",
+      message: "Rappel",
+    });
     const after = await invoicing.listOverdue(asOf);
     expect(after[0]?.lastDunningLevel).toBe(1);
     expect(after[0]?.suggestedLevel).toBe(2);
     await expect(invoicing.recordDunning(paid.id, { level: 1, channel: "EMAIL" })).rejects.toMatchObject({ code: "INVALID_STATUS" });
+
+    // Envoi en échec : rien n'est enregistré comme envoyé, mais la tentative
+    // reste dans dunning_log — on perd l'envoi, jamais sa trace.
+    dunningSender.failNext = true;
+    await expect(invoicing.recordDunning(overdue[1]!.documentId, { level: 1, channel: "EMAIL" })).rejects.toMatchObject({ code: "DUNNING_NOT_SENT" });
+    expect((await invoicing.listOverdue(asOf))[1]?.lastDunningLevel).toBe(0);
+
+    // Sans contact pour le canal demandé, la relance n'a pas de destinataire.
+    await expect(invoicing.recordDunning(overdue[3]!.documentId, { level: 1, channel: "WHATSAPP" })).rejects.toMatchObject({ code: "VALIDATION" });
+
+    // Sans expéditeur branché, on refuse plutôt que d'enregistrer un envoi imaginaire.
+    const muet = services({ tenantId: tenantC, userId: userA, organizationId: orgId }).invoicing;
+    await expect(muet.recordDunning(overdue[3]!.documentId, { level: 1, channel: "EMAIL" })).rejects.toMatchObject({ code: "DUNNING_NOT_SENT" });
+    expect((await invoicing.listOverdue(asOf))[3]?.lastDunningLevel).toBe(0);
+
+    const journal = await withTenant(db, { tenantId: tenantC }, (tx) => tx`SELECT status, level, channel, reference FROM dunning_log WHERE tenant_id = ${tenantC} ORDER BY sent_at`);
+    expect(journal.map((r) => r.status)).toEqual(["SENT", "FAILED", "FAILED"]);
   });
 });

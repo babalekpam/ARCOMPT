@@ -14,6 +14,7 @@
     "@arcompt/db": "workspace:*",
     "@arcompt/documents": "workspace:*",
     "@arcompt/ledger": "workspace:*",
+    "@arcompt/mailer": "workspace:*",
     "postgres": "^3.4.5",
     "zod": "^3.24.1"
   }

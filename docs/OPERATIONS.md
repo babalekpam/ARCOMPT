@@ -13,6 +13,7 @@ Ce guide décrit le déploiement et l'exploitation d'ARCOMPT conformément à `S
 | Redis 7 | facultatif | File de tâches |
 | Keycloak | `docker compose --profile auth up keycloak` | Realm `infra/keycloak/realm-arcompt.json` |
 | Stockage | R2 (`R2_*`) ou disque local (`STORAGE_DIR`) | Pièces justificatives et exports |
+| Messagerie | Relais SMTP (`SMTP_*`, `MAIL_*`) | Invitations, demandes de pièces, notifications d'accès, relances |
 
 ## Mise en route
 
@@ -37,7 +38,7 @@ Lancé avant les migrations, il refuse avec un message explicite.
 
 ## Configuration de production : démarrage strict
 
-Avec `NODE_ENV=production`, l'API refuse de démarrer tant que les secrets et les connecteurs ne sont pas réels : mode d'authentification, secrets de signature, clé de chiffrement de la paie, stockage objet, passerelle IA, antivirus, canal sortant WhatsApp, opérateur de paiement et connecteur de certification. La validation de démarrage **rassemble tous les problèmes et échoue avec la liste complète**, plutôt que d'échouer au premier : un déploiement se corrige en une passe.
+Avec `NODE_ENV=production`, l'API refuse de démarrer tant que les secrets et les connecteurs ne sont pas réels : mode d'authentification, secrets de signature, clé de chiffrement de la paie, stockage objet, passerelle IA, antivirus, canal sortant WhatsApp, envoi des e-mails, opérateur de paiement et connecteur de certification. La validation de démarrage **rassemble tous les problèmes et échoue avec la liste complète**, plutôt que d'échouer au premier : un déploiement se corrige en une passe.
 
 Quelques simulations peuvent être acceptées sciemment en production au moyen de variables d'opt-out explicites, une par sujet ; elles sont volontairement repérables par une simple recherche dans la configuration. Les secrets de signature et l'opérateur de paiement n'en ont pas : aucune exception n'y est possible. Le détail des variables, de leur effet et des opt-out disponibles vit dans `.env.example`, qui reste la référence à jour.
 
@@ -140,6 +141,97 @@ autre configuration, il refuse en disant ce qu'il a trouvé plutôt que d'écras
 un compte. Le pack `tg` est en statut `DRAFT` : taux et barèmes restent
 indicatifs tant que l'expert-comptable référent ne les a pas validés.
 
+## Envoi des e-mails
+
+ARCOMPT envoie par SMTP, et **ne connaît aucun fournisseur** : `packages/mailer`
+parle à n'importe quel service qui accepte du SMTP authentifié. Changer
+d'opérateur, c'est changer quatre variables et redéployer, rien d'autre.
+
+| Variable | Rôle |
+| --- | --- |
+| `SMTP_HOST` | Hôte du relais. Son absence est ce qui bascule l'envoi en mode neutre. |
+| `SMTP_PORT` | 587 ou 25 (STARTTLS, exigé), 465 (TLS dès la connexion). Défaut 587. |
+| `SMTP_SECURE` | `1` pour le TLS implicite. Non renseignée, le port décide (465 → implicite). |
+| `SMTP_USER`, `SMTP_PASSWORD` | Identifiants du relais ; facultatifs si l'authentification se fait par adresse IP. |
+| `MAIL_FROM_ADDRESS` | Adresse d'expédition. C'est **son** domaine que SPF et DKIM doivent couvrir. |
+| `MAIL_FROM_NAME` | Nom affiché devant l'adresse. |
+| `MAIL_REPLY_TO` | Adresse de réponse par défaut, quand elle diffère de l'expéditeur. |
+| `MAIL_LEGAL_FOOTER` | Mentions légales en pied de chaque message : raison sociale, adresse, RCCM, contact. |
+| `ALLOW_INSECURE_MAIL` | Opt-out explicite : accepter en production que rien ne parte. |
+
+Sans `SMTP_HOST` **et** `MAIL_FROM_ADDRESS`, l'expéditeur est neutre : chaque
+message est écrit en entier sur la sortie standard et ne quitte pas le serveur.
+C'est le confort du poste de développement, et un mensonge en production — une
+invitation dont le code à usage unique ne part pas est une invitation
+inutilisable. `createMailerFromEnv()` refuse donc ce repli quand
+`NODE_ENV=production`, sauf `ALLOW_INSECURE_MAIL=1` : l'API s'arrête au montage
+des routes, avant d'écouter, en nommant les variables manquantes. Une
+configuration à moitié posée (`SMTP_HOST` sans `MAIL_FROM_ADDRESS`) est refusée
+partout, production ou non : ce n'est pas un repli, c'est une erreur.
+
+Ce qui part, et quand :
+
+| Message | Déclencheur | Destinataire |
+| --- | --- | --- |
+| Invitation au portail | `POST /v1/portal/org/invitations` | La personne invitée. Porte le lien d'acceptation et le code à usage unique. |
+| Demande de pièce manquante | `POST /v1/portal/missing-documents` avec `channel: "EMAIL"` | Le tiers, ou l'adresse saisie. |
+| Accès technique à un dossier | `AccessService.recordAdminAccess()` | Les dirigeants (`OWNER`) du dossier. |
+| Accès d'urgence (break-glass) | Le même, avec une demande approuvée | Les dirigeants du dossier ; message distinct, qui dit la fin de l'accès. |
+| Relance de règlement | `POST /v1/sales/:id/dunning`, ou la tâche `dunning.send` | Le client, à l'adresse portée par sa fiche tiers. |
+
+Les modèles sont en français, vouvoiement, sans emoji ni ton commercial
+(`packages/mailer/src/templates.ts`). Chaque message dit pourquoi son
+destinataire le reçoit — un client de PME n'a jamais entendu parler d'ARCOMPT —
+et se termine par `MAIL_LEGAL_FOOTER`. Le corps de référence est le texte brut ;
+le HTML en est dérivé et n'ajoute rien, donc un client qui ne l'affiche pas ne
+perd rien. Une variable manquante fait échouer le rendu : mieux vaut ne pas
+envoyer que remettre un message où s'affiche `{{numero_facture}}`.
+
+**Ce qu'« envoyé » veut dire.** Une ligne de relance (`dunning`) n'est écrite
+qu'après acceptation du message par le serveur de messagerie ; un envoi refusé
+laisse l'écran des créances échues au niveau précédent, et consigne la tentative
+dans `dunning_log` (statut `FAILED`, avec le motif). De même, une demande de
+pièce dont l'envoi échoue reste enregistrée avec `sent_at` nul et l'API répond
+`NOTIFY_FAILED`. Aucun échec n'est avalé.
+
+### SPF et DKIM : obligatoires
+
+Envoyer depuis un domaine que l'on possède ne suffit pas. Tant que le domaine de
+`MAIL_FROM_ADDRESS` n'autorise pas explicitement le fournisseur, les messages
+seront **classés en indésirables ou rejetés** par les destinataires — et une
+relance de règlement qui finit en indésirable ne relance personne.
+
+Deux enregistrements DNS à créer sur le domaine de `MAIL_FROM_ADDRESS`, chez le
+bureau d'enregistrement qui héberge sa zone :
+
+1. **SPF** — un enregistrement `TXT` à la racine du domaine, autorisant les
+   serveurs du fournisseur à émettre en son nom. Un seul enregistrement SPF par
+   domaine : s'il en existe déjà un, on ajoute le mécanisme du fournisseur
+   dedans, on n'en crée pas un second.
+
+   ```
+   Type : TXT     Nom : @     Valeur : v=spf1 include:<domaine-du-fournisseur> ~all
+   ```
+
+2. **DKIM** — un ou plusieurs `TXT` (ou `CNAME`, selon le fournisseur) sur le
+   sélecteur qu'il indique, portant la clé publique qui vérifiera sa signature.
+
+   ```
+   Type : TXT     Nom : <sélecteur>._domainkey     Valeur : v=DKIM1; k=rsa; p=<clé publique>
+   ```
+
+Le contenu exact de ces deux valeurs est donné par le fournisseur retenu au
+moment où le domaine d'envoi est déclaré chez lui ; ARCOMPT ne peut pas le
+deviner. Un troisième enregistrement, **DMARC**
+(`_dmarc`, `v=DMARC1; p=none; rua=mailto:…`), n'est pas exigé pour délivrer mais
+indique quoi faire des messages non authentifiés et fait remonter des rapports :
+posez-le en `p=none` le temps d'observer, avant de durcir.
+
+Vérification, une fois les enregistrements propagés : envoyer une invitation à
+une adresse extérieure, ouvrir les en-têtes du message reçu et contrôler que
+`Authentication-Results` porte `spf=pass` **et** `dkim=pass`. Tant que l'un des
+deux manque, ne lancez pas de campagne de relances.
+
 ## Secrets et clés
 
 | Secret | Usage | Rotation |
@@ -149,6 +241,7 @@ indicatifs tant que l'expert-comptable référent ne les a pas validés.
 | `PAYMENT_WEBHOOK_SECRET`, `WHATSAPP_APP_SECRET` | Signatures HMAC des webhooks | À chaque changement de fournisseur |
 | `ANTHROPIC_API_KEY` | Passerelle IA | Trimestrielle |
 | `R2_SECRET_ACCESS_KEY` | Object store | Annuelle |
+| `SMTP_PASSWORD` | Relais d'envoi des e-mails | À chaque changement de fournisseur |
 
 Jamais dans le code, les images ni les journaux : `apps/api/src/security.ts` masque les motifs de secrets dans les journaux.
 
