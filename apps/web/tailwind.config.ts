@@ -5,13 +5,14 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Palette de marque — voir docs/BRAND.md. Les neutres restent l'échelle
-        // `slate` de Tailwind, déjà employée partout dans l'interface.
+        // Palette de marque — relevée sur le logo fourni, voir docs/BRAND.md.
+        // Les neutres restent l'échelle `slate` de Tailwind, déjà employée
+        // partout dans l'interface.
         brand: {
-          DEFAULT: "#0E5B46", // vert registre — marque et accents sur fond clair
-          light: "#4FB795", // vert registre clair — marque et accents sur fond sombre
-          ocre: "#C2703D", // ocre latérite — seconde teinte, jamais du texte courant
-          "ocre-light": "#D98A55",
+          DEFAULT: "#14324E", // marine — rubans du logo, teinte dominante ; 13,2:1 sur blanc
+          petrol: "#0A7693", // bleu pétrole — corps de la calculatrice ; 5,2:1 sur blanc
+          teal: "#1BAD9A", // turquoise — histogramme ; 2,8:1 sur blanc, jamais du texte
+          light: "#1BAD9A", // alias de `teal` pour les fonds sombres (7,2:1 sur slate-950)
         },
       },
     },

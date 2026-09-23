@@ -10,11 +10,12 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: "fr",
     background_color: "#ffffff",
     theme_color: "#0f172a",
-    // Marque ARCOMPT (voir docs/BRAND.md). Les PNG sont rendus depuis
-    // `public/favicon.svg` ; `maskable` porte la marge de sécurité Android
-    // (marque inscrite dans les 80 % centraux) pour survivre au masquage.
+    // Marque ARCOMPT (voir docs/BRAND.md). Le logo est une image matricielle :
+    // pas de variante SVG, les PNG sont dérivés de `public/brand/arcompt-mark-512.png`.
+    // Tous portent une plaque blanche, car le marine du logo disparaît sur fond
+    // sombre. `maskable` est à fond perdu et n'occupe que 58 % de la toile, pour
+    // tenir dans les 80 % centraux que le masque Android laisse voir.
     icons: [
-      { src: "/favicon.svg", type: "image/svg+xml", sizes: "any", purpose: "any" },
       { src: "/icon-192.png", type: "image/png", sizes: "192x192", purpose: "any" },
       { src: "/icon-512.png", type: "image/png", sizes: "512x512", purpose: "any" },
       { src: "/icon-maskable-512.png", type: "image/png", sizes: "512x512", purpose: "maskable" },

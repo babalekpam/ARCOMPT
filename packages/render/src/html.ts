@@ -116,13 +116,21 @@ export function pageHeader(ctx: Ctx, title: string, meta: string[]): string {
 }
 
 /**
- * Marque ARCOMPT en SVG inline (aucun réseau : ces gabarits sont rendus par un
- * Chromium isolé). Tracé canonique documenté dans `docs/BRAND.md`, recopié
- * depuis `apps/web/components/brand/BrandMark.tsx` ; toute retouche vaut pour
- * les deux. `fill: currentColor` : la marque prend le gris du pied de page.
+ * Marque ARCOMPT en data URI (aucun réseau : ces gabarits sont rendus par un
+ * Chromium isolé, sans accès sortant). Le logo fourni est matriciel : il ne
+ * peut plus hériter du gris `currentColor` du pied de page et porte donc ses
+ * trois couleurs, ce qui reste discret à 7 pt.
+ *
+ * PNG 64 x 64, palette 16 couleurs, 868 octets. Affiche a 7 pt (~2,47 mm),
+ * soit environ 660 ppp : net au tirage. Genere depuis
+ * `apps/web/public/brand/arcompt-mark-512.png` ; toute retouche vaut pour les
+ * deux. Voir `docs/BRAND.md`, section « Lisibilite en petit » : sur un ecran a
+ * 100 % la marque se reduit a un galet colore, elle ne reprend corps qu au
+ * tirage.
  */
-const MARK_SVG =
-  '<svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M11.8 3 H20.2 L25.93 18.2 H28.5 V22 H27.36 L30 29 H22.2 L19.62 22 H12.38 L9.8 29 H2 L4.64 22 H3.5 V18.2 H6.07 Z M16 12.2 L13.79 18.2 H18.21 Z"/></svg>';
+const MARK_PNG_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAMFBMVEVIdXcVM08bsJ01ZGstZ3Erpp8jkZcYMUsiNk0YeZUZMUsdM0sLd5X8/f59tMTB2+F1uP39AAAADHRSTlMC/v4XPOqT22nkwptoivP6AAAACXBIWXMAAAPoAAAD6AG1e1JrAAACwklEQVRIx5WWQWsTQRTHB3axaTwNLWxJbgu5DzY1xV4mNmDAW7GePCymFoQeDBEEvSRYUNqL0FAoVGhAaKgXg0JDcxQDC9v4CVpPHgTJJ2jQ92Z2NzOTJqFzSAjvt//3f+/tzISQmy67sDgZmA38/dXJAKx9NgUIunwKMIEIgaDLpgBBfRoQVMcB63IF3higdyHXE+96n7M/Y2ATG2uEbzEF2AKJZQN4pips7RHy0BDIaECXkLYOPNWBgFsvdQEXgB99uQIAPiTmdAEE4kYB8H3mSBdwH+mAV6saAhwa9evyfHA1+HeIHsrcFECTl+cXVwNRRSI1IqABe7kFU+Aug1nEgNeaNwXWVZPPbXpkCCxBmb3+717/b79/6G0kadUQWMuoHljNMQVcCXyUgE0XdAFrTQdytKILwIeYxR/hwWctsMBVB0vucBYHB/UEhTZ9VZsoAWmSW7xG54ldUZuoAcSm9AsJxy0EVpgO5KnDSHJuWMKrUEG2moMAFJmvxAL3HNWkz/OYgbQqsUBDA6AErMEqv4gFqAr4rEaxSwkxrfuuCwIa4N2mlEJdOUxju67LklQF6sBTfBWwl5jBALrsHQhAyBYyI4DPMQEOMomtGAH8kl2GXzilGk3LIjIqULJaIIBbTvbKBLIEDaTwCMuJUiUwEwMiLt/FhmimBHII3HEzJbJDwwQk7IUKPOaWeD4tzkiwkiYakCX2KcZTPBKIZpkBP04TDqQGxh1hAJsprQhgpQ2vkEgfxskDKuaJ1W5uFPBrtyziKRlP0CiDWNn3Z1SuN/I9F82SGYqdzslxGKXOt/CMF8XIfRVJY7gdbRMRj3euVQSN1yed7eiGkM1QN6Zx751STUCuYqRuRSk/GY8dN7dXF7PF3UZoaCRBIvZKh+PQNRpq/LrLxNqJ480xV97yGeZxPr8df+9ahUKB3ezfwH9bG4ug46DwMwAAAABJRU5ErkJggg==";
+
+const MARK_IMG = `<img class="mark" alt="" src="${MARK_PNG_DATA_URI}">`;
 
 /**
  * Pied de page : date d'édition puis la mention du logiciel producteur.
@@ -130,7 +138,7 @@ const MARK_SVG =
  * l'entreprise cliente, dont l'identité reste dans l'en-tête.
  */
 export function pageFooter(ctx: Ctx): string {
-  return `<footer class="doc-footer">${esc(ctx.L("generatedOn"))} ${esc(fmtDateTime(ctx.generatedAt, ctx.locale))} · <span class="producer">${MARK_SVG}ARCOMPT</span></footer>`;
+  return `<footer class="doc-footer">${esc(ctx.L("generatedOn"))} ${esc(fmtDateTime(ctx.generatedAt, ctx.locale))} · <span class="producer">${MARK_IMG}ARCOMPT</span></footer>`;
 }
 
 /** Document HTML complet : squelette, style d'impression, filigrane éventuel. */
@@ -165,7 +173,7 @@ body { font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-
 .doc-title { font-weight: 700; font-size: 11pt; color: #1a3a5c; text-transform: uppercase; letter-spacing: .04em; }
 .doc-footer { margin-top: 10px; padding-top: 4px; border-top: 1px solid #bbb; font-size: 7.5pt; color: #666; text-align: right; }
 .doc-footer .producer { white-space: nowrap; }
-.doc-footer .producer .mark { width: 7pt; height: 7pt; vertical-align: -0.8pt; margin-right: 1.5pt; fill: currentColor; }
+.doc-footer .producer .mark { width: 7pt; height: 7pt; vertical-align: -0.8pt; margin-right: 1.5pt; display: inline-block; }
 h1 { font-size: 14pt; text-transform: uppercase; margin: 6px 0 4px; color: #1a3a5c; letter-spacing: .04em; }
 h2 { font-size: 11pt; margin: 12px 0 4px; color: #1a3a5c; }
 h3 { font-size: 10pt; margin: 10px 0 3px; }

@@ -131,11 +131,15 @@ describe("marque ARCOMPT dans les documents", () => {
   const h = renderHtml("statements", output, { company, generatedAt: "2026-01-15T10:00:00Z" });
 
   it("place la marque au pied de page, comme logiciel producteur", () => {
-    // SVG inline : ces gabarits sont rendus par un Chromium sans réseau.
-    expect(h).toContain('<span class="producer"><svg class="mark"');
+    // Image embarquée en data URI : ces gabarits sont rendus par un Chromium
+    // sans réseau, aucune requête ne doit partir au moment de l'impression.
+    expect(h).toContain('<span class="producer"><img class="mark" alt="" src="data:image/png;base64,');
     expect(h).toContain("ARCOMPT</span>");
-    // Elle hérite du gris du pied de page plutôt que d'imposer une couleur.
-    expect(h).toContain("fill: currentColor;");
+    // Le logo fourni est matriciel : il porte ses couleurs et ne peut plus
+    // hériter du gris du pied de page. On vérifie donc qu'il reste calibré à
+    // 7 pt, la seule chose qui garantisse qu'il ne mange pas la ligne.
+    expect(h).toContain(".doc-footer .producer .mark { width: 7pt; height: 7pt;");
+    expect(h).not.toContain("fill: currentColor;");
   });
 
   it("ne se substitue pas à l'identité du client, qui reste seule en en-tête", () => {
@@ -171,7 +175,7 @@ describe("PDF (Chromium)", () => {
     expect(pdf.subarray(0, 4).toString()).toBe("%PDF");
     expect(pdf.length).toBeGreaterThan(10 * 1024);
     // Le navigateur est partagé : un second rendu réutilise l'instance.
-    const again = await renderPdf(renderHtml("trial-balance", trialBalanceView({ tenantId: "t", fiscalYearCode: "2025", from: "2025-01-01", to: "2025-12-31", rows: [], totalDebit: Money.zero(), totalCredit: Money.zero() }, "XOF")), { landscape: true, pageNumbers: false });
+    const again = await renderPdf(renderHtml("trial-balance", trialBalanceView({ tenantId: "t", currency: "XOF", fiscalYearCode: "2025", from: "2025-01-01", to: "2025-12-31", rows: [], totalDebit: Money.zero(), totalCredit: Money.zero() }, "XOF")), { landscape: true, pageNumbers: false });
     expect(again.subarray(0, 4).toString()).toBe("%PDF");
   });
 
@@ -239,7 +243,7 @@ describe("Excel", () => {
 
   it("conserve quatre décimales et le format à deux décimales pour l'euro", async () => {
     const view = trialBalanceView(
-      { tenantId: "t", fiscalYearCode: "2025", from: "2025-01-01", to: "2025-12-31", rows: [{ accountNumber: "521", label: "Banque", class: 5, debit: Money.parse("1234.5678"), credit: Money.zero() }], totalDebit: Money.parse("1234.5678"), totalCredit: Money.zero() },
+      { tenantId: "t", currency: "EUR", fiscalYearCode: "2025", from: "2025-01-01", to: "2025-12-31", rows: [{ accountNumber: "521", label: "Banque", class: 5, debit: Money.parse("1234.5678"), credit: Money.zero() }], totalDebit: Money.parse("1234.5678"), totalCredit: Money.zero() },
       "EUR",
     );
     const wb = await readWorkbook(await trialBalanceWorkbook(view));
@@ -354,7 +358,7 @@ describe("facture, bulletin, rapprochement", () => {
     expect(html).toContain("Wave +225 05 00 00 00 00");
     expect(html).toContain("RIB CI93 SG001 01234 56789012345 67");
     expect(html).toContain("Pénalités de retard");
-    expect(html).toContain('<span class="producer"><svg class="mark"'); // logiciel producteur, sous les mentions du vendeur
+    expect(html).toContain('<span class="producer"><img class="mark"'); // logiciel producteur, sous les mentions du vendeur
     expect(renderHtml("invoice", { ...inv, kind: "CREDIT_NOTE" })).toContain("AVOIR N° FAC-2025-0042");
     expect(renderHtml("invoice", inv, { locale: "en" })).toContain("INVOICE No. FAC-2025-0042");
   });

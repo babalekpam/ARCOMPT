@@ -1,31 +1,51 @@
 /**
  * Identité ARCOMPT : la marque, la pastille et le logotype horizontal.
  *
- * La marque est un « A » à sommet plat dont les deux jambes portent la même
- * masse (débit à gauche, crédit à droite) et dont la barre est le trait de
- * totalisation, qui déborde de part et d'autre comme sur un registre.
+ * La marque est le logo fourni par le propriétaire : une calculatrice et un
+ * histogramme ascendant, balayés par deux rubans marine. Voir `docs/BRAND.md`
+ * pour la palette, les zones de protection et les tailles minimales.
  *
- * Tracé canonique sur une grille 32×32, un seul contour et un seul contre-poinçon :
- * il est documenté dans `docs/BRAND.md` et recopié à l'identique dans
- * `apps/web/public/*.svg` et `packages/render/src/html.ts`. Toute retouche doit
- * être répercutée aux trois endroits (aucun paquet partagé pour un simple tracé).
+ * C'est une **image matricielle**, pas un tracé : contrairement à l'ancienne
+ * marque, elle ne peut pas hériter de `currentColor`. Elle porte donc ses
+ * trois couleurs en propre et exige un fond clair (le marine `#14324E` ne
+ * fait que 1,5:1 sur `slate-950`). `BrandTile` fournit ce fond clair dans les
+ * deux thèmes ; c'est la seule différence visible pour les appelants.
  */
 
-/** Tracé de la marque, grille 32×32. Voir docs/BRAND.md. */
-export const BRAND_MARK_PATH =
-  "M11.8 3 H20.2 L25.93 18.2 H28.5 V22 H27.36 L30 29 H22.2 L19.62 22 H12.38 L9.8 29 H2 L4.64 22 H3.5 V18.2 H6.07 Z M16 12.2 L13.79 18.2 H18.21 Z";
+/**
+ * Chemin de l'image de la marque (fond transparent, 128 × 128).
+ *
+ * Le nom `BRAND_MARK_PATH` est conservé pour ne pas casser les imports, mais
+ * il désigne désormais le chemin du fichier et non plus un tracé SVG.
+ * Le master pleine résolution vit à `/brand/arcompt-mark-512.png`, la source
+ * du propriétaire à `/brand/arcompt-logo-source.jpg`.
+ */
+export const BRAND_MARK_PATH = "/brand/arcompt-mark-128.png";
+
+/** Dimensions intrinsèques de `BRAND_MARK_PATH` : obligatoires pour éviter tout décalage de mise en page. */
+const MARK_W = 128;
+const MARK_H = 128;
 
 /**
- * La marque seule, en `currentColor` : elle prend la couleur du texte
- * environnant et fonctionne donc sur fond clair comme sur fond sombre.
- * Sans `title`, elle est décorative et masquée aux lecteurs d'écran.
+ * La marque seule, sur fond transparent.
+ *
+ * Sans `title`, elle est décorative : `alt=""` et `aria-hidden` la retirent de
+ * l'arbre d'accessibilité. Avec `title`, ce texte devient son `alt`.
+ * Elle a besoin d'un fond clair pour rester lisible — voir `BrandTile`.
  */
 export function BrandMark({ className = "", title }: { className?: string; title?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={className} fill="currentColor" role={title ? "img" : undefined} aria-label={title} aria-hidden={title ? undefined : true}>
-      {title ? <title>{title}</title> : null}
-      <path d={BRAND_MARK_PATH} />
-    </svg>
+    // Balise `img` brute et non `next/image` : la marque est un fichier statique
+    // de /public, de taille fixe et connue ; l'optimiseur n'aurait rien à faire.
+    <img
+      src={BRAND_MARK_PATH}
+      width={MARK_W}
+      height={MARK_H}
+      alt={title ?? ""}
+      aria-hidden={title ? undefined : true}
+      decoding="async"
+      className={className}
+    />
   );
 }
 
@@ -37,10 +57,11 @@ const TILE: Record<Size, string> = {
   lg: "h-9 w-9 rounded-lg",
 };
 
+/** ~75 % de la pastille, comme documenté dans docs/BRAND.md. */
 const GLYPH: Record<Size, string> = {
-  sm: "h-4 w-4",
-  md: "h-[1.15rem] w-[1.15rem]",
-  lg: "h-5 w-5",
+  sm: "h-5 w-5",
+  md: "h-6 w-6",
+  lg: "h-7 w-7",
 };
 
 const WORD: Record<Size, string> = {
@@ -49,10 +70,19 @@ const WORD: Record<Size, string> = {
   lg: "text-xl",
 };
 
-/** Pastille pleine : vert registre sur fond clair, vert clair sur fond sombre. */
+/**
+ * Pastille : fond blanc dans les deux thèmes.
+ *
+ * L'ancienne pastille changeait de couleur selon le thème parce que la marque
+ * héritait de `currentColor`. Le logo fourni porte ses couleurs : les rubans
+ * marine disparaîtraient sur un fond sombre. La pastille reste donc claire en
+ * thème sombre, cernée d'un liseré discret pour ne pas flotter.
+ */
 export function BrandTile({ size = "md", className = "", title }: { size?: Size; className?: string; title?: string }) {
   return (
-    <span className={`grid shrink-0 place-items-center bg-brand text-white dark:bg-brand-light dark:text-slate-950 ${TILE[size]} ${className}`}>
+    <span
+      className={`grid shrink-0 place-items-center bg-white ring-1 ring-slate-900/10 dark:ring-white/20 ${TILE[size]} ${className}`}
+    >
       <BrandMark className={GLYPH[size]} title={title} />
     </span>
   );

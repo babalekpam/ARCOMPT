@@ -10,18 +10,22 @@
       h1 { font-size: 1.25rem; }
       p { color: #475569; font-size: 0.95rem; }
       a { color: inherit; }
-      /* Marque ARCOMPT — tracé canonique, voir docs/BRAND.md. */
-      .mark { width: 2.25rem; height: 2.25rem; padding: .5rem; border-radius: .5rem; background: #0E5B46; fill: #fff; box-sizing: border-box; }
+      /* Marque ARCOMPT — logo fourni, voir docs/BRAND.md. Il est embarqué en
+         data URI : la page hors ligne est préchargée seule par le service
+         worker et ne doit dépendre d'aucune requête. La plaque reste blanche
+         dans les deux thèmes : le marine du logo s'efface sur fond sombre. */
+      .plate { display: inline-grid; place-items: center; width: 3rem; height: 3rem; border-radius: .625rem; background: #fff; box-shadow: 0 0 0 1px rgba(15, 23, 42, .1); box-sizing: border-box; }
+      .mark { width: 2.25rem; height: 2.25rem; display: block; }
       @media (prefers-color-scheme: dark) {
         body { background: #020617; color: #f1f5f9; }
         p { color: #94a3b8; }
-        .mark { background: #4FB795; fill: #020617; }
+        .plate { box-shadow: 0 0 0 1px rgba(255, 255, 255, .2); }
       }
     </style>
   </head>
   <body>
     <main>
-      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M11.8 3 H20.2 L25.93 18.2 H28.5 V22 H27.36 L30 29 H22.2 L19.62 22 H12.38 L9.8 29 H2 L4.64 22 H3.5 V18.2 H6.07 Z M16 12.2 L13.79 18.2 H18.21 Z"/></svg>
+<span class="plate"><img class="mark" alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAMFBMVEVIdXcVM08bsJ01ZGstZ3Erpp8jkZcYMUsiNk0YeZUZMUsdM0sLd5X8/f59tMTB2+F1uP39AAAADHRSTlMC/v4XPOqT22nkwptoivP6AAAACXBIWXMAAAPoAAAD6AG1e1JrAAACwklEQVRIx5WWQWsTQRTHB3axaTwNLWxJbgu5DzY1xV4mNmDAW7GePCymFoQeDBEEvSRYUNqL0FAoVGhAaKgXg0JDcxQDC9v4CVpPHgTJJ2jQ92Z2NzOTJqFzSAjvt//3f+/tzISQmy67sDgZmA38/dXJAKx9NgUIunwKMIEIgaDLpgBBfRoQVMcB63IF3higdyHXE+96n7M/Y2ATG2uEbzEF2AKJZQN4pips7RHy0BDIaECXkLYOPNWBgFsvdQEXgB99uQIAPiTmdAEE4kYB8H3mSBdwH+mAV6saAhwa9evyfHA1+HeIHsrcFECTl+cXVwNRRSI1IqABe7kFU+Aug1nEgNeaNwXWVZPPbXpkCCxBmb3+717/b79/6G0kadUQWMuoHljNMQVcCXyUgE0XdAFrTQdytKILwIeYxR/hwWctsMBVB0vucBYHB/UEhTZ9VZsoAWmSW7xG54ldUZuoAcSm9AsJxy0EVpgO5KnDSHJuWMKrUEG2moMAFJmvxAL3HNWkz/OYgbQqsUBDA6AErMEqv4gFqAr4rEaxSwkxrfuuCwIa4N2mlEJdOUxju67LklQF6sBTfBWwl5jBALrsHQhAyBYyI4DPMQEOMomtGAH8kl2GXzilGk3LIjIqULJaIIBbTvbKBLIEDaTwCMuJUiUwEwMiLt/FhmimBHII3HEzJbJDwwQk7IUKPOaWeD4tzkiwkiYakCX2KcZTPBKIZpkBP04TDqQGxh1hAJsprQhgpQ2vkEgfxskDKuaJ1W5uFPBrtyziKRlP0CiDWNn3Z1SuN/I9F82SGYqdzslxGKXOt/CMF8XIfRVJY7gdbRMRj3euVQSN1yed7eiGkM1QN6Zx751STUCuYqRuRSk/GY8dN7dXF7PF3UZoaCRBIvZKh+PQNRpq/LrLxNqJ480xV97yGeZxPr8df+9ahUKB3ezfwH9bG4ug46DwMwAAAABJRU5ErkJggg==" /></span>
       <h1>ARCOMPT est hors ligne</h1>
       <p>Cette page n'est pas disponible sans réseau. Les brouillons d'écritures saisis hors ligne restent enregistrés sur cet appareil et seront envoyés au retour de la connexion.</p>
       <p><a href="/">Réessayer</a></p>

@@ -10,9 +10,11 @@ export const metadata: Metadata = {
   description: "La comptabilité intelligente des PME de l'espace OHADA.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "ARCOMPT", statusBarStyle: "default" },
+  // Le logo est matriciel : pas de favicon SVG. `favicon.ico` porte les trames
+  // 16/32/48 sur plaque blanche — voir docs/BRAND.md, § « Lisibilité en petit ».
   icons: {
     icon: [
-      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", type: "image/x-icon", sizes: "48x48 32x32 16x16" },
       { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
