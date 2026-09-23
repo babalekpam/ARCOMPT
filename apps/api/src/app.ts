@@ -7,7 +7,7 @@ import type { Sql } from "postgres";
 import { LedgerError, type Ledger } from "@arcompt/ledger";
 import { authMiddleware, type AuthOptions } from "./auth.js";
 import { readinessHandler } from "./health.js";
-import { resolveIdentity, touchLastActive, type TokenIdentityHints } from "./identity.js";
+import { recordPlatformAccess, resolveIdentity, resolvePlatformAdmin, resolvePlatformCompanies, resolvePlatformCompany, touchLastActive, type TokenIdentityHints } from "./identity.js";
 import { rateLimit, securityHeaders } from "./security.js";
 import { BurstDetector, log, raiseSecurityAlert } from "./telemetry.js";
 import { accountsRoutes } from "./routes/accounts.js";
@@ -29,6 +29,7 @@ import { taxRoutes } from "./routes/tax.js";
 import { treasuryRoutes } from "./routes/treasury.js";
 import { whatsappRoutes } from "./routes/whatsapp.js";
 import { whatsappLinkRoutes } from "./routes/whatsapp-link.js";
+import { platformRoutes } from "./routes/platform.js";
 
 export interface AppDeps {
   /** Fabrique un moteur comptable pour le contexte courant (adaptateur mémoire ou PostgreSQL). */
@@ -76,6 +77,10 @@ export function createApp(deps: AppDeps) {
         ? {
             resolveIdentity: (sub: string, hints: TokenIdentityHints) => resolveIdentity(db, sub, hints),
             touchLastActive: (userId: string) => touchLastActive(db, userId),
+            resolvePlatformAdmin: (sub: string) => resolvePlatformAdmin(db, sub),
+            resolvePlatformCompany: (sub: string, companyId: string) => resolvePlatformCompany(db, sub, companyId),
+            resolvePlatformCompanies: (sub: string) => resolvePlatformCompanies(db, sub),
+            recordPlatformAccess: (sub: string, companyId: string | null, method: string, path: string) => recordPlatformAccess(db, sub, companyId, method, path),
           }
         : {}),
     }),
@@ -105,6 +110,7 @@ export function createApp(deps: AppDeps) {
   api.route("/anchors", anchoringRoutes(deps));
   api.route("/", documentsRoutes(deps)); // /documents, /proposals, /assistant, /anomalies
   api.route("/portal", portalRoutes(deps));
+  api.route("/platform", platformRoutes(db ? (sub: string) => resolvePlatformCompanies(db, sub) : undefined));
   app.route("/v1", api);
 
   // Canaux entrants sans jeton : WhatsApp (signature Meta) et webhooks de paiement (HMAC + anti-rejeu).

@@ -9,6 +9,9 @@ ARCOMPT utilise désormais **Replit-managed Clerk** pour l'identité web et la
 récupération de mot de passe. Le navigateur conserve sa session Clerk ; Next.js
 obtient côté serveur un jeton court et le transmet au proxy Hono. Le navigateur
 ne choisit jamais son utilisateur, son organisation ou son dossier.
+Un administrateur de la plateforme peut être accordé séparément, uniquement
+par une procédure privilégiée et avec un compte Clerk dédié et MFA. Ce droit
+global ne découle pas d'un rôle de dossier. Voir `docs/PLATFORM-ADMIN.md`.
 Les utilisateurs déjà rattachés à un sujet Keycloak ne sont **pas** rattachés
 automatiquement à un nouveau sujet Clerk : leur migration exige une procédure
 administrateur vérifiée, pas une réattribution par simple adresse e-mail.

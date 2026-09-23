@@ -26,7 +26,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 }
 
 /** Barre latérale (desktop) : sections disponibles puis modules à venir. */
-export function SideNav() {
+export function SideNav({ platformAdmin = false }: { platformAdmin?: boolean }) {
   const pathname = usePathname();
   const t = useT();
   return (
@@ -35,6 +35,7 @@ export function SideNav() {
       {MAIN_NAV.map((item) => (
         <NavLink key={item.href} item={item} active={isActivePath(pathname, item.href)} />
       ))}
+      {platformAdmin ? <Link href="/platform" className="mt-3 flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-amber-800 hover:bg-amber-50 dark:text-amber-200 dark:hover:bg-amber-950/30"><span className="w-5 text-center" aria-hidden>◈</span><span>Platform companies</span></Link> : null}
       <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t("nav.sectionSoon")}</p>
       {SOON_NAV.map((item) => (
         <NavLink key={item.href} item={item} active={isActivePath(pathname, item.href)} />

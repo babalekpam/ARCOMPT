@@ -1,2 +1,3 @@
 - [Replit package and test toolchain](replit-toolchain.md) — use Corepack for the pinned pnpm; keep database-backed Vitest files serial in this environment.
 - [Clerk on Next.js deployment](clerk-next-deployment.md) — Next builds embed public proxy config; validate the escaped Clerk route and never assume runtime-only injection suffices.
+- [Platform administrator authority](platform-admin-authority.md) — full cross-company access is an explicit user choice; keep the principal separate from customers and enforce per-company RLS.

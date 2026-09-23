@@ -3,7 +3,7 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { createClerkClient, verifyToken } from "@clerk/backend";
-import type { Identity, TokenIdentityHints } from "./identity.js";
+import type { Identity, PlatformAdminIdentity, PlatformCompany, TokenIdentityHints } from "./identity.js";
 import { log } from "./telemetry.js";
 
 /**
@@ -36,6 +36,10 @@ export interface AuthContext {
    * dossier dont la langue n'est pas renseignée (packages/render/src/locale.ts).
    */
   locale?: string;
+  /** True only when the Clerk subject is present in platform_admin_identity. */
+  platformAdmin?: boolean;
+  /** Verified Clerk subject, for platform discovery callbacks only. */
+  platformSub?: string;
 }
 
 export type Role = "OWNER" | "ACCOUNTANT" | "CASHIER" | "AUDITOR" | "REVIEWER";
@@ -172,6 +176,11 @@ export interface AuthOptions {
   resolveIdentity?: (sub: string, hints: TokenIdentityHints) => Promise<Identity | null>;
   /** Trace d'activité, au mieux : son échec ne doit jamais bloquer la requête. */
   touchLastActive?: (userId: string) => Promise<void>;
+  /** Platform privilege is resolved independently of ordinary memberships. */
+  resolvePlatformAdmin?: (sub: string) => Promise<PlatformAdminIdentity | null>;
+  resolvePlatformCompany?: (sub: string, companyId: string) => Promise<{ companyId: string; organizationId: string } | null>;
+  resolvePlatformCompanies?: (sub: string) => Promise<PlatformCompany[]>;
+  recordPlatformAccess?: (sub: string, companyId: string | null, method: string, path: string) => Promise<void>;
 }
 
 /** Trousseau de clés tel que `jose` l'attend. */
@@ -263,6 +272,40 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
       // Clerk session tokens carry sid; rejecting tokens without it prevents a
       // verified machine/JWT-template token from being accepted as a browser session.
       if (!sub || typeof payload.sid !== "string" || payload.sid.length === 0) return unauthorized(c, "Jeton Clerk sans session (sub/sid)");
+      const platformAdmin = opts.resolvePlatformAdmin ? await opts.resolvePlatformAdmin(sub) : null;
+      if (platformAdmin) {
+        if (platformAdmin.suspendedAt) return forbidden(c, "Compte suspendu : contactez l'administrateur");
+        if (!hasClerkSecondFactor(payload.fva)) return forbidden(c, "Authentification multifacteur requise pour l'administration de la plateforme");
+        // Hono normally retains the mounted `/v1` prefix; accept the
+        // sub-router form as well so this remains correct in isolated tests.
+        const platformPath = c.req.path === "/v1/platform" || c.req.path.startsWith("/v1/platform/") || c.req.path === "/platform" || c.req.path.startsWith("/platform/");
+        if (!tenantHeader && !platformPath) return forbidden(c, "Un tenant est requis hors des routes plateforme");
+        let tenantId = "";
+        let organizationId: string | undefined;
+        if (tenantHeader) {
+          if (!UUID_RE.test(tenantHeader)) return forbidden(c, "X-Tenant-Id doit être un UUID");
+          const company = opts.resolvePlatformCompany ? await opts.resolvePlatformCompany(sub, tenantHeader) : null;
+          if (!company) return forbidden(c, "Dossier non autorisé pour cet administrateur");
+          tenantId = company.companyId;
+          organizationId = company.organizationId;
+        }
+        if (!opts.recordPlatformAccess) return c.json({ error: { code: "AUDIT_UNAVAILABLE", message: "Journal d'accès indisponible" } }, 503);
+        try {
+          await opts.recordPlatformAccess(sub, tenantId || null, c.req.method, c.req.path);
+        } catch {
+          return c.json({ error: { code: "AUDIT_UNAVAILABLE", message: "Journal d'accès indisponible" } }, 503);
+        }
+        c.set("auth", {
+          userId: platformAdmin.userId,
+          tenantId,
+          roles: tenantId ? ["OWNER"] : [],
+          platformAdmin: true,
+          platformSub: sub,
+          ...(organizationId ? { organizationId } : {}),
+          ...(platformAdmin.locale ? { locale: platformAdmin.locale } : {}),
+        });
+        return next();
+      }
       const existing = resolve ? await resolve(sub, {}) : null;
       let identity = existing;
       if (!identity) {
@@ -337,6 +380,8 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
     return next();
   };
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Clerk's `fva` is [first-factor verification age, second-factor age]. */
 function hasClerkSecondFactor(fva: unknown): boolean {

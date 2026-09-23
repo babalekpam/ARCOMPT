@@ -1,0 +1,55 @@
+Console Error
+
+A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+See more info here: https://nextjs.org/docs/messages/react-hydration-error
+
+
+  ...
+    <HotReload assetPrefix="" globalError={[...]}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.tsx">
+                      <SegmentTrieNode>
+                      <link>
+                      <RootLayout>
+                        <html lang="fr">
+                          <body
+                            className="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text..."
+-                           data-new-gr-c-s-check-loaded="14.1331.0"
+-                           data-gr-ext-installed=""
+                          >
+                  ...
+app/layout.tsx (49:7) @ RootLayout
+
+
+  47 |   return (
+  48 |     <html lang={locale}>
+> 49 |       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+     |       ^
+  50 |         <ClerkProvider
+  51 |           proxyUrl={process.env.NEXT_PUBLIC_CLERK_PROXY_URL ?? ""}
+  52 |           localization={locale === "fr" ? frFR : enUS}
+Call Stack
+19
+
+Show 17 ignore-listed frame(s)
+body
+<anonymous>
+RootLayout
+app/layout.tsx (49:7)

@@ -81,5 +81,25 @@ run("création du premier OWNER sans démonstration", () => {
     } finally {
       await isolated.drop();
     }
-  });
+  }, 15_000);
+
+  it("ignore uniquement l'organisation interne dont tous les utilisateurs sont platform admins", async () => {
+    const isolated = await createTestDatabase();
+    if (!isolated) return;
+    try {
+      const [org] = await isolated.db`INSERT INTO organization (name, kind) VALUES ('__ARCOMPT_PLATFORM_INTERNAL__', 'GROUP') RETURNING id`;
+      const [user] = await isolated.db`INSERT INTO app_user (organization_id, email, display_name)
+        VALUES (${org!.id}, 'internal@example.test', 'Internal') RETURNING id`;
+      await isolated.db`INSERT INTO platform_admin_reserved_org(organization_id) VALUES (${org!.id})`;
+      await isolated.db`INSERT INTO platform_admin(user_id) VALUES (${user!.id})`;
+      const preview = await previewFirstOwner(isolated.db, input);
+      expect(preview.existing).toBeUndefined();
+      const [bad] = await isolated.db`INSERT INTO app_user (organization_id, email, display_name)
+        VALUES (${org!.id}, 'unrecorded@example.test', 'Unrecorded') RETURNING id`;
+      await expect(previewFirstOwner(isolated.db, input)).rejects.toThrow(/base contient déjà/);
+      await isolated.db`DELETE FROM app_user WHERE id = ${bad!.id}`;
+    } finally {
+      await isolated.drop();
+    }
+  }, 15_000);
 });

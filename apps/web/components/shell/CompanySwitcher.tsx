@@ -16,7 +16,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * existe, sinon saisie manuelle de l'UUID. Le choix est mémorisé en cookie
  * httpOnly (`/api/session/tenant`) et seuls les en-têtes du proxy le portent.
  */
-export function CompanySwitcher({ tenantId }: { tenantId: string | null }) {
+export function CompanySwitcher({ tenantId, platformAdmin = false }: { tenantId: string | null; platformAdmin?: boolean }) {
   const t = useT();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -27,7 +27,7 @@ export function CompanySwitcher({ tenantId }: { tenantId: string | null }) {
 
   useEffect(() => {
     if (!open || companies !== null) return;
-    apiClient<{ companies?: Company[] } | Company[]>("/portal/org/companies")
+    apiClient<{ companies?: Company[] } | Company[]>(platformAdmin ? "/platform/companies" : "/portal/org/companies")
       .then((data) => setCompanies(Array.isArray(data) ? data : (data.companies ?? [])))
       .catch(() => setCompanies([]));
   }, [open, companies]);
@@ -63,7 +63,7 @@ export function CompanySwitcher({ tenantId }: { tenantId: string | null }) {
           {companies === null ? (
             <p className="text-xs text-slate-500">{t("common.loading")}</p>
           ) : companies.length === 0 ? (
-            <p className="text-xs text-slate-500">{t("company.manualHint")}</p>
+            <p className="text-xs text-slate-500">{platformAdmin ? "No companies available." : t("company.manualHint")}</p>
           ) : (
             <ul className="mb-2 max-h-48 overflow-auto">
               {companies.map((c) => (
@@ -76,7 +76,7 @@ export function CompanySwitcher({ tenantId }: { tenantId: string | null }) {
               ))}
             </ul>
           )}
-          <form
+          {!platformAdmin ? <form
             className="mt-2 flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
@@ -87,7 +87,7 @@ export function CompanySwitcher({ tenantId }: { tenantId: string | null }) {
             <Button type="submit" size="sm" disabled={pending}>
               {t("common.apply")}
             </Button>
-          </form>
+          </form> : null}
           {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
         </div>
       ) : null}

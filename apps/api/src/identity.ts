@@ -39,6 +39,46 @@ export interface TokenIdentityHints {
   emailVerified?: boolean;
 }
 
+export interface PlatformAdminIdentity {
+  userId: string;
+  suspendedAt: Date | null;
+  locale: string | null;
+}
+
+export interface PlatformCompany {
+  companyId: string;
+  companyName: string;
+  organizationId: string;
+  organizationName: string;
+  countryCode: string;
+}
+
+export async function resolvePlatformAdmin(db: Sql, sub: string): Promise<PlatformAdminIdentity | null> {
+  const [row] = await db`SELECT user_id, suspended_at, locale FROM platform_admin_identity(${sub})`;
+  if (!row) return null;
+  return { userId: String(row.user_id), suspendedAt: toDate(row.suspended_at), locale: row.locale == null ? null : String(row.locale) };
+}
+
+export async function resolvePlatformCompany(db: Sql, sub: string, companyId: string): Promise<{ companyId: string; organizationId: string } | null> {
+  const [row] = await db`SELECT company_id, organization_id FROM platform_admin_company(${sub}, ${companyId})`;
+  return row ? { companyId: String(row.company_id), organizationId: String(row.organization_id) } : null;
+}
+
+export async function resolvePlatformCompanies(db: Sql, sub: string): Promise<PlatformCompany[]> {
+  const rows = await db`SELECT company_id, company_name, organization_id, organization_name, country_code FROM platform_admin_companies(${sub})`;
+  return rows.map((row) => ({
+    companyId: String(row.company_id),
+    companyName: String(row.company_name),
+    organizationId: String(row.organization_id),
+    organizationName: String(row.organization_name),
+    countryCode: String(row.country_code),
+  }));
+}
+
+export async function recordPlatformAccess(db: Sql, sub: string, companyId: string | null, method: string, path: string): Promise<void> {
+  await db`SELECT platform_admin_record_access(${sub}, ${companyId}, ${method}, ${path})`;
+}
+
 /**
  * Résout un `sub` Keycloak en identité ARCOMPT ; null si le sujet est inconnu.
  *

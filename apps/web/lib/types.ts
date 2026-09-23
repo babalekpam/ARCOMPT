@@ -170,6 +170,8 @@ export interface CountryPack {
 export interface Company {
   id: string;
   name: string;
+  organizationId?: string;
+  organizationName?: string;
   countryCode?: string;
   currency?: string;
 }

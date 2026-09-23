@@ -73,7 +73,10 @@ export async function previewFirstOwner(db: Db, raw: FirstOwnerInput): Promise<F
     JOIN organization o ON o.id = u.organization_id
     LEFT JOIN company_member m ON m.user_id = u.id
     LEFT JOIN company c ON c.id = m.company_id
-    WHERE lower(u.email) = ${input.email}`;
+    WHERE lower(u.email) = ${input.email}
+      AND NOT EXISTS (SELECT 1 FROM platform_admin_reserved_org r
+                      WHERE r.organization_id = u.organization_id
+                        AND EXISTS (SELECT 1 FROM platform_admin pa WHERE pa.user_id = u.id))`;
 
   if (users.length > 0) {
     const same = users.length === 1 && users[0]!.organization_name === input.organization
@@ -94,9 +97,19 @@ export async function previewFirstOwner(db: Db, raw: FirstOwnerInput): Promise<F
   // Ce programme est réservé à la première installation, pas un moyen de
   // contourner les invitations et les droits du portail sur une base peuplée.
   const [counts] = await db`
-    SELECT (SELECT count(*)::int FROM organization) AS organizations,
-           (SELECT count(*)::int FROM app_user) AS users,
-           (SELECT count(*)::int FROM company) AS companies`;
+    SELECT
+      (SELECT count(*)::int FROM organization o
+       WHERE NOT EXISTS (SELECT 1 FROM platform_admin_reserved_org r
+                         WHERE r.organization_id = o.id
+                           AND NOT EXISTS (SELECT 1 FROM company c WHERE c.organization_id = o.id)
+                           AND NOT EXISTS (SELECT 1 FROM app_user u
+                             WHERE u.organization_id = o.id
+                               AND NOT EXISTS (SELECT 1 FROM platform_admin pa WHERE pa.user_id = u.id)))) AS organizations,
+      (SELECT count(*)::int FROM app_user u
+       WHERE NOT EXISTS (SELECT 1 FROM platform_admin_reserved_org r
+                         WHERE r.organization_id = u.organization_id
+                           AND EXISTS (SELECT 1 FROM platform_admin pa WHERE pa.user_id = u.id))) AS users,
+      (SELECT count(*)::int FROM company) AS companies`;
   if (Number(counts?.organizations) || Number(counts?.users) || Number(counts?.companies)) {
     throw new Error("La base contient déjà des organisations ou utilisateurs. Utilisez une base vierge pour ce premier OWNER ; aucune donnée existante n'est effacée.");
   }
