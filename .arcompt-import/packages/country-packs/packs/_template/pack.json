@@ -1,0 +1,143 @@
+{
+  "code": "xx",
+  "name": "Modèle de pack pays — copier vers le code ISO du pays",
+  "version": "2025.1",
+  "status": "DRAFT",
+  "identity": {
+    "currency": "XOF",
+    "languages": [
+      "fr"
+    ],
+    "tax_ids": [
+      {
+        "code": "NIF",
+        "label": "Numéro d'identification fiscale",
+        "pattern": "^[A-Z0-9]{6,20}$",
+        "required": true
+      }
+    ],
+    "accounting_systems": [
+      "NORMAL",
+      "SMT"
+    ],
+    "smt_threshold_revenue": "60000000",
+    "social_security_body": "Caisse nationale de sécurité sociale",
+    "tax_authority": "Direction générale des impôts"
+  },
+  "vat": {
+    "rates": [
+      {
+        "code": "TVA18",
+        "label": "Taux normal",
+        "rate": "0.18",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "code": "EXO",
+        "label": "Exonéré",
+        "rate": "0",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      }
+    ],
+    "rules": [
+      {
+        "id": "vat.due",
+        "label": "TVA due ou crédit",
+        "expr": "tva_collectee - tva_deductible",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "taxes": {
+    "rules": [
+      {
+        "id": "is.rate",
+        "label": "Taux de l'impôt sur les sociétés",
+        "value": "0.25",
+        "valid_from": "2000-01-01",
+        "source": "À renseigner : code général des impôts, article …"
+      },
+      {
+        "id": "is.amount",
+        "label": "Impôt sur les sociétés",
+        "expr": "round(max(resultat_fiscal, 0) * is.rate, 0)",
+        "depends_on": [
+          "is.rate"
+        ],
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "payroll": {
+    "variables": [
+      "salaire_brut",
+      "tva_collectee",
+      "tva_deductible"
+    ],
+    "rules": [
+      {
+        "id": "payroll.cnss.employee_rate",
+        "value": "0.05",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnss.employee",
+        "expr": "round(salaire_brut * payroll.cnss.employee_rate, 0)",
+        "depends_on": [
+          "payroll.cnss.employee_rate"
+        ],
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "variables": [
+    "resultat_comptable",
+    "resultat_fiscal",
+    "ca_annuel",
+    "reintegrations",
+    "deductions"
+  ],
+  "dsf": {
+    "label": "Déclaration statistique et fiscale",
+    "statements": [
+      "BILAN_ACTIF",
+      "BILAN_PASSIF",
+      "COMPTE_RESULTAT",
+      "TFT",
+      "NOTES"
+    ],
+    "adjustments": []
+  },
+  "filing": [
+    {
+      "id": "dsf",
+      "label": "Dépôt des états financiers",
+      "portal": "Portail DGI",
+      "format": "MANUAL",
+      "api": false
+    }
+  ],
+  "calendar": [
+    {
+      "id": "vat",
+      "label": "Déclaration mensuelle de TVA",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "dsf",
+      "label": "Dépôt de la DSF",
+      "frequency": "ANNUAL",
+      "due": "04-30"
+    }
+  ],
+  "chart_overrides": [],
+  "notes": [
+    "Toutes les valeurs de ce modèle sont fictives et servent uniquement de structure.",
+    "Un pack ne passe en PUBLISHED qu'après validation par un expert-comptable inscrit à l'ordre du pays."
+  ]
+}

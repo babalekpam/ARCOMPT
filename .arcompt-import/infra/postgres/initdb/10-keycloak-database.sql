@@ -1,0 +1,13 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
+-- Base dédiée à Keycloak, créée au tout premier démarrage de PostgreSQL.
+--
+-- Keycloak stocke ses utilisateurs, ses sessions et ses clés de signature dans
+-- sa propre base : les mélanger au schéma comptable rendrait toute sauvegarde,
+-- toute restauration et tout audit ambigus.
+--
+-- Ce fichier n'est joué qu'à l'initialisation du volume de données. Sur une
+-- installation déjà en service, créer la base à la main :
+--   docker compose -f docker-compose.prod.yml exec postgres \
+--     psql -U "$POSTGRES_USER" -d postgres -c 'CREATE DATABASE keycloak'
+SELECT 'CREATE DATABASE keycloak' WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'keycloak') \gexec

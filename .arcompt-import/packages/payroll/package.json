@@ -1,0 +1,26 @@
+{
+  "name": "@arcompt/payroll",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Paie : salariés, bulletins calculés par le pack pays, livre de paie, déclarations sociales, écritures.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@arcompt/ledger": "workspace:*",
+    "@arcompt/db": "workspace:*",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1",
+    "@arcompt/rules": "workspace:*",
+    "@arcompt/country-packs": "workspace:*"
+  },
+  "author": "ARGILETTE LLC",
+  "license": "LicenseRef-ARGILETTE-Proprietary"
+}

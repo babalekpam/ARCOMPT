@@ -1,0 +1,307 @@
+{
+  "code": "ci",
+  "name": "Côte d'Ivoire",
+  "version": "2025.1",
+  "status": "DRAFT",
+  "identity": {
+    "currency": "XOF",
+    "languages": [
+      "fr"
+    ],
+    "tax_ids": [
+      {
+        "code": "NCC",
+        "label": "Numéro de compte contribuable",
+        "pattern": "^[0-9]{7}[A-Z]$",
+        "required": true
+      },
+      {
+        "code": "RCCM",
+        "label": "Registre du commerce et du crédit mobilier",
+        "required": false
+      }
+    ],
+    "accounting_systems": [
+      "NORMAL",
+      "SMT"
+    ],
+    "smt_threshold_revenue": "60000000",
+    "social_security_body": "CNPS",
+    "tax_authority": "Direction générale des impôts (DGI)"
+  },
+  "vat": {
+    "rates": [
+      {
+        "code": "TVA18",
+        "label": "TVA taux normal (indicatif : à valider)",
+        "rate": "0.18",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "code": "TVA9",
+        "label": "TVA taux réduit (indicatif : à valider)",
+        "rate": "0.09",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "code": "EXO",
+        "label": "Exonéré",
+        "rate": "0",
+        "collected_account": "443",
+        "deductible_account": "445",
+        "valid_from": "2000-01-01"
+      }
+    ],
+    "rules": [
+      {
+        "id": "vat.due",
+        "label": "TVA nette due (ou crédit si négatif)",
+        "expr": "tva_collectee - tva_deductible",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "taxes": {
+    "rules": [
+      {
+        "id": "is.rate",
+        "label": "Taux BIC/IS (indicatif : à valider)",
+        "value": "0.25",
+        "valid_from": "2000-01-01",
+        "source": "CGI CI — à confirmer par l'expert-comptable référent"
+      },
+      {
+        "id": "is.amount",
+        "label": "Impôt sur les bénéfices",
+        "expr": "round(max(resultat_fiscal, 0) * is.rate, 0)",
+        "depends_on": [
+          "is.rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "imf.rate",
+        "label": "Impôt minimum forfaitaire, taux sur CA (indicatif : à valider)",
+        "value": "0.005",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "imf.amount",
+        "label": "Impôt minimum forfaitaire",
+        "expr": "round(ca_annuel * imf.rate, 0)",
+        "depends_on": [
+          "imf.rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "is.due",
+        "label": "Impôt dû : le plus élevé de l'IS et de l'IMF",
+        "expr": "max(is.amount, imf.amount)",
+        "depends_on": [
+          "is.amount",
+          "imf.amount"
+        ],
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "payroll": {
+    "variables": [
+      "salaire_brut",
+      "tva_collectee",
+      "tva_deductible",
+      "plafond_cnps"
+    ],
+    "rules": [
+      {
+        "id": "payroll.cnps.retraite.employee_rate",
+        "label": "CNPS retraite, part salariale (indicatif : à valider)",
+        "value": "0.063",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnps.retraite.employer_rate",
+        "label": "CNPS retraite, part patronale (indicatif : à valider)",
+        "value": "0.077",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnps.plafond",
+        "label": "Plafond mensuel CNPS retraite (indicatif : à valider)",
+        "value": "3375000",
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnps.base",
+        "label": "Assiette CNPS plafonnée",
+        "expr": "min(salaire_brut, payroll.cnps.plafond)",
+        "depends_on": [
+          "payroll.cnps.plafond"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnps.employee",
+        "label": "Cotisation CNPS salariale",
+        "expr": "round(payroll.cnps.base * payroll.cnps.retraite.employee_rate, 0)",
+        "depends_on": [
+          "payroll.cnps.base",
+          "payroll.cnps.retraite.employee_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.cnps.employer",
+        "label": "Cotisation CNPS patronale",
+        "expr": "round(payroll.cnps.base * payroll.cnps.retraite.employer_rate, 0)",
+        "depends_on": [
+          "payroll.cnps.base",
+          "payroll.cnps.retraite.employer_rate"
+        ],
+        "valid_from": "2000-01-01"
+      },
+      {
+        "id": "payroll.its.bareme",
+        "label": "Barème ITS mensuel (structure indicative, valeurs à renseigner par l'expert-comptable)",
+        "value": {
+          "kind": "bareme",
+          "tranches": [
+            {
+              "upTo": "75000",
+              "rate": "0"
+            },
+            {
+              "upTo": "240000",
+              "rate": "0.16"
+            },
+            {
+              "upTo": "800000",
+              "rate": "0.21"
+            },
+            {
+              "upTo": "2400000",
+              "rate": "0.24"
+            },
+            {
+              "upTo": "8000000",
+              "rate": "0.28"
+            },
+            {
+              "rate": "0.32"
+            }
+          ]
+        },
+        "valid_from": "2024-01-01",
+        "source": "Réforme de l'imposition des salaires CI 2024 — barème indicatif à valider"
+      },
+      {
+        "id": "payroll.its",
+        "label": "Impôt sur les traitements et salaires",
+        "expr": "round(tranche(salaire_brut - payroll.cnps.employee, payroll.its.bareme), 0)",
+        "depends_on": [
+          "payroll.cnps.employee",
+          "payroll.its.bareme"
+        ],
+        "valid_from": "2024-01-01"
+      },
+      {
+        "id": "payroll.net",
+        "label": "Net à payer",
+        "expr": "salaire_brut - payroll.cnps.employee - payroll.its",
+        "depends_on": [
+          "payroll.cnps.employee",
+          "payroll.its"
+        ],
+        "valid_from": "2024-01-01"
+      }
+    ]
+  },
+  "variables": [
+    "resultat_comptable",
+    "resultat_fiscal",
+    "ca_annuel",
+    "reintegrations",
+    "deductions"
+  ],
+  "dsf": {
+    "label": "Déclaration statistique et fiscale (DSF) — système normal",
+    "statements": [
+      "BILAN_ACTIF",
+      "BILAN_PASSIF",
+      "COMPTE_RESULTAT",
+      "TFT",
+      "NOTES"
+    ],
+    "adjustments": [
+      {
+        "id": "dsf.resultat_fiscal",
+        "label": "Résultat fiscal = résultat comptable + réintégrations − déductions",
+        "expr": "resultat_comptable + reintegrations - deductions",
+        "valid_from": "2000-01-01"
+      }
+    ]
+  },
+  "filing": [
+    {
+      "id": "dsf",
+      "label": "Dépôt des états financiers et de la DSF",
+      "portal": "e-impôts (DGI Côte d'Ivoire)",
+      "url": "https://e-impots.gouv.ci",
+      "format": "XLSX",
+      "api": false
+    },
+    {
+      "id": "vat",
+      "label": "Déclaration de TVA",
+      "portal": "e-impôts (DGI Côte d'Ivoire)",
+      "url": "https://e-impots.gouv.ci",
+      "format": "MANUAL",
+      "api": false
+    }
+  ],
+  "calendar": [
+    {
+      "id": "vat",
+      "label": "Déclaration et paiement de la TVA (régime réel normal)",
+      "frequency": "MONTHLY",
+      "due": "15"
+    },
+    {
+      "id": "is_acompte",
+      "label": "Acomptes d'impôt sur les bénéfices",
+      "frequency": "QUARTERLY",
+      "due": "15"
+    },
+    {
+      "id": "dsf",
+      "label": "Dépôt des états financiers de synthèse",
+      "frequency": "ANNUAL",
+      "due": "06-30"
+    }
+  ],
+  "chart_overrides": [
+    {
+      "number": "4471",
+      "label": "État, impôt sur les traitements et salaires (ITS) retenu"
+    },
+    {
+      "number": "4311",
+      "label": "CNPS, cotisations dues"
+    }
+  ],
+  "certified_invoice": {
+    "system": "FNE (facture normalisée électronique)",
+    "mandatory": true,
+    "connector": "fne-ci",
+    "since": "2025-01-01"
+  },
+  "notes": [
+    "Pack en brouillon : les taux, barèmes, plafonds et échéances sont indicatifs et doivent être validés contre le Code général des impôts et les textes CNPS en vigueur par un expert-comptable inscrit à l'OECCA-CI avant toute utilisation.",
+    "Le portail e-impôts n'expose pas d'API publique connue : le fichier est généré au format attendu puis déposé manuellement."
+  ]
+}

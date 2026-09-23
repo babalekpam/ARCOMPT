@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: arcompt
+          POSTGRES_PASSWORD: arcompt
+          POSTGRES_DB: arcompt
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U arcompt"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://arcompt:arcompt@localhost:5432/arcompt
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      # La version de pnpm vient du champ packageManager de package.json.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm db:migrate
+      - run: SEED_FIRM=1 pnpm db:seed
+      - run: pnpm pack:validate
+      - run: pnpm test
+      - run: pnpm --filter @arcompt/web build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+        env:
+          AUTH_MODE: dev

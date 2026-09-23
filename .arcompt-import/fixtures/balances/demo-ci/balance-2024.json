@@ -1,0 +1,103 @@
+{
+  "fiscalYear": "2024",
+  "currency": "XOF",
+  "system": "NORMAL",
+  "rows": [
+    {
+      "account": "101",
+      "label": "Capital social",
+      "debit": "0.0000",
+      "credit": "5000000.0000"
+    },
+    {
+      "account": "162",
+      "label": "Emprunts et dettes auprès des établissements de crédit",
+      "debit": "0.0000",
+      "credit": "2000000.0000"
+    },
+    {
+      "account": "244",
+      "label": "Matériel et mobilier",
+      "debit": "3000000.0000",
+      "credit": "0.0000"
+    },
+    {
+      "account": "2844",
+      "label": "Amortissements du matériel et mobilier",
+      "debit": "0.0000",
+      "credit": "600000.0000"
+    },
+    {
+      "account": "401",
+      "label": "Fournisseurs, dettes en compte",
+      "debit": "1416000.0000",
+      "credit": "1416000.0000"
+    },
+    {
+      "account": "411",
+      "label": "Clients",
+      "debit": "4720000.0000",
+      "credit": "4720000.0000"
+    },
+    {
+      "account": "422",
+      "label": "Personnel, rémunérations dues",
+      "debit": "1000000.0000",
+      "credit": "1000000.0000"
+    },
+    {
+      "account": "443",
+      "label": "État, TVA facturée",
+      "debit": "720000.0000",
+      "credit": "720000.0000"
+    },
+    {
+      "account": "444",
+      "label": "État, TVA due ou crédit de TVA",
+      "debit": "504000.0000",
+      "credit": "504000.0000"
+    },
+    {
+      "account": "445",
+      "label": "État, TVA récupérable",
+      "debit": "216000.0000",
+      "credit": "216000.0000"
+    },
+    {
+      "account": "481",
+      "label": "Fournisseurs d'investissements",
+      "debit": "3000000.0000",
+      "credit": "3000000.0000"
+    },
+    {
+      "account": "521",
+      "label": "Banques locales",
+      "debit": "11720000.0000",
+      "credit": "5920000.0000"
+    },
+    {
+      "account": "622",
+      "label": "Locations et charges locatives",
+      "debit": "1200000.0000",
+      "credit": "0.0000"
+    },
+    {
+      "account": "661",
+      "label": "Rémunérations directes versées au personnel national",
+      "debit": "1000000.0000",
+      "credit": "0.0000"
+    },
+    {
+      "account": "681",
+      "label": "Dotations aux amortissements d'exploitation",
+      "debit": "600000.0000",
+      "credit": "0.0000"
+    },
+    {
+      "account": "706",
+      "label": "Services vendus",
+      "debit": "0.0000",
+      "credit": "4000000.0000"
+    }
+  ]
+}
