@@ -4,7 +4,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import { SignJWT, exportJWK, generateKeyPair } from "jose";
 import { createTestDatabase } from "@arcompt/db/testing";
-import { authMiddleware } from "./auth.js";
+import { JWKS_URI_ENV, OIDC_DISCOVERY_PATH, OidcDiscoveryError, authMiddleware, discoverJwksUri } from "./auth.js";
 import { linkSubject, resolveIdentity, touchLastActive, type Identity } from "./identity.js";
 
 /**
@@ -20,20 +20,36 @@ const TENANT = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const OTHER = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const AUDIENCE = "arcompt-api";
 
-// JWKS local : on signe de vrais jetons et le middleware les vérifie comme en production.
+// Fournisseur d'identité local : document de découverte + trousseau, comme un
+// fournisseur conforme. On signe de vrais jetons et le middleware les vérifie
+// comme en production, l'URL du trousseau étant découverte et non devinée.
 const { publicKey, privateKey } = await generateKeyPair("RS256");
 const jwks = { keys: [{ ...(await exportJWK(publicKey)), kid: "test", alg: "RS256", use: "sig" }] };
+/** Nombre d'appels reçus par chemin : sert à prouver la mise en cache. */
+const hits: Record<string, number> = {};
 const server = createServer((req, res) => {
-  if (req.url?.endsWith("/protocol/openid-connect/certs")) {
+  const path = (req.url ?? "").split("?")[0]!;
+  hits[path] = (hits[path] ?? 0) + 1;
+  const json = (body: unknown) => {
     res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify(jwks));
-    return;
-  }
+    res.end(JSON.stringify(body));
+  };
+  // Le chemin du trousseau n'est PAS celui de Keycloak : un middleware qui le
+  // devinerait au lieu de le découvrir échouerait ici.
+  if (path === "/realms/test/clefs-publiques") return json(jwks);
+  if (path === `/realms/test${OIDC_DISCOVERY_PATH}`) return json({ issuer: ISSUER, jwks_uri: `${ISSUER}/clefs-publiques` });
+  // Découverte annonçant un émetteur qui n'est pas celui configuré.
+  if (path === `/autre-emetteur${OIDC_DISCOVERY_PATH}`) return json({ issuer: "https://ailleurs.example/realms/test", jwks_uri: `${ISSUER}/clefs-publiques` });
+  // Découverte sans jwks_uri.
+  if (path === `/sans-trousseau${OIDC_DISCOVERY_PATH}`) return json({ issuer: `${ORIGIN}/sans-trousseau` });
   res.statusCode = 404;
   res.end();
 });
 await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-const ISSUER = `http://127.0.0.1:${(server.address() as AddressInfo).port}/realms/test`;
+const ORIGIN = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+const ISSUER = `${ORIGIN}/realms/test`;
+const JWKS_URI = `${ISSUER}/clefs-publiques`;
+const DISCOVERY_PATH = `/realms/test${OIDC_DISCOVERY_PATH}`;
 
 afterAll(() => {
   server.close();
@@ -142,6 +158,118 @@ describe("middleware d'autorisation (identité en base)", () => {
   it("exige l'en-tête X-Tenant-Id", async () => {
     const res = await call(appWith(identity()), await token(), null);
     expect(res.status).toBe(403);
+  });
+});
+
+/**
+ * Découverte OpenID Connect : l'URL du trousseau vient de
+ * `/.well-known/openid-configuration`, jamais d'un chemin deviné. C'est ce qui
+ * permet de brancher autre chose que Keycloak — chaque fournisseur place son
+ * trousseau ailleurs.
+ */
+describe("découverte du trousseau (jwks_uri)", () => {
+  it("découvre l'URL du trousseau et l'utilise pour vérifier un jeton", async () => {
+    const res = await call(appWith(identity()), await token());
+    expect(res.status).toBe(200);
+    expect(hits[DISCOVERY_PATH]).toBeGreaterThanOrEqual(1);
+  });
+
+  it("ne découvre qu'une fois : le résultat est mémorisé pour les requêtes suivantes", async () => {
+    const avant = hits[DISCOVERY_PATH] ?? 0;
+    const app = appWith(identity());
+    expect((await call(app, await token())).status).toBe(200);
+    const apresPremiere = hits[DISCOVERY_PATH] ?? 0;
+    expect(apresPremiere).toBe(avant + 1);
+    expect((await call(app, await token())).status).toBe(200);
+    expect((await call(app, await token())).status).toBe(200);
+    expect(hits[DISCOVERY_PATH]).toBe(apresPremiere);
+  });
+
+  it("ne découvre rien au montage du middleware : aucun appel réseau avant la première requête", async () => {
+    const avant = hits[DISCOVERY_PATH] ?? 0;
+    appWith(identity());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(hits[DISCOVERY_PATH] ?? 0).toBe(avant);
+  });
+
+  it("court-circuite la découverte quand l'URL du trousseau est imposée", async () => {
+    const avant = hits[DISCOVERY_PATH] ?? 0;
+    const app = new Hono();
+    app.use(
+      "*",
+      authMiddleware({
+        mode: "oidc",
+        issuer: ISSUER,
+        audience: AUDIENCE,
+        // Émetteur sans document de découverte exploitable : seule
+        // l'échappatoire peut faire aboutir la vérification.
+        env: { [JWKS_URI_ENV]: JWKS_URI } as NodeJS.ProcessEnv,
+        discover: async () => {
+          throw new Error("la découverte ne doit pas être appelée");
+        },
+        resolveIdentity: async () => identity(),
+      }),
+    );
+    app.get("/me", (c) => c.json(c.get("auth")));
+    expect((await call(app, await token())).status).toBe(200);
+    expect(hits[DISCOVERY_PATH] ?? 0).toBe(avant);
+  });
+
+  it("répond 503 avec un message explicite quand la découverte échoue, et réessaie ensuite", async () => {
+    let essais = 0;
+    const app = new Hono();
+    app.use(
+      "*",
+      authMiddleware({
+        mode: "oidc",
+        issuer: ISSUER,
+        audience: AUDIENCE,
+        env: {} as NodeJS.ProcessEnv,
+        discover: async () => {
+          essais += 1;
+          if (essais === 1) throw new OidcDiscoveryError("Découverte OpenID Connect injoignable (…) : connexion refusée.");
+          return JWKS_URI;
+        },
+        resolveIdentity: async () => identity(),
+      }),
+    );
+    app.get("/me", (c) => c.json(c.get("auth")));
+
+    const res = await call(app, await token());
+    expect(res.status).toBe(503);
+    const erreur = (await body(res)).error;
+    expect(erreur.code).toBe("IDENTITY_PROVIDER_UNAVAILABLE");
+    expect(erreur.message).toMatch(/Découverte OpenID Connect injoignable/);
+
+    // Un échec n'est pas mémorisé : la requête suivante retente.
+    expect((await call(app, await token())).status).toBe(200);
+    expect(essais).toBe(2);
+  });
+
+  it("lit jwks_uri dans le document de découverte", async () => {
+    await expect(discoverJwksUri(ISSUER)).resolves.toBe(JWKS_URI);
+    // Barre oblique finale : même émetteur, même document.
+    await expect(discoverJwksUri(`${ISSUER}/`)).resolves.toBe(JWKS_URI);
+  });
+
+  it("refuse un document absent, sans jwks_uri, ou déclarant un autre émetteur", async () => {
+    await expect(discoverJwksUri(`${ORIGIN}/inexistant`)).rejects.toThrow(/HTTP 404/);
+    await expect(discoverJwksUri(`${ORIGIN}/sans-trousseau`)).rejects.toThrow(/jwks_uri/);
+    await expect(discoverJwksUri(`${ORIGIN}/autre-emetteur`)).rejects.toThrow(/émetteur/);
+  });
+
+  it("nomme l'URL interrogée et l'échappatoire quand le fournisseur est injoignable", async () => {
+    const erreur = await discoverJwksUri("https://identite.invalide.test/realms/x", {
+      fetchImpl: async () => {
+        throw new Error("getaddrinfo ENOTFOUND");
+      },
+    }).then(
+      () => null,
+      (e: unknown) => e as Error,
+    );
+    expect(erreur).toBeInstanceOf(OidcDiscoveryError);
+    expect(erreur!.message).toContain("https://identite.invalide.test/realms/x/.well-known/openid-configuration");
+    expect(erreur!.message).toContain(JWKS_URI_ENV);
   });
 });
 

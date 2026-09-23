@@ -1,6 +1,7 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import type { Identity, TokenIdentityHints } from "./identity.js";
+import { log } from "./telemetry.js";
 
 /**
  * Contexte d'authentification. Keycloak authentifie, ARCOMPT autorise : le
@@ -8,7 +9,10 @@ import type { Identity, TokenIdentityHints } from "./identity.js";
  * les rôles sont lus dans `company_member`, jamais dans un claim recopié.
  *
  * Deux modes :
- *  - AUTH_MODE=oidc : jeton Keycloak vérifié via JWKS, puis résolution de
+ *  - AUTH_MODE=oidc : jeton vérifié contre le trousseau du fournisseur, dont
+ *    l'URL est obtenue par découverte OpenID Connect (`jwks_uri` du document
+ *    `/.well-known/openid-configuration`) — donc n'importe quel fournisseur
+ *    conforme, Keycloak comme un service hébergé —, puis résolution de
  *    l'identité en base (auth_resolve_identity). Le dossier courant est choisi
  *    par l'en-tête X-Tenant-Id et doit correspondre à une appartenance ; le
  *    rôle vient de cette appartenance, l'organisation de `app_user`. Un compte
@@ -35,6 +39,101 @@ export type Role = "OWNER" | "ACCOUNTANT" | "CASHIER" | "AUDITOR" | "REVIEWER";
 export const MFA_AMR_VALUES = ["mfa", "otp", "hwk", "swk"] as const;
 export const MFA_MIN_ACR = 2;
 
+// ---------------------------------------------------------------------------
+// Découverte OpenID Connect
+// ---------------------------------------------------------------------------
+
+/**
+ * Chemin normalisé du document de découverte (OpenID Connect Discovery 1.0,
+ * § 4). Tout fournisseur conforme le sert ; c'est lui qui donne l'URL du
+ * trousseau de clés publiques (`jwks_uri`).
+ *
+ * Auparavant l'URL était fabriquée en collant `/protocol/openid-connect/certs`
+ * à l'émetteur. Ce chemin est celui de Keycloak, et de lui seul : il rendait
+ * tout autre fournisseur (Auth0, Microsoft Entra ID, Okta, Google, Zitadel…)
+ * impossible à brancher, chacun plaçant son trousseau ailleurs.
+ */
+export const OIDC_DISCOVERY_PATH = "/.well-known/openid-configuration";
+
+/**
+ * Échappatoire : impose l'URL du trousseau sans passer par la découverte, pour
+ * les rares fournisseurs qui ne publient pas de document conforme, ou qui le
+ * publient sur un hôte différent de l'émetteur.
+ */
+export const JWKS_URI_ENV = "OIDC_JWKS_URI";
+
+/** Au-delà, la découverte est considérée injoignable. */
+export const DISCOVERY_TIMEOUT_MS = 5_000;
+
+/** Échec de découverte : porte un message directement exploitable par l'exploitant. */
+export class OidcDiscoveryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OidcDiscoveryError";
+  }
+}
+
+export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+/** Un émetteur ne diffère jamais d'un autre par sa seule barre oblique finale. */
+function normalizeIssuer(issuer: string): string {
+  return issuer.trim().replace(/\/+$/, "");
+}
+
+export interface DiscoverOptions {
+  /** Injectable : les tests ne doivent pas atteindre le réseau. */
+  fetchImpl?: FetchLike;
+  timeoutMs?: number;
+}
+
+/**
+ * Lit `${issuer}/.well-known/openid-configuration` et en extrait `jwks_uri`.
+ *
+ * Trois refus délibérés, tous avec un message nommant l'URL interrogée :
+ *  - document injoignable, non-JSON, ou réponse non 2xx ;
+ *  - `jwks_uri` absent ou inexploitable comme URL absolue ;
+ *  - `issuer` déclaré différent de celui configuré — c'est la vérification que
+ *    demande la spécification, et la seule protection contre un `KEYCLOAK_ISSUER`
+ *    qui pointerait vers un document de découverte étranger.
+ */
+export async function discoverJwksUri(issuer: string, opts: DiscoverOptions = {}): Promise<string> {
+  const fetchImpl = opts.fetchImpl ?? ((input, init) => fetch(input, init));
+  const url = `${normalizeIssuer(issuer)}${OIDC_DISCOVERY_PATH}`;
+  const hint = `Vérifiez KEYCLOAK_ISSUER, ou imposez l'URL du trousseau avec ${JWKS_URI_ENV}.`;
+
+  let response: Response;
+  try {
+    response = await fetchImpl(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(opts.timeoutMs ?? DISCOVERY_TIMEOUT_MS) });
+  } catch (e) {
+    throw new OidcDiscoveryError(`Découverte OpenID Connect injoignable (${url}) : ${e instanceof Error ? e.message : String(e)}. ${hint}`);
+  }
+  if (!response.ok) {
+    throw new OidcDiscoveryError(`Découverte OpenID Connect en échec (${url}) : HTTP ${response.status}. ${hint}`);
+  }
+
+  let document: unknown;
+  try {
+    document = await response.json();
+  } catch (e) {
+    throw new OidcDiscoveryError(`Découverte OpenID Connect illisible (${url}) : réponse non JSON (${e instanceof Error ? e.message : String(e)}). ${hint}`);
+  }
+  const doc = (document ?? {}) as { jwks_uri?: unknown; issuer?: unknown };
+
+  if (typeof doc.issuer === "string" && normalizeIssuer(doc.issuer) !== normalizeIssuer(issuer)) {
+    throw new OidcDiscoveryError(
+      `Découverte OpenID Connect incohérente (${url}) : le document déclare l'émetteur « ${doc.issuer} », la configuration attend « ${issuer} ». Les jetons seraient rejetés. ${hint}`,
+    );
+  }
+  if (typeof doc.jwks_uri !== "string" || doc.jwks_uri.trim() === "") {
+    throw new OidcDiscoveryError(`Découverte OpenID Connect inexploitable (${url}) : aucun « jwks_uri » dans le document. ${hint}`);
+  }
+  try {
+    return new URL(doc.jwks_uri.trim()).toString();
+  } catch {
+    throw new OidcDiscoveryError(`Découverte OpenID Connect inexploitable (${url}) : « jwks_uri » n'est pas une URL absolue (« ${doc.jwks_uri} »). ${hint}`);
+  }
+}
+
 declare module "hono" {
   interface ContextVariableMap {
     auth: AuthContext;
@@ -45,10 +144,59 @@ export interface AuthOptions {
   mode: "dev" | "oidc";
   issuer?: string;
   audience?: string;
+  /**
+   * URL du trousseau imposée à la main, court-circuitant la découverte.
+   * Par défaut la variable d'environnement `OIDC_JWKS_URI`.
+   */
+  jwksUri?: string;
+  /** Découverte injectable : les tests ne touchent jamais le réseau. */
+  discover?: (issuer: string) => Promise<string>;
+  /** Environnement lu pour l'échappatoire `OIDC_JWKS_URI` ; injectable. */
+  env?: NodeJS.ProcessEnv;
   /** Résolution des droits en base ; injectable pour tester le middleware sans PostgreSQL. */
   resolveIdentity?: (sub: string, hints: TokenIdentityHints) => Promise<Identity | null>;
   /** Trace d'activité, au mieux : son échec ne doit jamais bloquer la requête. */
   touchLastActive?: (userId: string) => Promise<void>;
+}
+
+/** Trousseau de clés tel que `jose` l'attend. */
+type JwksResolver = ReturnType<typeof createRemoteJWKSet>;
+
+/**
+ * Résout le trousseau **paresseusement**, et une seule fois.
+ *
+ * La découverte est un appel réseau : la faire au chargement du module
+ * empêcherait l'API de démarrer quand le fournisseur d'identité est
+ * momentanément indisponible, et rendrait tout test dépendant du réseau. Elle
+ * est donc déclenchée à la première requête portant un jeton, puis mémorisée.
+ *
+ * Un échec n'est pas mémorisé : la promesse en cours est oubliée, et la requête
+ * suivante réessaie. Une panne passagère du fournisseur ne condamne pas le
+ * processus jusqu'à son redémarrage.
+ */
+function jwksResolverFor(opts: AuthOptions): () => Promise<JwksResolver> {
+  const issuer = opts.issuer!;
+  const env = opts.env ?? process.env;
+  const override = (opts.jwksUri ?? env[JWKS_URI_ENV] ?? "").trim();
+  const discover = opts.discover ?? ((iss: string) => discoverJwksUri(iss));
+
+  let cached: JwksResolver | null = null;
+  let pending: Promise<JwksResolver> | null = null;
+
+  return () => {
+    if (cached) return Promise.resolve(cached);
+    if (!pending) {
+      pending = (async () => {
+        const uri = override !== "" ? override : await discover(issuer);
+        const resolver = createRemoteJWKSet(new URL(uri));
+        cached = resolver;
+        log("info", "auth.jwks.resolved", { issuer, jwksUri: uri, source: override !== "" ? JWKS_URI_ENV : "discovery" });
+        return resolver;
+      })();
+      pending.catch(() => undefined).then(() => { if (!cached) pending = null; });
+    }
+    return pending;
+  };
 }
 
 export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
@@ -59,7 +207,7 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
   if (opts.mode === "oidc" && !resolve) {
     throw new Error("AUTH_MODE=oidc exige un résolveur d'identité (base de données)");
   }
-  const jwks = opts.mode === "oidc" && opts.issuer ? createRemoteJWKSet(new URL(`${opts.issuer}/protocol/openid-connect/certs`)) : null;
+  const jwksFor = opts.mode === "oidc" && opts.issuer ? jwksResolverFor(opts) : null;
 
   return async (c, next) => {
     const tenantHeader = c.req.header("x-tenant-id");
@@ -71,7 +219,21 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
     }
     const header = c.req.header("authorization") ?? "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-    if (!token || !jwks) return unauthorized(c, "Jeton Bearer requis");
+    if (!token || !jwksFor) return unauthorized(c, "Jeton Bearer requis");
+
+    // Le trousseau est résolu à la première requête, jamais au chargement du
+    // module. Son indisponibilité n'est pas un jeton invalide : la distinguer
+    // évite de faire chercher une erreur d'authentification là où le
+    // fournisseur d'identité est simplement injoignable ou mal configuré.
+    let jwks: JwksResolver;
+    try {
+      jwks = await jwksFor();
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      log("error", "auth.jwks.unavailable", { issuer: opts.issuer, detail });
+      return c.json({ error: { code: "IDENTITY_PROVIDER_UNAVAILABLE", message: `Fournisseur d'identité inexploitable : ${detail}` } }, 503);
+    }
+
     let payload: JWTPayload & { amr?: unknown; acr?: unknown; email?: unknown; email_verified?: unknown };
     try {
       const verifyOptions = { ...(opts.issuer ? { issuer: opts.issuer } : {}), ...(opts.audience ? { audience: opts.audience } : {}) };

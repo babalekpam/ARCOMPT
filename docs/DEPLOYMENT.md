@@ -20,6 +20,13 @@ Les quatre noms utilisés dans tout ce document :
 L'adresse IP du serveur est notée `203.0.113.10` dans les exemples : remplacez-la
 partout par celle que votre hébergeur vous donnera.
 
+> **Il existe une seconde route, sans serveur ni conteneurs :**
+> [`docs/DEPLOYMENT-REPLIT.md`](DEPLOYMENT-REPLIT.md) déploie la même
+> application sur Replit. Plus rapide à mettre en place, mais Keycloak n'y
+> tourne pas (il faut un fournisseur d'identité hébergé) et le stockage des
+> pièces y exige un stockage objet externe. Ce document-ci reste la route de
+> référence.
+
 > **Ce qui est déployé ici est une première version de test.** La section
 > [Ce qui n'est pas encore de la production](#ce-qui-nest-pas-encore-de-la-production)
 > dit exactement ce qui manque avant d'y mettre la comptabilité réelle d'un client.

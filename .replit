@@ -1,0 +1,79 @@
+# =============================================================================
+# ARCOMPT — configuration de l'atelier et du déploiement Replit.
+#
+# Procédure complète, pas à pas : docs/DEPLOYMENT-REPLIT.md
+# La route serveur + Docker + Caddy reste décrite dans docs/DEPLOYMENT.md ;
+# les deux coexistent, ce fichier n'est lu que par Replit.
+#
+# Principes tenus ici
+# -------------------
+#  * AUCUN secret. Tout vient du panneau « Secrets » de l'atelier et des
+#    secrets de publication ; ce fichier est versionné.
+#  * UN SEUL port exposé. Replit n'en accepte qu'un par déploiement (Autoscale
+#    comme Reserved VM) : c'est le serveur Next (3000 → 80). L'API écoute sur
+#    127.0.0.1:4000 et n'est jamais publiée — le navigateur ne l'appelle de
+#    toute façon jamais directement, il passe par /api/proxy/… servi par Next.
+#    Conséquence assumée : les webhooks entrants (WhatsApp, paiement) n'ont pas
+#    d'entrée publique ici. Voir docs/DEPLOYMENT-REPLIT.md § 9.
+#  * DEUX identifiants de client OIDC, une seule variable. L'API et le web
+#    lisent tous deux KEYCLOAK_CLIENT_ID, mais n'y mettent pas la même chose :
+#    l'API y attend l'AUDIENCE exigée dans le jeton, le web le client de
+#    CONNEXION. Sur un serveur ce sont deux conteneurs, donc deux
+#    environnements ; ici c'est un seul processus parent. La variable est donc
+#    posée PAR PROCESSUS dans la commande de démarrage, à partir de deux
+#    secrets distincts : KEYCLOAK_API_AUDIENCE et KEYCLOAK_WEB_CLIENT_ID.
+#    Ne posez PAS KEYCLOAK_CLIENT_ID dans les secrets : l'une des deux
+#    applications s'en trouverait mal configurée, avec des 401 partout.
+#  * Les migrations ne sont PAS jouées au démarrage. Replit n'a pas d'étape
+#    équivalente au service `migrate` de docker-compose.prod.yml : elles se
+#    lancent à la main avant de publier (docs/DEPLOYMENT-REPLIT.md § 7).
+# =============================================================================
+
+modules = ["nodejs-20", "postgresql-16"]
+
+hidden = [".git", "node_modules", "dist", ".next", ".pnpm-store"]
+
+# --- Atelier (bouton « Run ») : les deux applications en mode développement ---
+# `pnpm dev` lance en parallèle l'API (tsx watch, port 4000) et Next (port 3000).
+# CHROMIUM_PATH pointe le Chromium fourni par Nix : sans lui, tout téléchargement
+# de PDF échoue avec « Chromium introuvable » (packages/render/src/pdf.ts).
+run = [
+  "bash",
+  "-c",
+  "set -uo pipefail; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; corepack enable >/dev/null 2>&1 || true; pnpm install --frozen-lockfile || exit 1; trap 'kill 0' EXIT; KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_API_AUDIENCE:-arcompt-api}\" pnpm --filter @arcompt/api dev & KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_WEB_CLIENT_ID:-arcompt-web}\" pnpm --filter @arcompt/web dev & wait -n; exit 1",
+]
+
+# Un seul port exposé, celui de Next. Ne pas en ajouter : un second
+# `externalPort` fait échouer la publication.
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[nix]
+channel = "stable-24_05"
+# chromium : rendu des PDF (états financiers, factures, bulletins de paie).
+# pnpm     : gestionnaire de paquets du dépôt (packageManager: pnpm@10.33.0).
+#            Si le canal Nix ne le fournit pas, `corepack enable` ci-dessus
+#            prend le relais, Node 20 l'embarquant.
+packages = ["chromium", "pnpm"]
+
+[gitHubImport]
+requiredFiles = [".replit"]
+
+# --- Publication -------------------------------------------------------------
+# deploymentTarget = "gce"      → Reserved VM (machine dédiée, jamais en veille)
+# deploymentTarget = "cloudrun" → Autoscale (mise à l'échelle, veille à zéro)
+#
+# « gce » est le choix retenu, et docs/DEPLOYMENT-REPLIT.md § 3 dit pourquoi :
+# l'API garde un navigateur Chromium et une file de tâches EN MÉMOIRE (aucun
+# Redis n'existe sur Replit), deux choses qu'une instance mise en veille ou
+# dupliquée perd. Le panneau « Publishing » reste la source de vérité : il
+# réécrit cette clé si vous y changez le type de déploiement.
+[deployment]
+deploymentTarget = "gce"
+build = ["bash", "-c", "corepack enable >/dev/null 2>&1 || true; pnpm install --frozen-lockfile && pnpm --filter @arcompt/web build"]
+run = [
+  "bash",
+  "-c",
+  "set -uo pipefail; export NODE_ENV=production AUTH_MODE=oidc API_PORT=4000 API_URL=http://127.0.0.1:4000; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; trap 'kill 0' EXIT; KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_API_AUDIENCE:?KEYCLOAK_API_AUDIENCE manquant}\" pnpm --filter @arcompt/api start & KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_WEB_CLIENT_ID:?KEYCLOAK_WEB_CLIENT_ID manquant}\" pnpm --filter @arcompt/web start & wait -n; echo 'ARCOMPT : un des deux processus s est arrete, le deploiement redemarre' >&2; exit 1",
+]
