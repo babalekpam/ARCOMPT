@@ -23,6 +23,11 @@ export interface SmtpTransport {
     html?: string;
     replyTo?: string;
   }): Promise<{ messageId?: string; accepted?: unknown[]; rejected?: unknown[]; response?: string }>;
+  /**
+   * Ouvre la session et s'authentifie sans rien expédier. Facultatif : une
+   * doublure de test n'a rien à vérifier.
+   */
+  verify?(): Promise<unknown>;
 }
 
 export interface SmtpMailerOptions {
@@ -83,6 +88,33 @@ export class SmtpMailer implements Mailer {
       }) as unknown as SmtpTransport;
     }
     return this.transport;
+  }
+
+  /**
+   * Éprouve la connexion et l'authentification, sans expédier de message.
+   *
+   * Sert au contrôle d'exploitation (scripts/check-mail.mts) : un relais mal
+   * configuré ne se voit pas autrement qu'en perdant une invitation réelle.
+   * Séparé de `send()` à dessein — une authentification acceptée ne prouve pas
+   * qu'un message sorte, et confondre les deux ferait chercher l'erreur au
+   * mauvais endroit.
+   *
+   * Le transport est celui que l'application utilise pour de bon : mêmes délais,
+   * même exigence de STARTTLS. Vérifier autre chose ne vérifierait rien.
+   */
+  async verify(): Promise<void> {
+    const transport = this.connection();
+    if (!transport.verify) return; // doublure de test : rien à ouvrir
+    try {
+      await transport.verify();
+    } catch (e) {
+      throw new MailError("CONFIG", `Connexion SMTP impossible vers ${this.opts.host}:${this.opts.port} : ${(e as Error).message}`, {
+        host: this.opts.host,
+        port: this.opts.port,
+        secure: this.opts.secure,
+        cause: (e as Error).message,
+      });
+    }
   }
 
   async send(message: MailMessage): Promise<MailResult> {

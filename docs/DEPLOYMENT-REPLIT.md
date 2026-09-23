@@ -317,7 +317,7 @@ dernière ligne.
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` **ou** `ALLOW_INSECURE_STORAGE=1` | Cloudflare R2, ou renoncement explicite | Pièces sur le disque local — **effacé à chaque publication sur Replit** (§ 11) |
 | `CLAMAV_HOST` **ou** `ALLOW_INSECURE_ANTIVIRUS=1` | Un clamd joignable, ou renoncement | Tout fichier accepté sans analyse |
 | `WHATSAPP_TOKEN` + `WHATSAPP_PHONE_ID` **ou** `ALLOW_INSECURE_WHATSAPP=1` | Meta Cloud API, ou renoncement | Messages sortants avalés |
-| `SMTP_HOST` + `MAIL_FROM_ADDRESS` **ou** `ALLOW_INSECURE_MAIL=1` | N'importe quel relais SMTP | Invitations au portail jamais remises, **avec leur code à usage unique** |
+| `SMTP_HOST` + `MAIL_FROM_ADDRESS` **ou** `ALLOW_INSECURE_MAIL=1` | Zoho pour ce déploiement — voir § 5.5 | Invitations au portail jamais remises, **avec leur code à usage unique** |
 
 `AUTH_MODE`, `NODE_ENV`, `API_PORT` et `API_URL` sont posés par `.replit` : ne
 les mettez pas dans les secrets.
@@ -363,6 +363,44 @@ et c'est `config.ts` qui fait foi :
 
 > **`PAYROLL_ENCRYPTION_KEY` ne se change pas.** Elle déchiffre les données de
 > paie déjà enregistrées ; la perdre les rend définitivement illisibles.
+
+### 5.5 Messagerie — Zoho, info@arcompt.com
+
+Six secrets à poser sur Replit. Le code ne connaît aucun fournisseur ; ce sont
+les valeurs de ce déploiement.
+
+```
+SMTP_HOST=smtppro.zoho.com     ← smtppro, PAS smtp : voir ci-dessous
+SMTP_PORT=465
+SMTP_SECURE=1
+SMTP_USER=info@arcompt.com
+SMTP_PASSWORD=<mot de passe d'application Zoho>
+MAIL_FROM_ADDRESS=info@arcompt.com
+MAIL_FROM_NAME=ARCOMPT
+```
+
+Seul `SMTP_PASSWORD` est un secret ; les cinq autres peuvent être posés en clair
+sans risque. Le mot de passe d'application se crée dans `accounts.zoho.com` →
+Sécurité → Mots de passe d'application : dédié à ARCOMPT, révocable seul, et
+obligatoire dès que la double authentification est active sur la boîte — ce
+qu'elle doit être, puisque c'est elle qui expédie les codes d'invitation.
+
+Le piège coûteux : une adresse sur domaine propre passe par `smtppro.zoho.com`.
+Le `smtp.zoho.com` des comptes gratuits refuse l'authentification et l'erreur
+ressemble à un mot de passe faux. Le suffixe (`.com`, `.eu`, `.in`, `.com.au`)
+suit le centre de données du compte Zoho, pas le pays du dossier, et se lit dans
+la console Zoho.
+
+**Avant la première invitation réelle**, depuis une machine qui peut sortir en
+SMTP (le conteneur de développement ne le peut pas toujours) :
+
+```
+pnpm mail:check --to vous@exemple.com
+```
+
+puis ouvrez l'en-tête complet du message reçu et exigez `spf=pass` **et**
+`dkim=pass`. Les trois enregistrements DNS à publier sur `arcompt.com` chez
+GoDaddy sont donnés dans `docs/OPERATIONS.md`.
 > Gardez-en une copie **hors de Replit**, dans un gestionnaire de mots de passe.
 
 ---

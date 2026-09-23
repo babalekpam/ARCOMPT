@@ -22,7 +22,8 @@
     "pack:validate": "pnpm --filter @arcompt/country-packs validate",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
-    "test:e2e": "playwright test -c e2e/playwright.config.ts"
+    "test:e2e": "playwright test -c e2e/playwright.config.ts",
+    "mail:check": "tsx scripts/check-mail.mts"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

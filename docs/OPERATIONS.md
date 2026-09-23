@@ -232,6 +232,89 @@ une adresse extérieure, ouvrir les en-têtes du message reçu et contrôler que
 `Authentication-Results` porte `spf=pass` **et** `dkim=pass`. Tant que l'un des
 deux manque, ne lancez pas de campagne de relances.
 
+Plus simple qu'une invitation réelle pour cette vérification :
+
+```
+pnpm mail:check --to vous@exemple.com     # configuration, connexion, envoi réel
+pnpm mail:check --dry                     # configuration et connexion seulement
+```
+
+Le script éprouve les trois étapes séparément — configuration, authentification,
+remise — parce qu'elles échouent pour des raisons différentes. Une
+authentification acceptée ne prouve pas qu'un message sorte : quota, expéditeur
+refusé ou domaine non vérifié échouent tous APRÈS. Ce qu'il ne prouve pas non
+plus : l'arrivée en boîte de réception. Cela ne se lit que dans l'en-tête du
+message reçu, et le message envoyé le rappelle.
+
+### Le déploiement arcompt.com : Zoho, info@arcompt.com
+
+Le code ne connaît aucun fournisseur et n'en connaîtra pas : ce qui suit décrit
+**ce déploiement**, pas une dépendance. Changer de fournisseur reste six
+variables d'environnement.
+
+| Variable | Valeur | Pourquoi celle-là |
+|---|---|---|
+| `SMTP_HOST` | `smtppro.zoho.com` | **Pas `smtp.zoho.com`.** Voir ci-dessous. |
+| `SMTP_PORT` | `465` | TLS dès la connexion, rien ne s'ouvre en clair. |
+| `SMTP_SECURE` | `1` | Cohérent avec 465. Sur 587, laisser vide : STARTTLS est alors exigé. |
+| `SMTP_USER` | `info@arcompt.com` | L'adresse complète, pas un nom d'utilisateur. |
+| `SMTP_PASSWORD` | mot de passe d'application | Jamais celui de la boîte. Voir ci-dessous. |
+| `MAIL_FROM_ADDRESS` | `info@arcompt.com` | Zoho exige qu'elle corresponde à `SMTP_USER`. |
+
+Quatre pièges, dans l'ordre où ils se présentent :
+
+1. **`smtppro`, pas `smtp`.** Une adresse sur domaine propre passe par
+   `smtppro.zoho.com`. Le `smtp.zoho.com` des comptes gratuits refuse
+   l'authentification d'un compte à domaine, et l'erreur ressemble à un mot de
+   passe faux — on cherche alors des heures au mauvais endroit.
+2. **Le suffixe suit le centre de données du compte Zoho, pas le pays du
+   dossier.** `smtppro.zoho.com` (US), `.eu`, `.in`, `.com.au`. Un compte ouvert
+   depuis l'Europe n'est pas forcément européen. Le bon suffixe se lit dans la
+   console Zoho ; le mauvais donne exactement le même échec qu'au point 1.
+3. **Mot de passe d'application.** La double authentification doit être activée
+   sur `info@arcompt.com` — c'est la boîte qui expédie les invitations au
+   portail. Une fois activée, Zoho refuse le mot de passe de la boîte en SMTP :
+   `SMTP_PASSWORD` est un mot de passe d'application créé dans
+   `accounts.zoho.com` → Sécurité → Mots de passe d'application, dédié à
+   ARCOMPT, révocable seul.
+4. **Quota d'envoi.** Zoho borne le nombre de messages par jour selon l'offre.
+   Une campagne de relances sur un portefeuille entier peut l'atteindre ; les
+   messages suivants sont alors refusés APRÈS authentification, et le module de
+   relance n'enregistre rien comme envoyé (c'est le contrat, mais la relance
+   n'est pas partie pour autant).
+
+#### Les enregistrements DNS à publier sur arcompt.com
+
+La zone d'`arcompt.com` est chez GoDaddy ; ces trois enregistrements s'y créent.
+Les valeurs de SPF et DMARC sont données ici en entier — celle de DKIM, non :
+elle contient la clé publique que Zoho génère pour ce domaine, et personne
+d'autre ne peut la produire.
+
+```
+SPF     Type : TXT   Nom : @                  Valeur : v=spf1 include:zoho.com ~all
+DKIM    Type : TXT   Nom : zmail._domainkey   Valeur : (copiée depuis la console Zoho)
+DMARC   Type : TXT   Nom : _dmarc             Valeur : v=DMARC1; p=none; rua=mailto:info@arcompt.com
+```
+
+- **SPF** : un seul enregistrement SPF par domaine. S'il en existe déjà un sur
+  `arcompt.com`, ajoutez-y `include:zoho.com` au lieu d'en créer un second —
+  deux enregistrements SPF produisent un `PermError` et **aucun** des deux ne
+  s'applique, ce qui est pire que pas de SPF du tout.
+- **DKIM** : `zmail` est le sélecteur que Zoho propose par défaut. La valeur se
+  récupère dans la console d'administration Zoho, sous Domaine →
+  Authentification des e-mails → DKIM, puis se colle telle quelle. Zoho a un
+  bouton « Vérifier » qui relit le DNS : ne le cliquez qu'après propagation.
+- **DMARC** : `p=none` observe sans rien rejeter. Gardez-le le temps de lire
+  quelques rapports, puis durcissez en `p=quarantine`. Poser `p=reject` avant
+  que SPF et DKIM ne passent tous les deux ferait rejeter vos propres
+  invitations.
+
+Ordre d'exécution : publier SPF et DKIM, attendre la propagation, faire vérifier
+par Zoho, puis `pnpm mail:check --to …` et lire l'en-tête `Authentication-Results`
+du message reçu. Tant que `spf=pass` et `dkim=pass` n'y sont pas tous les deux,
+n'invitez pas l'expert-comptable : son code à usage unique partirait en
+indésirables.
+
 ## Secrets et clés
 
 | Secret | Usage | Rotation |
