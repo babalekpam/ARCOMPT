@@ -26,9 +26,11 @@ import frDocuments from "../messages/modules/documents.fr.json";
 import enDocuments from "../messages/modules/documents.en.json";
 import frFirm from "../messages/modules/firm.fr.json";
 import enFirm from "../messages/modules/firm.en.json";
+import frOffline from "../messages/modules/offline.fr.json";
+import enOffline from "../messages/modules/offline.en.json";
 
-const fr: Record<string, string> = { ...frBase, ...frInvoicing, ...frTreasury, ...frPayroll, ...frTax, ...frAssets, ...frClosing, ...frDocuments, ...frFirm };
-const en: Record<string, string> = { ...enBase, ...enInvoicing, ...enTreasury, ...enPayroll, ...enTax, ...enAssets, ...enClosing, ...enDocuments, ...enFirm };
+const fr: Record<string, string> = { ...frBase, ...frInvoicing, ...frTreasury, ...frPayroll, ...frTax, ...frAssets, ...frClosing, ...frDocuments, ...frFirm, ...frOffline };
+const en: Record<string, string> = { ...enBase, ...enInvoicing, ...enTreasury, ...enPayroll, ...enTax, ...enAssets, ...enClosing, ...enDocuments, ...enFirm, ...enOffline };
 
 export type Locale = "fr" | "en";
 export const LOCALES: Locale[] = ["fr", "en"];

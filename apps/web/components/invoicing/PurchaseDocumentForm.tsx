@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState, type FormEvent } from "react";
 import { apiClient, errorMessage } from "@/lib/api-client";
 import { useT } from "@/lib/i18n-client";
 import { generateClientId } from "@/lib/offline";
+import { createOrQueue } from "@/lib/offline-submit";
 import { Alert } from "@/components/ui/Alert";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Field";
@@ -76,8 +77,16 @@ export function PurchaseDocumentForm({ rates, currency, initialKind = "SUPPLIER_
     if (typeof input === "string") return setError(input);
     setBusy(true);
     try {
-      const doc = existing ? await apiClient<PurchaseDocument>(`/purchases/${existing.id}`, { method: "PUT", body: { ...input, kind: undefined } }) : await apiClient<PurchaseDocument>("/purchases", { method: "POST", body: input });
-      router.push(`/expenses/${doc.id}`);
+      if (existing) {
+        const doc = await apiClient<PurchaseDocument>(`/purchases/${existing.id}`, { method: "PUT", body: { ...input, kind: undefined } });
+        router.push(`/expenses/${doc.id}`);
+        router.refresh();
+        return;
+      }
+      const outcome = await createOrQueue("purchase.draft", input as unknown as Record<string, unknown>, (body) =>
+        apiClient<PurchaseDocument>("/purchases", { method: "POST", body }),
+      );
+      router.push(outcome.queued ? "/sync" : `/expenses/${outcome.result.id}`);
       router.refresh();
     } catch (err) {
       setError(errorMessage(err));

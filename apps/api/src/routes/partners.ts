@@ -11,6 +11,7 @@ import {
   type TenantCipher,
 } from "@arcompt/db";
 import { requireRole } from "../auth.js";
+import { IdempotencyConflictError, withIdempotency } from "../idempotency.js";
 import type { AppDeps } from "../app.js";
 
 /**
@@ -73,6 +74,11 @@ const PartnerSchema = z.object({
   collectiveAccount: z.string().regex(/^4\d{1,12}$/).optional(),
   contact: ContactSchema.optional(),
   active: z.boolean().optional(),
+  /**
+   * Identifiant de rejeu tiré par l'appareil au moment de la mise en file hors
+   * ligne (docs/OFFLINE.md). Deux envois du même brouillon ne créent qu'un tiers.
+   */
+  clientId: z.string().uuid().optional(),
 });
 
 const ListSchema = z.object({
@@ -148,21 +154,35 @@ export function partnersRoutes(deps: AppDeps) {
     const parsed = PartnerSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ error: { code: "VALIDATION", message: "Corps invalide", details: parsed.error.issues } }, 400);
     if (!deps.db) return c.json({ error: { code: "UNAVAILABLE", message: "Tiers indisponibles sans base de données" } }, 503);
-    const input = parsed.data;
+    const { clientId, ...input } = parsed.data;
     const collective = input.collectiveAccount ?? DEFAULT_COLLECTIVE[input.type];
     const contact = JSON.stringify(input.contact ?? {});
-    const created = await withTenant(deps.db, ctxOf(auth), async (tx) => {
-      // La clé de données du dossier n'est créée que s'il y a réellement un
-      // identifiant à chiffrer.
-      const cipher = input.taxId?.trim() ? await tenantCipherIn(tx, auth.tenantId) : await existingTenantCipherIn(tx, auth.tenantId);
-      const [row] = await tx<Record<string, unknown>[]>`
-        INSERT INTO partner (tenant_id, type, name, tax_id_enc, tax_id_bidx, collective_account, contact, active)
-        VALUES (${auth.tenantId}, ${input.type}, ${input.name.trim()}, ${encryptTaxId(cipher, input.taxId)},
-                ${taxIdBlindIndex(cipher, PARTNER_TAX_ID_DOMAIN, input.taxId)}, ${collective}, ${contact}::jsonb, ${input.active ?? true})
-        RETURNING id, type, name, tax_id, tax_id_enc, collective_account, contact, active, created_at`;
-      return { row: row!, cipher };
-    });
-    return c.json(toRow(created.row, created.cipher), 201);
+    // Le tiers et la trace de rejeu s'écrivent dans la MÊME transaction : soit
+    // les deux, soit aucun. Un rejeu ne peut donc jamais voir un tiers créé
+    // sans sa trace, ni l'inverse.
+    let outcome;
+    try {
+      outcome = await withTenant(deps.db, ctxOf(auth), (tx) =>
+        withIdempotency({ tx, tenantId: auth.tenantId, userId: auth.userId, clientId, operation: "partner.create", body: input, resourceKind: "partner" }, async () => {
+          // La clé de données du dossier n'est créée que s'il y a réellement un
+          // identifiant à chiffrer.
+          const cipher = input.taxId?.trim() ? await tenantCipherIn(tx, auth.tenantId) : await existingTenantCipherIn(tx, auth.tenantId);
+          const [row] = await tx<Record<string, unknown>[]>`
+            INSERT INTO partner (tenant_id, type, name, tax_id_enc, tax_id_bidx, collective_account, contact, active)
+            VALUES (${auth.tenantId}, ${input.type}, ${input.name.trim()}, ${encryptTaxId(cipher, input.taxId)},
+                    ${taxIdBlindIndex(cipher, PARTNER_TAX_ID_DOMAIN, input.taxId)}, ${collective}, ${contact}::jsonb, ${input.active ?? true})
+            RETURNING id, type, name, tax_id, tax_id_enc, collective_account, contact, active, created_at`;
+          const body = toRow(row!, cipher);
+          return { body, resourceId: body.id };
+        }),
+      );
+    } catch (e) {
+      if (e instanceof IdempotencyConflictError) return c.json({ error: { code: "IDEMPOTENCY_CONFLICT", message: e.message } }, 409);
+      throw e;
+    }
+    // Un rejeu répond 200, pas 201 : rien n'a été créé cette fois-ci.
+    if (outcome.replayed) c.header("Idempotent-Replay", "true");
+    return c.json(outcome.body, outcome.replayed ? 200 : 201);
   });
 
   r.put("/:id", write, async (c) => {

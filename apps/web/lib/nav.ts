@@ -21,6 +21,7 @@ export const MAIN_NAV: NavItem[] = [
   { href: "/statements", labelKey: "nav.statements", icon: "▤" },
   { href: "/accounts", labelKey: "nav.accounts", icon: "⌗" },
   { href: "/firm", labelKey: "nav.firm", icon: "◫" },
+  { href: "/sync", labelKey: "nav.sync", icon: "⟳" },
   { href: "/settings", labelKey: "nav.settings", icon: "⚙" },
 ];
 

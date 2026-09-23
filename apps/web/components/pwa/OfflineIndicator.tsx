@@ -1,16 +1,20 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { apiClient, ApiError, NetworkError } from "@/lib/api-client";
-import { toRecentEntry } from "@/lib/entries";
 import { useT } from "@/lib/i18n-client";
-import { RetryableError } from "@/lib/offline";
 import { getOfflineServices } from "@/lib/offline-browser";
-import type { JournalEntry } from "@/lib/types";
+import { notifySyncChanged, pendingCount, refreshSnapshots, syncNow, SYNC_EVENT } from "@/lib/offline-sync";
 
 /**
- * Bandeau hors ligne + file de brouillons : affiche l'état réseau, le nombre
- * de brouillons en attente et rejoue la file au retour du réseau (ou à la demande).
- * Ne rejoue que des créations de brouillons (validate: false), jamais de validation.
+ * Bandeau hors ligne : état réseau, nombre d'éléments en attente, rejeu au
+ * retour du réseau ou à la demande.
+ *
+ * Le rejeu lui-même vit dans `lib/offline-sync.ts` : le bandeau ne sait pas ce
+ * qu'il envoie, et le centre de synchronisation (/sync) appelle exactement le
+ * même code. Deux chemins de rejeu auraient fini par diverger.
+ *
+ * Ce qui est REFUSÉ par le serveur est signalé séparément : ce n'est pas une
+ * attente, c'est une saisie à corriger, et elle ne partira jamais toute seule.
  */
 export function OfflineIndicator() {
   const t = useT();
@@ -19,9 +23,12 @@ export function OfflineIndicator() {
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
 
+  const [blocked, setBlocked] = useState(0);
+
   const refreshCount = useCallback(async () => {
-    const svc = await getOfflineServices();
-    setPending(svc ? await svc.queue.count() : 0);
+    const { total, blocked: refused } = await pendingCount();
+    setPending(total);
+    setBlocked(refused);
   }, []);
 
   const sync = useCallback(async () => {
@@ -29,19 +36,15 @@ export function OfflineIndicator() {
     if (!svc || syncing) return;
     setSyncing(true);
     try {
-      const result = await svc.queue.replay(async (body) => {
-        try {
-          const entry = await apiClient<JournalEntry>("/entries", { method: "POST", body });
-          await svc.recent.upsert(toRecentEntry(entry));
-          return { id: entry.id };
-        } catch (e) {
-          if (e instanceof NetworkError || (e instanceof ApiError && e.status >= 500)) throw new RetryableError(e.message);
-          throw e;
-        }
-      });
-      if (result.sent.length > 0 && result.failed.length === 0) setMessage({ tone: "ok", text: t("offline.synced") });
-      else if (result.failed.length > 0) setMessage({ tone: "error", text: t("offline.syncError", { message: result.failed[0]!.message }) });
-      window.dispatchEvent(new CustomEvent("arcompt:drafts-changed"));
+      const report = await syncNow();
+      if (report.blocked.length > 0) setMessage({ tone: "error", text: t("offline.syncError", { message: report.blocked[0]!.message }) });
+      else if (report.sent > 0) setMessage({ tone: "ok", text: t("offline.synced") });
+      // Le réseau vient de répondre : on en profite pour rafraîchir le cliché
+      // de référence, sans quoi la coupure suivante travaillerait sur des
+      // listes vieillissantes. Le code du pack vient du cliché lui-même.
+      const pack = await svc.snapshots.read<{ code?: string }>("pack");
+      if (pack?.data?.code) void refreshSnapshots({ packCode: pack.data.code });
+      notifySyncChanged();
     } finally {
       setSyncing(false);
       await refreshCount();
@@ -58,14 +61,14 @@ export function OfflineIndicator() {
     const changed = () => void refreshCount();
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
-    window.addEventListener("arcompt:drafts-changed", changed);
+    window.addEventListener(SYNC_EVENT, changed);
     void refreshCount().then(() => {
       if (navigator.onLine) void sync();
     });
     return () => {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
-      window.removeEventListener("arcompt:drafts-changed", changed);
+      window.removeEventListener(SYNC_EVENT, changed);
     };
   }, []);
 
@@ -80,7 +83,16 @@ export function OfflineIndicator() {
     <div className={`flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-xs ${online ? "bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200" : "bg-slate-800 text-white"}`} role="status">
       <span>
         {!online ? t("offline.banner") : null}
-        {pending > 0 ? <span className="ml-2 font-medium">{t("offline.pending", { count: pending })}</span> : null}
+        {pending > 0 ? (
+          <Link href="/sync" className="ml-2 font-medium underline underline-offset-2">
+            {t("offline.pending", { count: pending })}
+          </Link>
+        ) : null}
+        {blocked > 0 ? (
+          <Link href="/sync" className="ml-2 font-medium text-red-700 underline underline-offset-2 dark:text-red-300">
+            {t("offline.center.blocked")} ({blocked})
+          </Link>
+        ) : null}
         {message ? <span className={`ml-2 ${message.tone === "error" ? "text-red-600 dark:text-red-300" : ""}`}>{message.text}</span> : null}
       </span>
       {online && pending > 0 ? (

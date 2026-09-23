@@ -16,6 +16,7 @@ import {
 } from "@arcompt/invoicing";
 import { createProviderFromEnv } from "@arcompt/whatsapp";
 import { requireRole } from "../auth.js";
+import { idempotencyErrorResponse, withIdempotencyAround } from "../idempotency.js";
 import type { AppDeps } from "../app.js";
 import { certificationConnectorFromEnv, paymentProvidersFromEnv } from "../config.js";
 import { createDunningSender, createMailer } from "../notifications.js";
@@ -46,7 +47,14 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const uuid = z.string().uuid();
 const account = z.string().regex(/^[1-9]\d{1,12}$/);
 
+/**
+ * Identifiant de rejeu tiré par l'appareil au moment de la mise en file hors
+ * ligne (docs/OFFLINE.md). Deux envois du même brouillon ne créent qu'un objet.
+ */
+const clientId = z.string().uuid().optional();
+
 const ProductSchema = z.object({
+  clientId,
   code: z.string().min(1).max(40),
   label: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
@@ -67,6 +75,7 @@ const SalesLineSchema = z.object({
 });
 
 const SalesDocumentSchema = z.object({
+  clientId,
   kind: z.enum(["QUOTE", "INVOICE", "CREDIT_NOTE"]),
   partnerId: uuid,
   issueDate: isoDate,
@@ -84,6 +93,7 @@ const PurchaseLineSchema = z.object({
 });
 
 const PurchaseDocumentSchema = z.object({
+  clientId,
   kind: z.enum(["SUPPLIER_INVOICE", "SUPPLIER_CREDIT_NOTE", "EXPENSE_CLAIM"]),
   partnerId: uuid,
   reference: z.string().max(80).optional(),
@@ -130,6 +140,11 @@ function invalid(c: Context, issues: unknown) {
   return c.json({ error: { code: "VALIDATION", message: "Corps invalide", details: issues } }, 400);
 }
 
+/** Objets créés par ces routes : l'identifiant serveur est toujours `id`. */
+function idOf(body: unknown): string | null {
+  return body && typeof body === "object" && typeof (body as { id?: unknown }).id === "string" ? (body as { id: string }).id : null;
+}
+
 export function invoicingRoutes(deps: InvoicingRouteDeps) {
   const r = new Hono();
   const packs = new Map<string, CountryPack>();
@@ -170,6 +185,27 @@ export function invoicingRoutes(deps: InvoicingRouteDeps) {
     return { invoicing: new InvoicingService(sd, ctx), purchases: new PurchasesService(sd, ctx), payments: new PaymentsService(sd, ctx) };
   }
 
+  /**
+   * Création rejouable depuis la file hors ligne. Sans `replayId`, le
+   * comportement est inchangé : l'opération s'exécute et répond 201.
+   *
+   * Le service ouvrant sa propre transaction, la trace de rejeu est posée
+   * autour (docs/OFFLINE.md, apps/api/src/idempotency.ts).
+   */
+  async function replayable<T>(c: Context, replayId: string | undefined, operation: string, resourceKind: string, body: unknown, run: () => Promise<T>) {
+    const auth = c.get("auth");
+    const ctx = { tenantId: auth.tenantId, userId: auth.userId, ...(auth.organizationId ? { organizationId: auth.organizationId } : {}) };
+    try {
+      const out = await withIdempotencyAround({ db: deps.db!, ctx, clientId: replayId, operation, body, resourceKind }, run, idOf);
+      if (out.replayed) c.header("Idempotent-Replay", "true");
+      return c.json(out.body as object, out.replayed ? 200 : 201);
+    } catch (e) {
+      const mapped = idempotencyErrorResponse(e);
+      if (mapped) return c.json(mapped.body, mapped.status);
+      throw e;
+    }
+  }
+
   r.use("*", async (c, next) => {
     if (!deps.db) return c.json({ error: { code: "UNAVAILABLE", message: "Module facturation indisponible sans base de données" } }, 503);
     return next();
@@ -194,8 +230,9 @@ export function invoicingRoutes(deps: InvoicingRouteDeps) {
   r.post("/products", issue, async (c) => {
     const parsed = ProductSchema.safeParse(await c.req.json());
     if (!parsed.success) return invalid(c, parsed.error.issues);
+    const { clientId: replayId, ...input } = parsed.data;
     const { invoicing } = await servicesFor(c);
-    return c.json(await invoicing.createProduct(strip(parsed.data)), 201);
+    return replayable(c, replayId, "product.create", "product", input, () => invoicing.createProduct(strip(input)));
   });
   r.get("/products/:id", async (c) => c.json(await (await servicesFor(c)).invoicing.getProduct(c.req.param("id"))));
   r.put("/products/:id", issue, async (c) => {
@@ -217,8 +254,9 @@ export function invoicingRoutes(deps: InvoicingRouteDeps) {
   r.post("/sales", write, async (c) => {
     const parsed = SalesDocumentSchema.safeParse(await c.req.json());
     if (!parsed.success) return invalid(c, parsed.error.issues);
+    const { clientId: replayId, ...input } = parsed.data;
     const { invoicing } = await servicesFor(c);
-    return c.json(await invoicing.createDraft(strip(parsed.data)), 201);
+    return replayable(c, replayId, "sales.draft", "sales_document", input, () => invoicing.createDraft(strip(input)));
   });
   r.get("/sales/:id", async (c) => c.json(await (await servicesFor(c)).invoicing.get(c.req.param("id"))));
   r.put("/sales/:id", write, async (c) => {
@@ -269,7 +307,9 @@ export function invoicingRoutes(deps: InvoicingRouteDeps) {
   r.post("/purchases", write, async (c) => {
     const parsed = PurchaseDocumentSchema.safeParse(await c.req.json());
     if (!parsed.success) return invalid(c, parsed.error.issues);
-    return c.json(await (await servicesFor(c)).purchases.createDraft(strip(parsed.data)), 201);
+    const { clientId: replayId, ...input } = parsed.data;
+    const { purchases } = await servicesFor(c);
+    return replayable(c, replayId, "purchase.draft", "purchase_document", input, () => purchases.createDraft(strip(input)));
   });
   r.get("/purchases/:id", async (c) => c.json(await (await servicesFor(c)).purchases.get(c.req.param("id"))));
   r.put("/purchases/:id", write, async (c) => {

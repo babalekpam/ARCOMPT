@@ -5,9 +5,16 @@
  * Singleton par onglet ; `null` si IndexedDB ou WebCrypto manquent.
  */
 import { createDraftQueue, createRecentStore, fromBase64, IndexedDbStore, loadOrCreateCipher, type DraftQueue, type RecentStore, type StoredDraft } from "./offline";
+import { createOperationQueue, type OperationQueue, type StoredOperation } from "./offline-queue";
+import { createSnapshotStore, type SnapshotStore, type StoredSnapshot } from "./offline-snapshot";
 
 export interface OfflineServices {
+  /** File historique des brouillons d'écriture ; conservée pour ne rien perdre d'un appareil déjà en attente. */
   queue: DraftQueue;
+  /** File généralisée : tiers, articles, brouillons de vente et d'achat, mouvements de stock. */
+  operations: OperationQueue;
+  /** Cliché local des données de référence, pour que les écrans aient de quoi travailler hors ligne. */
+  snapshots: SnapshotStore;
   recent: RecentStore;
   keyId: string;
 }
@@ -36,6 +43,12 @@ async function init(): Promise<OfflineServices | null> {
   const cipher = await loadOrCreateCipher(new IndexedDbStore<CryptoKey>("keys"), fromBase64(material));
   return {
     queue: createDraftQueue({ store: new IndexedDbStore<StoredDraft>("drafts"), cipher }),
+    operations: createOperationQueue({
+      store: new IndexedDbStore<StoredOperation>("operations"),
+      links: new IndexedDbStore<{ iv: string; data: string }>("links"),
+      cipher,
+    }),
+    snapshots: createSnapshotStore({ store: new IndexedDbStore<StoredSnapshot>("snapshot"), cipher }),
     recent: createRecentStore({ store: new IndexedDbStore<{ iv: string; data: string }>("recent"), cipher }),
     keyId: cipher.keyId,
   };

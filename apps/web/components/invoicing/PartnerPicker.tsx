@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { apiClient, errorMessage } from "@/lib/api-client";
 import { useT } from "@/lib/i18n-client";
+import { getOfflineServices } from "@/lib/offline-browser";
+import { createOrQueue } from "@/lib/offline-submit";
 import { Button } from "@/components/ui/Button";
 import { Input, inputClass, Select } from "@/components/ui/Field";
 import type { Partner, PartnerType } from "./types";
@@ -10,11 +12,24 @@ import type { Partner, PartnerType } from "./types";
  * Sélecteur de tiers avec recherche (GET /v1/partners?type=&q=) et création
  * rapide (POST /v1/partners). La valeur est le tiers entier : l'appelant en
  * garde l'identifiant pour le document et le nom pour l'affichage.
+ *
+ * Hors ligne (docs/OFFLINE.md) :
+ *   - la recherche se rabat sur le cliché local des tiers, filtré sur
+ *     l'appareil. Sans lui, saisir une facture sans réseau serait impossible :
+ *     on ne peut pas facturer un client qu'on ne peut pas désigner.
+ *   - la création rapide met le tiers en file et rend un tiers portant un
+ *     identifiant LOCAL (`local:<uuid>`). Le document qui le désigne part avec
+ *     cette référence ; le rejeu la remplace par l'identifiant serveur une fois
+ *     le tiers réellement créé.
  */
 export function PartnerPicker({ types, value, onChange, disabled = false }: { types: PartnerType[]; value: Partner | null; onChange: (p: Partner | null) => void; disabled?: boolean }) {
   const t = useT();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Partner[] | null>(null);
+  /** Vrai quand la liste vient du cliché local : l'écran doit le dire. */
+  const [offline, setOffline] = useState(false);
+  /** Tiers créés sur cet appareil et pas encore parvenus au serveur. */
+  const [local, setLocal] = useState<Partner[]>([]);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +47,31 @@ export function PartnerPicker({ types, value, onChange, disabled = false }: { ty
   }, []);
 
   useEffect(() => {
+    void (async () => {
+      const svc = await getOfflineServices();
+      if (!svc) return;
+      const pending = await svc.operations.list();
+      setLocal(
+        pending
+          .filter((o) => o.kind === "partner.create" && o.produces && o.input)
+          .map((o) => {
+            const input = o.input as { type?: PartnerType; name?: string; taxId?: string; contact?: Record<string, string> };
+            return {
+              id: o.produces!,
+              type: input.type ?? "CUSTOMER",
+              name: input.name ?? "",
+              taxId: input.taxId ?? null,
+              collectiveAccount: "",
+              contact: input.contact ?? {},
+              active: true,
+              createdAt: o.createdAt,
+            } satisfies Partner;
+          }),
+      );
+    })();
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
     const handle = setTimeout(() => {
       const list = typesKey.split(",").filter(Boolean) as PartnerType[];
@@ -39,11 +79,31 @@ export function PartnerPicker({ types, value, onChange, disabled = false }: { ty
       fetchAll
         .then((rows) => {
           setResults(rows.slice(0, 30));
+          setOffline(false);
           setError(null);
         })
         .catch((e) => {
-          setResults([]);
-          setError(errorMessage(e));
+          // Repli sur le cliché local. Le filtrage se fait ici parce qu'il n'y a
+          // pas de serveur pour le faire ; il est volontairement plus simple que
+          // celui de l'API (nom seulement, pas d'index aveugle sur l'identifiant
+          // fiscal, que l'appareil ne sait pas calculer).
+          void (async () => {
+            const svc = await getOfflineServices();
+            const cached = svc ? await svc.snapshots.read<{ partners: Partner[] }>("partners") : null;
+            if (!cached) {
+              setResults([]);
+              setOffline(false);
+              setError(errorMessage(e));
+              return;
+            }
+            const needle = query.trim().toLowerCase();
+            const rows = cached.data.partners
+              .filter((p) => (list.length === 0 || list.includes(p.type)) && (!needle || p.name.toLowerCase().includes(needle)))
+              .slice(0, 30);
+            setResults([...rows, ...local.filter((p) => list.length === 0 || list.includes(p.type))]);
+            setOffline(true);
+            setError(null);
+          })();
         });
     }, 200);
     return () => clearTimeout(handle);
@@ -57,7 +117,12 @@ export function PartnerPicker({ types, value, onChange, disabled = false }: { ty
       const contact: Record<string, string> = {};
       if (draft.phone.trim()) contact.phone = draft.phone.trim();
       if (draft.email.trim()) contact.email = draft.email.trim();
-      const p = await apiClient<Partner>("/partners", { method: "POST", body: { type: draft.type, name: draft.name.trim(), ...(draft.taxId.trim() ? { taxId: draft.taxId.trim() } : {}), contact } });
+      const input = { type: draft.type, name: draft.name.trim(), ...(draft.taxId.trim() ? { taxId: draft.taxId.trim() } : {}), contact };
+      const outcome = await createOrQueue("partner.create", input, (body) => apiClient<Partner>("/partners", { method: "POST", body }), { producesLocalRef: true });
+      const p: Partner = outcome.queued
+        ? { id: outcome.localRef!, type: draft.type, name: draft.name.trim(), taxId: draft.taxId.trim() || null, collectiveAccount: "", contact, active: true, createdAt: new Date().toISOString() }
+        : outcome.result;
+      if (outcome.queued) setLocal((prev) => [...prev, p]);
       onChange(p);
       setCreating(false);
       setOpen(false);
@@ -109,12 +174,16 @@ export function PartnerPicker({ types, value, onChange, disabled = false }: { ty
         <div className="absolute z-30 mt-1 w-[min(28rem,92vw)] rounded-lg border border-slate-200 bg-white text-sm shadow-lg dark:border-slate-700 dark:bg-slate-900">
           {!creating ? (
             <>
+              {offline ? <p className="border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{t("offline.partners.fromSnapshot")}</p> : null}
               <ul role="listbox" className="max-h-56 overflow-auto">
                 {results === null ? <li className="px-3 py-2 text-xs text-slate-500">{t("common.loading")}</li> : null}
                 {results && results.length === 0 ? <li className="px-3 py-2 text-xs text-slate-500">{t("invoicing.partner.none")}</li> : null}
                 {(results ?? []).map((p) => (
                   <li key={p.id} role="option" aria-selected={false} onMouseDown={() => { onChange(p); setOpen(false); }} className="flex cursor-pointer items-center justify-between gap-2 px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">
-                    <span className="truncate">{p.name}</span>
+                    <span className="truncate">
+                      {p.name}
+                      {p.id.startsWith("local:") ? <span className="ml-1 text-xs text-amber-700 dark:text-amber-300">· {t("offline.partners.pending")}</span> : null}
+                    </span>
                     <span className="shrink-0 text-xs text-slate-500">{t(`invoicing.partnerType.${p.type}`)}</span>
                   </li>
                 ))}

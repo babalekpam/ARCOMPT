@@ -142,8 +142,14 @@ export class MemoryStore<T = unknown> implements KeyValueStore<T> {
 }
 
 export const IDB_NAME = "arcompt-offline";
-export const IDB_VERSION = 1;
-export const IDB_STORES = ["drafts", "keys", "recent"] as const;
+/**
+ * Version 2 : ajout des magasins de la file d'opérations généralisée
+ * (`operations`, `links`) et du cliché de référence (`snapshot`). Les magasins
+ * de la version 1 sont conservés tels quels — un appareil qui revient avec des
+ * brouillons en attente ne doit pas les perdre en se mettant à jour.
+ */
+export const IDB_VERSION = 2;
+export const IDB_STORES = ["drafts", "keys", "recent", "operations", "links", "snapshot"] as const;
 export type IdbStoreName = (typeof IDB_STORES)[number];
 
 function openDatabase(): Promise<IDBDatabase> {

@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
 import { apiClient, ApiError, errorMessage } from "@/lib/api-client";
 import { useT } from "@/lib/i18n-client";
 import { generateClientId } from "@/lib/offline";
+import { createOrQueue } from "@/lib/offline-submit";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Field";
@@ -104,10 +105,24 @@ export function SalesDocumentForm({ rates, currency, initialKind = "INVOICE", ex
     if (typeof input === "string") return setError(input);
     setBusy(true);
     try {
-      const doc = existing
-        ? await apiClient<SalesDocument>(`/sales/${existing.id}`, { method: "PUT", body: { ...input, kind: undefined } })
-        : await apiClient<SalesDocument>("/sales", { method: "POST", body: input });
-      router.push(`/invoices/${doc.id}`);
+      // Modification : elle vise un document qui existe déjà côté serveur, donc
+      // elle ne se met pas en file — il n'y aurait rien à modifier hors ligne.
+      if (existing) {
+        const doc = await apiClient<SalesDocument>(`/sales/${existing.id}`, { method: "PUT", body: { ...input, kind: undefined } });
+        router.push(`/invoices/${doc.id}`);
+        router.refresh();
+        return;
+      }
+      const outcome = await createOrQueue("sales.draft", input as unknown as Record<string, unknown>, (body) =>
+        apiClient<SalesDocument>("/sales", { method: "POST", body }),
+      );
+      if (outcome.queued) {
+        // Le brouillon est chiffré sur l'appareil ; il partira au retour du
+        // réseau. On emmène l'utilisateur là où il peut le voir.
+        router.push("/sync");
+      } else {
+        router.push(`/invoices/${outcome.result.id}`);
+      }
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError && err.code === "VALIDATION" ? `${t("invoicing.form.errorValidation")} ${errorMessage(err)}` : errorMessage(err));
