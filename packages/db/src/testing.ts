@@ -25,7 +25,17 @@ export async function createTestDatabase(): Promise<{ db: Db; appDb: Db; url: st
   const db = createDb({ url, max: 2 });
   await migrate(db);
   // Connexion « applicative » : rôle sans privilège de contournement de la RLS.
-  await db.unsafe(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'arcompt_app_login') THEN CREATE ROLE arcompt_app_login LOGIN PASSWORD 'arcompt_app' IN ROLE arcompt_app; END IF; END $$`);
+  // Le mot de passe est REPOSÉ à chaque fois, pas seulement à la création : le
+  // rôle vit dans le cluster, pas dans la base jetable, et `provision-app-role`
+  // lancé sur une autre base l'aurait changé — les tests échouaient alors tous
+  // sur « password authentication failed », pour une raison invisible ici.
+  await db.unsafe(`DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'arcompt_app_login') THEN
+      CREATE ROLE arcompt_app_login LOGIN PASSWORD 'arcompt_app' IN ROLE arcompt_app;
+    ELSE
+      ALTER ROLE arcompt_app_login LOGIN PASSWORD 'arcompt_app';
+      GRANT arcompt_app TO arcompt_app_login;
+    END IF; END $$`);
   const appUrl = new URL(url);
   appUrl.username = "arcompt_app_login";
   appUrl.password = "arcompt_app";
