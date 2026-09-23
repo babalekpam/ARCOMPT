@@ -14,7 +14,7 @@ run = [
 
 [nix]
 channel = "stable-24_05"
-packages = ["chromium", "pnpm", "clamav"]
+packages = ["chromium", "pnpm"]
 
 [gitHubImport]
 requiredFiles = [".replit"]

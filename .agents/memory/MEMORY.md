@@ -9,3 +9,5 @@
 - [Clerk JWT header type](clerk-jwt-header-type.md) — `verifyToken` headerType is the JWT `typ`, not the HTTP Bearer scheme; keep session and origin checks intact.
 - [Accounting AI provider routing](accounting-ai-routing.md) — model routes are explicit and fail closed; never silently switch financial operations to another provider.
 - [Optional delivery channels](optional-delivery-channels.md) — absent WhatsApp must disable sending and fail queued replies, not acknowledge undelivered messages.
+- [ClamAV version on Replit](clamav-version.md) — do not use the pinned Nix channel's unsupported scanner for production; verify supported versions before enabling uploads.
+- [Protected Replit config edits](protected-replit-config.md) — .replit changes require schema-validated replacement; direct patches may be rejected even during cleanup.
