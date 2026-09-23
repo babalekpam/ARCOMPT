@@ -22,6 +22,8 @@ export interface Identity {
   suspendedAt: Date | null;
   /** `organization.mfa_required` : l'API refuse alors un jeton sans second facteur. */
   mfaRequired: boolean;
+  /** `app_user.locale` : dernier échelon de la règle de langue (packages/render/src/locale.ts). */
+  locale: string | null;
   memberships: Membership[];
 }
 
@@ -64,7 +66,7 @@ export async function linkSubject(db: Sql, sub: string, email: string): Promise<
 }
 
 async function selectIdentity(db: Sql, sub: string): Promise<Identity | null> {
-  const rows = await db`SELECT user_id, organization_id, suspended_at, mfa_required, company_id, role FROM auth_resolve_identity(${sub})`;
+  const rows = await db`SELECT user_id, organization_id, suspended_at, mfa_required, locale, company_id, role FROM auth_resolve_identity(${sub})`;
   const head = rows[0];
   if (!head) return null;
   return {
@@ -72,6 +74,7 @@ async function selectIdentity(db: Sql, sub: string): Promise<Identity | null> {
     organizationId: String(head.organization_id),
     suspendedAt: toDate(head.suspended_at),
     mfaRequired: head.mfa_required === true,
+    locale: head.locale == null ? null : String(head.locale),
     memberships: rows.filter((r) => r.company_id != null).map((r) => ({ companyId: String(r.company_id), role: String(r.role) })),
   };
 }

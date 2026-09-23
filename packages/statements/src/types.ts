@@ -121,6 +121,16 @@ export interface Control {
   detail: string;
   expected?: string;
   actual?: string;
+  /**
+   * Version anglaise du libellé et du détail. Les contrôles sont IMPRIMÉS dans
+   * la liasse : sans elles, une liasse anglaise se terminait par une page
+   * entièrement française. Le détail est souvent construit avec des montants et
+   * des numéros de compte ; il est donc rédigé ici, à côté du français, plutôt
+   * que traduit après coup par une table de correspondance qui ne retrouverait
+   * jamais une phrase interpolée.
+   */
+  labelEn?: string;
+  detailEn?: string;
 }
 
 export interface StatementsInput {

@@ -2,7 +2,7 @@ import { Money } from "@arcompt/ledger";
 import type { ComputedLine, ComputedNote, ComputedStatement, Control, StatementCode, StatementsOutput } from "@arcompt/statements";
 import { esc, layout, makeCtx, pageFooter, pageHeader, td, type Ctx } from "../html.js";
 import type { LabelKey } from "../i18n.js";
-import { noteOutlineEn, noteTitleGloss, statementLineGloss } from "../syscohada-en.js";
+import { noteOutlineEn, noteRowEn, noteTitleGloss, statementLineGloss } from "../syscohada-en.js";
 import type { RenderOptions } from "./../views.js";
 
 /**
@@ -130,7 +130,12 @@ function noteSection(ctx: Ctx, note: ComputedNote, out: StatementsOutput): strin
 ${outline ? `<ol class="outline">${outline}</ol>` : ""}
 </section>`;
   }
-  const rows = note.rows.map((r) => `<tr><td>${esc(r.label)}</td>${td(ctx, r.amount)}${td(ctx, r.previous)}</tr>`).join("\n");
+  // Les lignes de notes ne sont pas du texte réglementaire : elles sont
+  // TRADUITES, pas glosées. Une traduction manquante laisse le français plutôt
+  // que de rendre une ligne vide ; le garde-fou de complétude la signale.
+  const rows = note.rows
+    .map((r) => `<tr><td>${esc((ctx.locale === "en" ? noteRowEn(r.label) : undefined) ?? r.label)}</td>${td(ctx, r.amount)}${td(ctx, r.previous)}</tr>`)
+    .join("\n");
   let recon = "";
   if (note.reconciles) {
     const stLabel = ctx.L(STATEMENT_KEY[note.reconciles.statement]);
@@ -154,7 +159,13 @@ function controlRow(ctx: Ctx, ctl: Control): string {
   const sev = ctl.severity === "BLOCKING" ? `<span class="badge blocking">${esc(ctx.L("blocking"))}</span>` : `<span class="badge warning">${esc(ctx.L("warning"))}</span>`;
   const res = ctl.ok ? `<span class="badge ok">${esc(ctx.L("ok"))}</span>` : `<span class="badge ko">${esc(ctx.L("ko"))}</span>`;
   const values = [ctl.expected !== undefined ? esc(ctx.kv(ctx.L("expected"), String(ctl.expected))) : "", ctl.actual !== undefined ? esc(ctx.kv(ctx.L("actual"), String(ctl.actual))) : ""].filter(Boolean).join(" · ");
-  return `<tr><td class="code">${esc(ctl.id)}</td><td>${esc(ctl.label)}</td><td class="center">${sev}</td><td class="center">${res}</td><td>${esc(ctl.detail)}${values ? `<br><span class="small">${values}</span>` : ""}</td></tr>`;
+  // Un contrôle n'est pas du texte réglementaire : c'est un diagnostic adressé
+  // à qui produit la liasse. Il est donc traduit, pas glosé — et les phrases
+  // anglaises sont rédigées avec le contrôle (packages/statements/src/controls.ts),
+  // parce qu'elles portent des montants et des numéros de compte interpolés.
+  const label = (ctx.locale === "en" ? ctl.labelEn : undefined) ?? ctl.label;
+  const detail = (ctx.locale === "en" ? ctl.detailEn : undefined) ?? ctl.detail;
+  return `<tr><td class="code">${esc(ctl.id)}</td><td>${esc(label)}</td><td class="center">${sev}</td><td class="center">${res}</td><td>${esc(detail)}${values ? `<br><span class="small">${values}</span>` : ""}</td></tr>`;
 }
 
 function controlsSection(ctx: Ctx, out: StatementsOutput): string {

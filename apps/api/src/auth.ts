@@ -27,6 +27,12 @@ export interface AuthContext {
   tenantId: string;
   organizationId?: string;
   roles: string[];
+  /**
+   * Langue de travail de l'opérateur (`app_user.locale`). Dernier échelon de la
+   * règle de langue : elle ne décide que d'un document sans destinataire dans un
+   * dossier dont la langue n'est pas renseignée (packages/render/src/locale.ts).
+   */
+  locale?: string;
 }
 
 export type Role = "OWNER" | "ACCOUNTANT" | "CASHIER" | "AUDITOR" | "REVIEWER";
@@ -262,7 +268,7 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
     const membership = identity.memberships.find((m) => m.companyId === tenantHeader);
     if (!membership) return forbidden(c, "Dossier non autorisé pour cet utilisateur");
 
-    c.set("auth", { userId: identity.userId, tenantId: membership.companyId, roles: [membership.role], organizationId: identity.organizationId });
+    c.set("auth", { userId: identity.userId, tenantId: membership.companyId, roles: [membership.role], organizationId: identity.organizationId, ...(identity.locale ? { locale: identity.locale } : {}) });
     if (opts.touchLastActive) void opts.touchLastActive(identity.userId);
     return next();
   };

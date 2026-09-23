@@ -1,5 +1,5 @@
 import { withTenant, type Db } from "@arcompt/db";
-import { adminAccessMail, breakGlassMail, legalFooterFromEnv } from "@arcompt/mailer";
+import { adminAccessMail, breakGlassMail, legalFooterFromEnv, resolveLocale } from "@arcompt/mailer";
 import { PortalError } from "./errors.js";
 import type { Notifier } from "./notifier.js";
 import { audit, int, iso, isoOrNull, str, strOrNull, type Row } from "./sql.js";
@@ -89,7 +89,7 @@ export class AccessService {
 
     // Dirigeants du dossier : membres OWNER dont le compte est lisible (même organisation).
     const owners = await withTenant(this.db, { tenantId: companyId, organizationId }, (tx) =>
-      tx`SELECT u.id, u.email, c.name AS company_name FROM company_member m
+      tx`SELECT u.id, u.email, u.locale, c.name AS company_name, c.locale AS company_locale FROM company_member m
          JOIN app_user u ON u.id = m.user_id JOIN company c ON c.id = m.company_id
          WHERE m.company_id = ${companyId} AND m.role = 'OWNER' AND u.suspended_at IS NULL`,
     );
@@ -99,9 +99,12 @@ export class AccessService {
       try {
         // Un accès d'urgence n'est pas un accès ordinaire : le dirigeant doit
         // lire qu'un second administrateur l'a approuvé et quand il prend fin.
+        // Le destinataire est un dirigeant identifié : sa propre langue décide,
+        // et le dossier prend le relais si elle n'est pas renseignée.
+        const locale = resolveLocale({ recipient: str(o.locale ?? ""), company: str(o.company_locale ?? "") });
         const mail = breakGlassExpiresAt
-          ? breakGlassMail({ companyName: str(o.company_name), accessedAt: record.accessedAt, reason, expiresAt: breakGlassExpiresAt, legalFooter })
-          : adminAccessMail({ companyName: str(o.company_name), accessedAt: record.accessedAt, reason, legalFooter });
+          ? breakGlassMail({ companyName: str(o.company_name), accessedAt: record.accessedAt, reason, expiresAt: breakGlassExpiresAt, locale, legalFooter })
+          : adminAccessMail({ companyName: str(o.company_name), accessedAt: record.accessedAt, reason, locale, legalFooter });
         await this.notifier.send({
           channel: "EMAIL",
           to: str(o.email),

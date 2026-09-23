@@ -2,7 +2,7 @@ import type { Sql } from "postgres";
 import { z } from "zod";
 import { withTenant, type Db } from "@arcompt/db";
 import { assertPackPublished, loadPack as defaultLoadPack, PackNotPublishedError, type CountryPack } from "@arcompt/country-packs";
-import { legalFooterFromEnv, missingDocumentMail } from "@arcompt/mailer";
+import { legalFooterFromEnv, missingDocumentMail, resolveLocale } from "@arcompt/mailer";
 import { computeDegressiveInvoice, type DegressiveInvoice, type PricingMode } from "./billing.js";
 import { nextDeadlines } from "./deadlines.js";
 import { PortalError } from "./errors.js";
@@ -200,15 +200,18 @@ export class PortalService {
   ): Promise<MissingDocumentRequest> {
     const description = input.description.trim();
     if (!description) throw new PortalError("VALIDATION", "Description de la pièce requise");
-    const { row, partnerName, brand } = await withTenant(this.db, ctx, async (tx) => {
+    const { row, partnerName, brand, locale } = await withTenant(this.db, ctx, async (tx) => {
       let recipient = input.recipient?.trim() ?? "";
       let partnerName: string | null = null;
+      // La demande est adressée AU TIERS : sa langue passe avant celle du dossier.
+      let recipientLocale: string | null = null;
       if (input.partnerId) {
         const [p] = await tx`SELECT name, contact FROM partner WHERE id = ${input.partnerId} AND tenant_id = ${ctx.tenantId}`;
         if (!p) throw new PortalError("NOT_FOUND", "Tiers introuvable");
         partnerName = str(p.name);
         const contact = (p.contact ?? {}) as Record<string, unknown>;
         if (!recipient) recipient = str(input.channel === "WHATSAPP" ? (contact.whatsapp ?? contact.phone ?? "") : (contact.email ?? ""));
+        if (typeof contact.locale === "string") recipientLocale = contact.locale;
       }
       if (!recipient) throw new PortalError("VALIDATION", "Destinataire requis (ou contact du tiers renseigné)");
       if (input.entryId) {
@@ -219,9 +222,9 @@ export class PortalService {
         INSERT INTO missing_document_request (tenant_id, partner_id, entry_id, description, channel, recipient, requested_by)
         VALUES (${ctx.tenantId}, ${input.partnerId ?? null}, ${input.entryId ?? null}, ${description}, ${input.channel}, ${recipient}, ${ctx.userId})
         RETURNING *`;
-      const [c] = await tx`SELECT name FROM company WHERE id = ${ctx.tenantId}`;
+      const [c] = await tx`SELECT name, locale FROM company WHERE id = ${ctx.tenantId}`;
       const brand = await this.brandFor(tx, ctx, str(c?.name ?? ""));
-      return { row: row!, partnerName, brand };
+      return { row: row!, partnerName, brand, locale: resolveLocale({ recipient: recipientLocale, company: str(c?.locale ?? "") }) };
     });
     const request = mapMissingDocument(row);
     // L'e-mail reprend le modèle complet (motif de réception, mentions
@@ -234,6 +237,7 @@ export class PortalService {
             senderName: brand.sender,
             companyName: brand.company,
             description,
+            locale,
             legalFooter: this.opts.legalFooter ?? legalFooterFromEnv(),
           })
         : null;
@@ -241,10 +245,12 @@ export class PortalService {
       await this.opts.notifier.send({
         channel: request.channel,
         to: request.recipient,
-        subject: mail?.subject ?? `${brand.sender} : pièce manquante`,
+        subject: mail?.subject ?? (locale === "en" ? `${brand.sender}: missing document` : `${brand.sender} : pièce manquante`),
         body:
           mail?.text ??
-          `Bonjour${partnerName ? ` ${partnerName}` : ""}, ${brand.sender} a besoin de la pièce suivante pour le dossier ${brand.company} : ${description}. Merci de la transmettre en réponse à ce message.`,
+          (locale === "en"
+            ? `Hello${partnerName ? ` ${partnerName}` : ""}, ${brand.sender} needs the following document for ${brand.company}: ${description}. Please send it back in reply to this message.`
+            : `Bonjour${partnerName ? ` ${partnerName}` : ""}, ${brand.sender} a besoin de la pièce suivante pour le dossier ${brand.company} : ${description}. Merci de la transmettre en réponse à ce message.`),
         ...(mail ? { html: mail.html } : {}),
         tenantId: ctx.tenantId,
         reference: `missing-document:${request.id}`,

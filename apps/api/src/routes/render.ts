@@ -1,11 +1,13 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { computeStatements } from "@arcompt/statements";
+import { withTenant, decryptTaxIds, existingTenantCipherIn } from "@arcompt/db";
 import {
   ledgerViewFromEntries,
   ledgerWorkbook,
   renderHtml,
   renderPdf,
+  resolveLocale,
   statementsWorkbook,
   trialBalanceView,
   trialBalanceWorkbook,
@@ -29,7 +31,10 @@ const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 const baseQuery = z.object({
   fiscalYear: z.string().min(1),
-  locale: z.enum(["fr", "en"]).default("fr"),
+  // Pas de `.default("fr")` : une valeur par défaut posée ici écraserait la
+  // langue du dossier, qui est justement celle sous laquelle il est archivé.
+  // Absente, `resolveLocale` descend la précédence (docs : packages/render/src/locale.ts).
+  locale: z.enum(["fr", "en"]).optional(),
   currency: z.string().length(3).default("XOF"),
 });
 
@@ -49,9 +54,41 @@ const ledgerQuery = baseQuery.extend({ account: z.string().optional() });
 export function renderRoutes(deps: RenderDeps) {
   const r = new Hono();
 
-  const options = async (auth: AuthContext, locale: "fr" | "en"): Promise<RenderOptions> => {
-    const company = (await deps.companyFor?.(auth)) ?? { name: `Dossier ${auth.tenantId}` };
-    return { locale, company };
+  /**
+   * En-tête du dossier, lu en base une fois par requête. Sans ces lignes, tous
+   * les exports portaient « Dossier <uuid> » en en-tête — un identifiant
+   * technique sur un document destiné au greffe.
+   *
+   * La langue du dossier est lue ici aussi : ces documents (balance, grand
+   * livre, liasse) n'ont pas de destinataire, c'est donc le dossier qui décide,
+   * sauf demande explicite.
+   */
+  const companyOf = async (auth: AuthContext): Promise<{ header: CompanyHeader; locale: string | null }> => {
+    const provided = await deps.companyFor?.(auth);
+    if (provided) return { header: provided, locale: null };
+    if (!deps.db) return { header: { name: `Dossier ${auth.tenantId}` }, locale: null };
+    const row = await withTenant(deps.db, { tenantId: auth.tenantId, userId: auth.userId, ...(auth.organizationId ? { organizationId: auth.organizationId } : {}) }, async (tx) => {
+      const [company] = await tx<Array<Record<string, unknown>>>`
+        SELECT name, country_code, currency, locale, tax_ids, tax_ids_enc FROM company WHERE id = ${auth.tenantId}`;
+      if (!company) return null;
+      const cipher = await existingTenantCipherIn(tx, auth.tenantId);
+      return { company, taxIds: decryptTaxIds(cipher, company.tax_ids_enc as string | null, company.tax_ids as Record<string, string>) };
+    });
+    if (!row) return { header: { name: `Dossier ${auth.tenantId}` }, locale: null };
+    const identifiers = Object.entries(row.taxIds).map(([label, value]) => ({ label: label.toUpperCase(), value: String(value) }));
+    return {
+      header: {
+        name: String(row.company.name),
+        country: String(row.company.country_code),
+        ...(identifiers.length > 0 ? { identifiers } : {}),
+      },
+      locale: row.company.locale as string,
+    };
+  };
+
+  const options = async (auth: AuthContext, requested: "fr" | "en" | undefined): Promise<RenderOptions> => {
+    const { header, locale } = await companyOf(auth);
+    return { locale: resolveLocale({ requested, company: locale, user: auth.locale }), company: header };
   };
 
   const statements = async (c: Context) => {

@@ -71,6 +71,7 @@ const identity = (over: Partial<Identity> = {}): Identity => ({
   organizationId: ORG,
   suspendedAt: null,
   mfaRequired: false,
+  locale: null,
   memberships: [{ companyId: TENANT, role: "CASHIER" }],
   ...over,
 });

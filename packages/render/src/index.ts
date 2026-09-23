@@ -23,7 +23,7 @@ export { renderLedger } from "./templates/ledger.js";
 export { renderInvoice, vatSummaryFromLines } from "./templates/invoice.js";
 export { renderPayslip } from "./templates/payslip.js";
 export { renderBankReconciliation } from "./templates/bank-reconciliation.js";
-export { noteOutlineEn, noteTitleGloss, statementLineGloss, statementTitleGloss } from "./syscohada-en.js";
+export { noteOutlineEn, noteRowEn, noteTitleGloss, statementLineGloss, statementTitleGloss } from "./syscohada-en.js";
 export { ledgerViewFromEntries, trialBalanceView, type LedgerViewOptions } from "./mappers.js";
 export { renderPdf, closeBrowser, resolveChromiumPath, DEFAULT_CHROMIUM_PATH, type PdfOptions } from "./pdf.js";
 export { statementsWorkbook, trialBalanceWorkbook, ledgerWorkbook, moneyCell, numberFormat } from "./excel.js";

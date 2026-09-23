@@ -11,7 +11,7 @@ import {
   type MemberRole,
   type Notifier,
 } from "@arcompt/portal";
-import { invitationMail, legalFooterFromEnv } from "@arcompt/mailer";
+import { invitationMail, legalFooterFromEnv, resolveLocale } from "@arcompt/mailer";
 import { createProviderFromEnv } from "@arcompt/whatsapp";
 import { requireRole, type AuthContext } from "../auth.js";
 import type { AppDeps } from "../app.js";
@@ -62,7 +62,10 @@ const CreateCompanySchema = z.object({
   taxIds: z.record(z.string()).optional(),
   fiscalYear: z.object({ code: z.string().min(1).max(20), startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
 });
-const InviteSchema = z.object({ email: z.string().email(), role, companyIds: z.array(uuid).min(1), ttlHours: z.number().int().positive().optional() });
+// `locale` : l'invité n'a pas encore de compte, donc pas de `app_user.locale`.
+// Personne d'autre que celui qui invite ne sait dans quelle langue écrire ;
+// absent, on retombe sur la langue du premier dossier de l'invitation.
+const InviteSchema = z.object({ email: z.string().email(), role, companyIds: z.array(uuid).min(1), ttlHours: z.number().int().positive().optional(), locale: z.enum(["fr", "en"]).optional() });
 const AcceptSchema = z.object({ token: z.string().min(16), email: z.string().email().optional(), displayName: z.string().max(120).optional(), keycloakSub: z.string().max(200).optional() });
 const SetRoleSchema = z.object({ role });
 const CommentSchema = z.object({ entityKind: z.enum(["ENTRY", "DOCUMENT", "PROPOSAL", "PERIOD", "FISCAL_YEAR"]), entityId: uuid, body: z.string().min(1).max(4000) });
@@ -183,8 +186,11 @@ export function portalRoutes(deps: AppDeps, opts: PortalRouteOptions = {}) {
    */
   r.post("/org/invitations", writeRole, h(async (c) => {
     const ctx = await orgCtx(c);
-    const input = strip(await body(c, InviteSchema));
+    const { locale: requestedLocale, ...input } = strip(await body(c, InviteSchema));
     const created = await orgs.invite(ctx, input);
+    const [invitedCompany] = deps.db
+      ? await withTenant(deps.db, { tenantId: input.companyIds[0]!, userId: ctx.userId, organizationId: ctx.organizationId }, (tx) => tx`SELECT locale FROM company WHERE id = ${input.companyIds[0]!}`)
+      : [];
     const organization = await orgs.getOrganization(ctx).catch(() => null);
     const delivery: { sent: boolean; channel: "EMAIL"; error?: string } = { sent: false, channel: "EMAIL" };
     try {
@@ -200,6 +206,7 @@ export function portalRoutes(deps: AppDeps, opts: PortalRouteOptions = {}) {
         acceptUrl: `${appUrl}${INVITATION_ACCEPT_PATH}#token=${encodeURIComponent(created.token)}`,
         token: created.token,
         expiresAt: created.invitation.expiresAt,
+        locale: resolveLocale({ requested: requestedLocale, company: invitedCompany ? String(invitedCompany.locale) : null, user: c.get("auth").locale }),
         legalFooter,
       });
       await notifier.send({

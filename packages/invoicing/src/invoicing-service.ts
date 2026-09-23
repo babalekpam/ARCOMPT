@@ -398,7 +398,7 @@ export class InvoicingService extends BaseService {
       const doc = await loadSalesDocument(tx, this.tenantId, documentId);
       if (doc.kind !== "INVOICE" || !["SENT", "PARTIALLY_PAID"].includes(doc.status)) throw new InvoicingError("INVALID_STATUS", "Seule une facture non soldée se relance");
       const [partner] = await tx`SELECT name, contact FROM partner WHERE id = ${doc.partnerId} AND tenant_id = ${this.tenantId}`;
-      const [company] = await tx`SELECT name FROM company WHERE id = ${this.tenantId}`;
+      const [company] = await tx`SELECT name, locale FROM company WHERE id = ${this.tenantId}`;
       const contact = (partner?.contact ?? {}) as Record<string, unknown>;
       const recipient = String((input.channel === "WHATSAPP" ? (contact.whatsapp ?? contact.phone) : contact.email) ?? "").trim();
       if (recipient === "") {
@@ -421,6 +421,8 @@ export class InvoicingService extends BaseService {
           outstanding: doc.outstanding.toString(),
           currency: doc.currency,
           ...(input.message ? { message: input.message } : {}),
+          // Le client lit la relance : sa langue passe avant celle du dossier.
+          ...(contact.locale || company?.locale ? { locale: String(contact.locale ?? company?.locale) } : {}),
         } satisfies DunningDispatch,
       };
     });

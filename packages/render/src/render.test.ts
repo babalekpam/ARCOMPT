@@ -28,6 +28,7 @@ import {
   formatSide,
   normalizeLocale,
   noteOutlineEn,
+  noteRowEn,
   noteTitleGloss,
   resolveLocale,
   statementLineGloss,
@@ -581,6 +582,39 @@ describe("documents en anglais", () => {
       expect(noteTitleGloss(note.number), `note ${note.number} sans titre anglais`).toBeTypeOf("string");
       if ((note.outline?.length ?? 0) > 0) {
         expect(noteOutlineEn(note.number), `note ${note.number} sans trame anglaise`).toBeDefined();
+      }
+    }
+  });
+
+  it("chaque ligne de note calculée a sa traduction anglaise", () => {
+    // Même garde-fou, sur les lignes : c'est là que le français passait
+    // inaperçu, parce qu'une note anglaise avec un titre anglais et des lignes
+    // françaises a l'air traduite au premier coup d'œil.
+    for (const note of output.notes) {
+      for (const row of note.rows) {
+        expect(noteRowEn(row.label), `ligne « ${row.label} » (note ${note.number}) sans traduction anglaise`).toBeTypeOf("string");
+      }
+    }
+  });
+
+  it("chaque contrôle de cohérence a son libellé et son détail anglais", () => {
+    // La page des contrôles fermait la liasse anglaise en français : elle est
+    // imprimée dans le document, pas seulement affichée à l'écran.
+    for (const control of output.controls) {
+      expect(control.labelEn, `contrôle ${control.id} sans libellé anglais`).toBeTypeOf("string");
+      expect(control.detailEn, `contrôle ${control.id} sans détail anglais`).toBeTypeOf("string");
+    }
+  });
+
+  it("une note anglaise ne laisse pas passer de libellé de ligne français", () => {
+    const html = renderHtml("statements", output, { locale: "en", company: { name: "Alpha" } });
+    // La comparaison porte sur la CELLULE entière : les mêmes mots existent
+    // aussi comme intitulés de postes, où le français est conservé exprès et
+    // suivi de sa glose (`… <span class="gloss">…`). Une cellule qui ne contient
+    // que du français est, elle, une ligne de note non traduite.
+    for (const note of output.notes) {
+      for (const row of note.rows) {
+        expect(html, `ligne « ${row.label} » restée en français`).not.toContain(`<td>${row.label}</td>`);
       }
     }
   });

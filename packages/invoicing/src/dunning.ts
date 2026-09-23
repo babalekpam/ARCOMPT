@@ -34,6 +34,13 @@ export interface DunningDispatch {
   currency: string;
   /** Mot ajouté par le cabinet, facultatif. */
   message?: string;
+  /**
+   * Langue de la relance. Résolue par le service : `partner.contact.locale`
+   * d'abord — une relance est adressée AU CLIENT, sa langue l'emporte sur celle
+   * du cabinet — puis `company.locale`. Absente, l'expéditeur retombe sur le
+   * français (packages/mailer/src/locale.ts).
+   */
+  locale?: string;
 }
 
 export interface DunningSender {

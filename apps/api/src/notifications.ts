@@ -1,4 +1,4 @@
-import { createMailerFromEnv, dunningMail, legalFooterFromEnv, type Mailer } from "@arcompt/mailer";
+import { createMailerFromEnv, dunningMail, legalFooterFromEnv, normalizeLocale, type Mailer } from "@arcompt/mailer";
 import type { DunningDispatch, DunningSender } from "@arcompt/invoicing";
 import type { Notifier, OutboundMessage } from "@arcompt/portal";
 import type { WhatsAppProvider } from "@arcompt/whatsapp";
@@ -67,6 +67,17 @@ export function createNotifier(opts: ChannelOptions): Notifier {
 
 /** Une relance WhatsApp tient sur un écran de téléphone ; le détail reste dans la facture. */
 export function whatsappDunningText(d: DunningDispatch): string {
+  // Même langue que la relance par e-mail : un client qui reçoit les deux ne
+  // doit pas les recevoir dans deux langues.
+  const locale = normalizeLocale(d.locale) ?? "fr";
+  if (locale === "en") {
+    const head = d.level <= 1 ? "Reminder" : d.level === 2 ? "Second reminder" : "Formal notice";
+    return [
+      `${head} — invoice ${d.invoiceNumber} from ${d.companyName}.`,
+      `Dear ${d.partnerName}, this invoice fell due on ${d.dueDate} (${d.daysOverdue} day(s) ago). Amount outstanding: ${d.outstanding} ${d.currency}.`,
+      d.message?.trim() ? d.message.trim() : "Please let us know when payment will be made.",
+    ].join("\n");
+  }
   const head = d.level <= 1 ? "Rappel" : d.level === 2 ? "Relance" : "Mise en demeure";
   return [
     `${head} — facture ${d.invoiceNumber} de ${d.companyName}.`,
@@ -95,6 +106,9 @@ export function createDunningSender(opts: ChannelOptions): DunningSender {
           outstanding: dispatch.outstanding,
           currency: dispatch.currency,
           ...(dispatch.message ? { message: dispatch.message } : {}),
+          // Langue du CLIENT relancé, résolue par le service à partir de son
+          // contact puis du dossier. Absente, le gabarit retombe sur le français.
+          ...(dispatch.locale ? { locale: dispatch.locale } : {}),
           legalFooter,
         });
         const result = await opts.mailer.send({ to: dispatch.recipient, subject: mail.subject, text: mail.text, html: mail.html });
