@@ -48,7 +48,37 @@ services:
     volumes:
       - miniodata:/data
 
+  # ---------------------------------------------------------------------------
   # Pile applicative conteneurisée : docker compose --profile app up --build
+  #
+  # Ce profil construit les MÊMES images que la production (JavaScript compilé,
+  # sortie standalone de Next, utilisateur non root) : il sert à vérifier
+  # localement ce qui sera déployé. Pour développer, `pnpm dev` reste la voie
+  # normale — ces conteneurs ne rechargent rien à chaud.
+  #
+  # La production se déploie avec docker-compose.prod.yml (reverse proxy, TLS,
+  # Keycloak en base). Voir docs/DEPLOYMENT.md.
+  # ---------------------------------------------------------------------------
+
+  # Migrations puis création du rôle de connexion applicatif, avant l'API.
+  # Le propriétaire du schéma migre ; l'application se connecte ensuite avec
+  # arcompt_app_login, soumis à la Row-Level Security. Même découpe qu'en
+  # production, pour que le chemin testé soit celui qui sera exploité.
+  migrate:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    restart: "no"
+    command: ["sh", "-c", "node infra/docker/ops/migrate.mjs && node infra/docker/ops/provision-role.mjs"]
+    environment:
+      DATABASE_URL: postgres://arcompt:arcompt@postgres:5432/arcompt
+      APP_DB_USER: arcompt_app_login
+      APP_DB_PASSWORD: arcompt-app-local-dev-password
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     profiles: ["app"]
     build:
@@ -56,11 +86,27 @@ services:
       dockerfile: infra/docker/api.Dockerfile
     env_file: .env
     environment:
-      DATABASE_URL: postgres://arcompt:arcompt@postgres:5432/arcompt
+      # Rôle applicatif, pas le propriétaire du schéma.
+      DATABASE_URL: postgres://arcompt_app_login:arcompt-app-local-dev-password@postgres:5432/arcompt
       REDIS_URL: redis://redis:6379
+      STORAGE_DIR: /data/storage
+    volumes:
+      - apistorage:/data/storage
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     ports:
       - "4000:4000"
 
@@ -72,11 +118,14 @@ services:
     env_file: .env
     environment:
       API_URL: http://api:4000
+      HOSTNAME: 0.0.0.0
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "3000:3000"
 
 volumes:
   pgdata:
   miniodata:
+  apistorage:

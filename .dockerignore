@@ -1,0 +1,52 @@
+# Contexte de construction des images.
+#
+# Sans ce fichier, `COPY . .` embarque les node_modules de la machine de
+# l'opérateur (compilés pour SON système, et qui écrasent les dépendances
+# élaguées de l'image), l'historique Git, les rapports de test et surtout tout
+# `.env` local — c'est-à-dire des secrets de production dans une couche d'image.
+
+# Dépendances : toujours réinstallées dans l'image depuis le lockfile.
+**/node_modules
+.pnpm-store
+
+# Historique et métadonnées de version.
+.git
+.gitignore
+.github
+
+# Sorties de construction et caches : régénérés dans l'image.
+dist
+out
+**/.next
+**/.turbo
+**/*.tsbuildinfo
+.ruff_cache
+coverage
+test-results
+playwright-report
+
+# Secrets et configuration locale : ne doivent JAMAIS entrer dans une image.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Données locales.
+.data
+.pgdata
+
+# Tests de bout en bout et jeux d'essai : inutiles à l'exécution.
+e2e
+fixtures
+vitest.workspace.ts
+**/vitest.config.ts
+**/*.test.ts
+**/*.test.tsx
+
+# Documentation et outillage d'édition.
+docs
+README.md
+.editorconfig
+.vscode
+.idea

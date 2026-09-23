@@ -1,0 +1,322 @@
+# =============================================================================
+# ARCOMPT — pile de production sur un seul serveur.
+#
+#   docker compose --env-file infra/env/prod.env -f docker-compose.prod.yml up -d
+#
+# Procédure complète, pas à pas : docs/DEPLOYMENT.md
+#
+# Principes tenus par ce fichier
+# ------------------------------
+#  * AUCUN secret ici. Tout vient de `infra/env/prod.env`, jamais versionné.
+#    La forme `${VAR:?message}` fait échouer la commande avec un message clair
+#    quand une variable obligatoire manque, plutôt que de démarrer à moitié.
+#  * Un seul port publié sur Internet : 80 et 443, tenus par Caddy. PostgreSQL,
+#    Redis, l'API, le web et Keycloak ne sont joignables que par le réseau
+#    interne de la pile.
+#  * Les migrations tournent AVANT l'application, dans une tâche qui doit se
+#    terminer avec succès (`service_completed_successfully`), et sous verrou
+#    consultatif (`infra/docker/ops/migrate.mjs`) pour qu'elles ne puissent pas se croiser.
+#  * L'API se connecte avec le rôle applicatif (`arcompt_app_login`), soumis à
+#    la Row-Level Security. Seule la tâche de migration utilise le propriétaire
+#    du schéma.
+# =============================================================================
+
+name: arcompt
+
+x-images:
+  api: &api_image ${API_IMAGE:-ghcr.io/arcompt/api:latest}
+  web: &web_image ${WEB_IMAGE:-ghcr.io/arcompt/web:latest}
+
+# Connexion de l'application : rôle de connexion membre de arcompt_app.
+x-app-database-url: &app_database_url
+  DATABASE_URL: postgres://${APP_DB_USER:-arcompt_app_login}:${APP_DB_PASSWORD:?APP_DB_PASSWORD manquant (16 caracteres minimum)}@postgres:5432/${POSTGRES_DB:-arcompt}
+
+# Configuration applicative commune à l'API et au worker.
+x-api-environment: &api_environment
+  NODE_ENV: production
+  APP_URL: https://${WEB_DOMAIN:?WEB_DOMAIN manquant}
+  API_PORT: "4000"
+  REDIS_URL: redis://redis:6379
+  JOBS_PREFIX: ${JOBS_PREFIX:-arcompt}
+  DEFAULT_CURRENCY: ${DEFAULT_CURRENCY:-XOF}
+  # --- Authentification : l'API vérifie la signature ET l'audience du jeton ---
+  AUTH_MODE: oidc
+  KEYCLOAK_ISSUER: https://${AUTH_DOMAIN:?AUTH_DOMAIN manquant}/realms/${KEYCLOAK_REALM:-arcompt}
+  # Attention : côté API, KEYCLOAK_CLIENT_ID est l'AUDIENCE attendue dans le
+  # jeton (le client « bearer only »), pas le client de connexion du web.
+  KEYCLOAK_CLIENT_ID: ${KEYCLOAK_API_AUDIENCE:-arcompt-api}
+  # --- Secrets obligatoires en production (apps/api/src/config.ts) ---
+  PAYROLL_ENCRYPTION_KEY: ${PAYROLL_ENCRYPTION_KEY:?PAYROLL_ENCRYPTION_KEY manquant (base64 de 32 octets)}
+  WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:?WHATSAPP_APP_SECRET manquant (exige meme sans WhatsApp)}
+  # --- Dépendances externes : réelles, ou repli assumé par ALLOW_INSECURE_* ---
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  AI_MODEL: ${AI_MODEL:-}
+  R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+  R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+  R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+  R2_BUCKET: ${R2_BUCKET:-}
+  CLAMAV_HOST: ${CLAMAV_HOST:-}
+  CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+  WHATSAPP_API_URL: ${WHATSAPP_API_URL:-}
+  WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+  WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
+  WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+  PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-}
+  PAYMENT_API_KEY: ${PAYMENT_API_KEY:-}
+  PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-}
+  CERTIFICATION_CONNECTOR: ${CERTIFICATION_CONNECTOR:-}
+  ALLOW_INSECURE_AI: ${ALLOW_INSECURE_AI:-}
+  ALLOW_INSECURE_STORAGE: ${ALLOW_INSECURE_STORAGE:-}
+  ALLOW_INSECURE_ANTIVIRUS: ${ALLOW_INSECURE_ANTIVIRUS:-}
+  ALLOW_INSECURE_WHATSAPP: ${ALLOW_INSECURE_WHATSAPP:-}
+  # Repli de stockage local (volume nommé) quand R2 n'est pas configuré.
+  STORAGE_DIR: /data/storage
+  MAX_DOCUMENT_BYTES: ${MAX_DOCUMENT_BYTES:-15728640}
+  # Arrêt en douceur : délai laissé aux requêtes en cours après SIGTERM. Doit
+  # rester SOUS le `stop_grace_period` ci-dessous, sinon Docker tue le processus
+  # avant qu'il ait fini de se retirer proprement.
+  SHUTDOWN_GRACE_MS: ${SHUTDOWN_GRACE_MS:-10000}
+  # --- Observabilité (facultative) ---
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  SECURITY_ALERT_WEBHOOK_URL: ${SECURITY_ALERT_WEBHOOK_URL:-}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Reverse proxy : seul service exposé sur Internet. TLS automatique.
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN:?WEB_DOMAIN manquant}
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN manquant}
+      AUTH_DOMAIN: ${AUTH_DOMAIN:?AUTH_DOMAIN manquant}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL manquant (adresse prevenue avant expiration d un certificat)}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # certificats : à sauvegarder, sinon Let's Encrypt limite les réémissions
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging: *logging
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL : aucun port publié. Le volume nommé porte toute la comptabilité.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-arcompt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}
+      POSTGRES_DB: ${POSTGRES_DB:-arcompt}
+      # Mots de passe hachés en SCRAM plutôt qu'en MD5.
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-arcompt} -d ${POSTGRES_DB:-arcompt}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+  # ---------------------------------------------------------------------------
+  # Migrations : tâche à durée de vie limitée, jouée AVANT l'API et le worker.
+  #
+  #  * elle se connecte avec le PROPRIÉTAIRE du schéma (seul habilité au DDL) ;
+  #  * `infra/docker/ops/migrate.mjs` prend un verrou consultatif PostgreSQL : deux
+  #    déploiements simultanés ne peuvent pas rejouer la même migration ;
+  #  * `infra/docker/ops/provision-role.mjs` crée (ou met à jour) le rôle de connexion de
+  #    l'application et VÉRIFIE le modèle de droits obtenu. Il échoue si le rôle
+  #    peut faire ce qu'il ne doit pas — le déploiement s'arrête là.
+  #
+  # `restart: "no"` est essentiel : une migration qui échoue doit rester en
+  # échec et bloquer la montée de l'API, pas boucler.
+  # ---------------------------------------------------------------------------
+  migrate:
+    image: *api_image
+    restart: "no"
+    command: ["sh", "-c", "node infra/docker/ops/migrate.mjs && node infra/docker/ops/provision-role.mjs"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-arcompt}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}@postgres:5432/${POSTGRES_DB:-arcompt}
+      APP_DB_USER: ${APP_DB_USER:-arcompt_app_login}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD manquant (16 caracteres minimum)}
+      MIGRATION_LOCK_TIMEOUT: ${MIGRATION_LOCK_TIMEOUT:-300}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
+  # ---------------------------------------------------------------------------
+  # API : refuse de démarrer si une dépendance de production est simulée.
+  # ---------------------------------------------------------------------------
+  api:
+    image: *api_image
+    restart: unless-stopped
+    # Marge au-dessus de SHUTDOWN_GRACE_MS (10 s) : l'API doit avoir le temps de
+    # sortir de rotation et de laisser finir les requêtes en cours avant SIGKILL.
+    stop_grace_period: ${STOP_GRACE_PERIOD:-20s}
+    environment:
+      <<: [*api_environment, *app_database_url]
+    volumes:
+      - api_storage:/data/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # /health = vivacité (ne touche à rien) ; /health/ready = aptitude (aller-retour PostgreSQL).
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    logging: *logging
+
+  # Tâches de fond (extraction IA, envois WhatsApp, rendus) : même image, même
+  # configuration, autre point d'entrée.
+  worker:
+    image: *api_image
+    restart: unless-stopped
+    stop_grace_period: ${STOP_GRACE_PERIOD:-20s}
+    command: ["node", "apps/api/src/worker.js"]
+    environment:
+      <<: [*api_environment, *app_database_url]
+    volumes:
+      - api_storage:/data/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    logging: *logging
+
+  # ---------------------------------------------------------------------------
+  # Web : PWA Next.js. Le navigateur n'appelle jamais l'API directement, il
+  # passe par /api/proxy/… servi ici ; API_URL reste donc interne.
+  # ---------------------------------------------------------------------------
+  web:
+    image: *web_image
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      API_URL: http://api:4000
+      AUTH_MODE: oidc
+      AUTH_URL: https://${WEB_DOMAIN:?WEB_DOMAIN manquant}
+      AUTH_TRUST_HOST: "true"
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET manquant (openssl rand -base64 32)}
+      KEYCLOAK_ISSUER: https://${AUTH_DOMAIN:?AUTH_DOMAIN manquant}/realms/${KEYCLOAK_REALM:-arcompt}
+      # Côté web, KEYCLOAK_CLIENT_ID est le client de CONNEXION (code flow).
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_WEB_CLIENT_ID:-arcompt-web}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_WEB_CLIENT_SECRET:?KEYCLOAK_WEB_CLIENT_SECRET manquant}
+      DEFAULT_LOCALE: ${DEFAULT_LOCALE:-fr}
+      DEFAULT_CURRENCY: ${DEFAULT_CURRENCY:-XOF}
+      DEFAULT_FISCAL_YEAR: ${DEFAULT_FISCAL_YEAR:-}
+      DEFAULT_COUNTRY_PACK: ${DEFAULT_COUNTRY_PACK:-ci}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      # Fichier statique de la PWA : ne dépend ni de l'API ni de la base.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/offline.html').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *logging
+
+  # ---------------------------------------------------------------------------
+  # Keycloak : fournisseur d'identité. Base dédiée `keycloak`, créée par
+  # infra/postgres/initdb/10-keycloak-database.sql.
+  #
+  # `start` (et non `start-dev`) : mode production, HTTP en clair sur le réseau
+  # interne uniquement, TLS terminé par Caddy. KC_PROXY_HEADERS=xforwarded est
+  # indispensable, sinon Keycloak fabrique des URL de redirection en http://.
+  # ---------------------------------------------------------------------------
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    restart: unless-stopped
+    command: ["start", "--optimized=false"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-arcompt}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}
+      KC_HOSTNAME: https://${AUTH_DOMAIN:?AUTH_DOMAIN manquant}
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      # Compte d'amorçage : à utiliser une fois pour créer un vrai administrateur,
+      # puis à retirer de prod.env et à supprimer dans la console.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD manquant}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    logging: *logging
+
+volumes:
+  pgdata: # toute la comptabilité : c'est CE volume qu'il faut sauvegarder
+  redisdata:
+  caddy_data: # certificats TLS émis par Let's Encrypt
+  caddy_config:
+  api_storage: # pièces justificatives quand R2 n'est pas configuré (repli)
