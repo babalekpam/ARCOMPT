@@ -10,7 +10,7 @@ describe("en-têtes d'authentification", () => {
   });
 
   it("mode oidc : Bearer + dossier choisi, jamais de X-User-Id", () => {
-    const h = buildHeaders({ mode: "oidc", userId: "ignored", tenantId: "t1", accessToken: "tok" });
+    const h = buildHeaders({ mode: "clerk", userId: "ignored", tenantId: "t1", accessToken: "tok" });
     expect(h).toEqual({ Authorization: "Bearer tok", "X-Tenant-Id": "t1" });
   });
 

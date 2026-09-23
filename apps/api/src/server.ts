@@ -37,7 +37,13 @@ const currencyResolver = createCompanyCurrencyResolver(db as unknown as Sql);
 
 const app = createApp({
   db: db as unknown as Sql,
-  auth: { mode: cfg.auth.mode, ...(cfg.auth.issuer ? { issuer: cfg.auth.issuer } : {}), ...(cfg.auth.audience ? { audience: cfg.auth.audience } : {}) },
+  auth: {
+    mode: cfg.auth.mode,
+    ...(cfg.auth.issuer ? { issuer: cfg.auth.issuer } : {}),
+    ...(cfg.auth.audience ? { audience: cfg.auth.audience } : {}),
+    ...(cfg.auth.secretKey ? { clerkSecretKey: cfg.auth.secretKey } : {}),
+    ...(cfg.auth.authorizedParties ? { authorizedParties: cfg.auth.authorizedParties } : {}),
+  },
   ledgerFor: (ctx) =>
     new Ledger(new PostgresStore(db as unknown as Sql, { userId: ctx.userId, ...(ctx.organizationId ? { organizationId: ctx.organizationId } : {}) }), {
       baseCurrency: cfg.baseCurrency,

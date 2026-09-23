@@ -5,19 +5,22 @@
  * variables NEXT_PUBLIC_*). Les valeurs par défaut correspondent au démarrage
  * local (`pnpm dev`).
  */
-export type AuthMode = "dev" | "oidc";
+export type AuthMode = "dev" | "clerk";
 
 export const config = {
   /** URL de l'API vue depuis le serveur Next (route handlers, composants serveur). */
   apiUrl: () => process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000",
-  /** AUTH_MODE=dev active le formulaire de connexion de développement (en-têtes X-User-Id…). */
-  authMode: (): AuthMode => (process.env.AUTH_MODE === "oidc" ? "oidc" : "dev"),
-  keycloak: () => ({
-    issuer: process.env.KEYCLOAK_ISSUER,
-    clientId: process.env.KEYCLOAK_CLIENT_ID,
-    clientSecret: process.env.KEYCLOAK_CLIENT_SECRET,
-  }),
-  authSecret: () => process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+  /** AUTH_MODE=dev is local-only; production must explicitly select Clerk. */
+  authMode: (): AuthMode => {
+    const value = process.env.AUTH_MODE;
+    if (value === "dev" && process.env.NODE_ENV !== "production") return "dev";
+    if (value === "clerk") return "clerk";
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("AUTH_MODE must be explicitly set to clerk in production");
+    }
+    return "dev";
+  },
+  authSecret: () => process.env.AUTH_SECRET ?? process.env.SESSION_SECRET ?? process.env.NEXTAUTH_SECRET,
   defaultLocale: () => (process.env.DEFAULT_LOCALE === "en" ? "en" : "fr"),
   /** Exercice affiché par défaut (l'API n'expose pas encore la liste des exercices). */
   defaultFiscalYear: () => process.env.DEFAULT_FISCAL_YEAR ?? String(new Date().getFullYear()),

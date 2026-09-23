@@ -5,6 +5,9 @@ import { I18nProvider } from "@/lib/i18n-client";
 import { getMessages, translate } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
 import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar";
+import { ClerkProvider } from "@clerk/nextjs";
+import { enUS, frFR } from "@clerk/localizations";
+import { shadcn } from "@clerk/themes";
 import "./globals.css";
 
 /**
@@ -44,10 +47,39 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={locale}>
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
-        <I18nProvider locale={locale} messages={getMessages(locale)}>
-          {children}
-          <ServiceWorkerRegistrar />
-        </I18nProvider>
+        <ClerkProvider
+          proxyUrl={process.env.NEXT_PUBLIC_CLERK_PROXY_URL ?? ""}
+          localization={locale === "fr" ? frFR : enUS}
+          appearance={{
+            theme: shadcn,
+            options: {
+              logoImageUrl: "/brand/arcompt-mark-128.png",
+            },
+            variables: {
+              colorPrimary: "#0369a1",
+              colorForeground: "#0f172a",
+              colorMutedForeground: "#64748b",
+              colorBackground: "#ffffff",
+              colorInput: "#ffffff",
+              colorInputForeground: "#0f172a",
+              colorNeutral: "#cbd5e1",
+              borderRadius: "0.75rem",
+              fontFamily: "inherit",
+            },
+            elements: {
+              card: "shadow-none border border-slate-200",
+              cardBox: "bg-white rounded-2xl",
+              logoImage: "h-12 w-12 object-contain",
+              formButtonPrimary: "bg-sky-700 hover:bg-sky-800",
+              footerActionLink: "text-sky-700 hover:text-sky-900",
+            },
+          }}
+        >
+          <I18nProvider locale={locale} messages={getMessages(locale)}>
+            {children}
+            <ServiceWorkerRegistrar />
+          </I18nProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

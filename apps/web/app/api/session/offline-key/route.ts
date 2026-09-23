@@ -17,7 +17,7 @@ export async function GET() {
   const auth = await getAuthContext();
   if (!auth) return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Session absente" } }, { status: 401 });
   const secret = config.authSecret() ?? (config.authMode() === "dev" ? "arcompt-dev-secret-change-me" : null);
-  if (!secret) return NextResponse.json({ error: { code: "CONFIG", message: "AUTH_SECRET manquant" } }, { status: 500 });
+  if (!secret) return NextResponse.json({ error: { code: "CONFIG", message: "AUTH_SECRET ou SESSION_SECRET manquant" } }, { status: 500 });
   const material = createHmac("sha256", secret).update(`${auth.mode}:${auth.userId}:${auth.tenantId ?? ""}`).digest("base64");
   const res = NextResponse.json({ material });
   res.headers.set("cache-control", "no-store");

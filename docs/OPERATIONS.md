@@ -129,12 +129,17 @@ pour que les écrans ne soient pas vides. Il imprime les identifiants à
 transmettre : identifiant du dossier (`X-Tenant-Id`), identifiant utilisateur
 (`X-User-Id`), et la marche à suivre selon `AUTH_MODE`.
 
-- `AUTH_MODE=oidc` : créez dans Keycloak un utilisateur portant **exactement**
-  la même adresse, courriel vérifié. Le rattachement au compte ARCOMPT se fait
-  tout seul au premier appel (`auth_link_subject`, migration 0009) : aucun SQL à
-  la main.
+- `AUTH_MODE=clerk` : créez ou invitez dans Clerk un utilisateur portant
+  **exactement** la même adresse, avec courriel vérifié. Le rattachement au
+  compte ARCOMPT se fait tout seul au premier appel (`auth_link_subject`,
+  migration 0009) : aucun SQL à la main. Clerk fournit aussi la récupération
+  du mot de passe.
 - `AUTH_MODE=dev` (poste local uniquement) : les deux identifiants imprimés
   suffisent, en en-têtes HTTP.
+
+> **LEGACY :** toute ancienne instruction Keycloak/Auth.js ci-dessous ou dans
+> les guides de déploiement ne s'applique plus au chemin Clerk actuel. Consultez
+> `docs/DEPLOYMENT-CLERK.md` avant toute publication.
 
 Options : `--name`, `--org`, `--company`, `--year`. Réexécuté à l'identique, le
 script ne crée rien et réimprime les informations ; si l'adresse existe dans une

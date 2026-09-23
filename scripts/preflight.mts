@@ -216,56 +216,48 @@ if (smtp) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Identité — le fournisseur OIDC
+// 4. Identité — Replit-managed Clerk
 // ---------------------------------------------------------------------------
 open("Identité");
 
 const authMode = (env.AUTH_MODE ?? "").trim();
-if (authMode !== "oidc") {
-  fail("Mode d'authentification", `AUTH_MODE=« ${authMode || "(vide)"} » : le mode dev accepte l'en-tête X-Tenant-Id SANS jeton — n'importe qui entre dans n'importe quel dossier`, "AUTH_MODE=oidc, avec KEYCLOAK_ISSUER et KEYCLOAK_CLIENT_ID renseignés.");
-}
-
-const issuer = env.KEYCLOAK_ISSUER?.trim();
-const audience = env.KEYCLOAK_CLIENT_ID?.trim();
-const webClient = env.KEYCLOAK_WEB_CLIENT_ID?.trim();
-
-if (!issuer) {
-  fail("Émetteur", "KEYCLOAK_ISSUER absent", "L'URL du realm, par exemple https://auth.arcompt.com/realms/arcompt.");
+if (authMode !== "clerk") {
+  fail("Mode d'authentification", `AUTH_MODE=« ${authMode || "(vide)"} » : seul Clerk vérifie les sessions de production ; le mode dev accepte l'en-tête X-Tenant-Id SANS jeton`, "AUTH_MODE=clerk, avec les clés Clerk et CLERK_AUTHORIZED_PARTIES renseignés.");
 } else {
-  const discovery = `${issuer.replace(/\/$/, "")}/.well-known/openid-configuration`;
-  try {
-    const res = await fetch(discovery, { signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) {
-      fail("Découverte OIDC", `${discovery} répond ${res.status}`, "L'API rend 503 « Fournisseur d'identité inexploitable » tant que ce document n'est pas servi. Vérifiez l'URL du realm et que le fournisseur est joignable depuis le serveur.");
-    } else {
-      const doc = (await res.json()) as { issuer?: string; jwks_uri?: string };
-      if (doc.issuer && doc.issuer.replace(/\/$/, "") !== issuer.replace(/\/$/, "")) {
-        fail("Découverte OIDC", `le document annonce l'émetteur « ${doc.issuer} », KEYCLOAK_ISSUER dit « ${issuer} »`, "Les deux doivent coïncider au caractère près : la validation du jeton compare cette chaîne. Cas fréquent : http:// posé là où le fournisseur se sert en https://.");
-      } else if (!doc.jwks_uri) {
-        fail("Découverte OIDC", "aucun jwks_uri : les signatures de jeton ne pourraient pas être vérifiées", "Fournisseur mal configuré ou document incomplet.");
-      } else {
-        const jwks = await fetch(doc.jwks_uri, { signal: AbortSignal.timeout(10_000) });
-        if (jwks.ok) ok("Découverte OIDC", `${discovery} et les clés publiques répondent`);
-        else fail("Clés publiques", `${doc.jwks_uri} répond ${jwks.status}`, "Sans les clés, tout jeton est rejeté : 401 partout après une connexion pourtant réussie.");
-      }
-    }
-  } catch (e) {
-    fail("Découverte OIDC", `${discovery} injoignable : ${e instanceof Error ? e.message : String(e)}`, "Le fournisseur doit être joignable DEPUIS LE SERVEUR, pas seulement depuis votre navigateur.");
-  }
+  ok("Mode d'authentification", "AUTH_MODE=clerk : l'API n'accepte pas le mode dev en production");
 }
 
-if (!audience) {
-  fail("Audience de l'API", "KEYCLOAK_CLIENT_ID absent côté API", "C'est l'audience exigée dans le jeton (client bearer-only), pas le client de connexion.");
-} else if (webClient && webClient === audience) {
-  fail("Audience de l'API", `l'API et le web utilisent le même identifiant de client (« ${audience} »)`, "Deux clients distincts sont exigés : le web se connecte (code flow), l'API n'accepte que les jetons dont l'audience est le client bearer-only.");
+const clerkSecret = env.CLERK_SECRET_KEY?.trim();
+const clerkPublishable = (env.CLERK_PUBLISHABLE_KEY ?? env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? env.VITE_CLERK_PUBLISHABLE_KEY)?.trim();
+const authorizedParties = (env.CLERK_AUTHORIZED_PARTIES ?? env.APP_URL ?? "")
+  .split(",").map((v) => v.trim()).filter(Boolean);
+
+if (!clerkSecret) {
+  fail("Clé secrète Clerk", "CLERK_SECRET_KEY absent", "Laissez Replit-managed Clerk provisionner CLERK_SECRET_KEY dans l'environnement de production ; ne l'imprimez jamais.");
 } else {
-  ok("Audience de l'API", `audience exigée : ${audience}${webClient ? `, client de connexion : ${webClient}` : ""}`);
+  ok("Clé secrète Clerk", "CLERK_SECRET_KEY est présente (valeur non affichée)");
 }
-
+if (!clerkPublishable) {
+  fail("Clé publique Clerk", "CLERK_PUBLISHABLE_KEY (ou VITE_CLERK_PUBLISHABLE_KEY) absent", "Vérifiez que Replit-managed Clerk a provisionné la clé publique du web ; cette clé n'est pas un secret.");
+} else {
+  ok("Clé publique Clerk", "la clé publique du web est présente (valeur non affichée)");
+}
+if (authorizedParties.length === 0) {
+  fail("Origine autorisée Clerk", "CLERK_AUTHORIZED_PARTIES et APP_URL sont absents", "Renseignez l'origine HTTPS canonique du web, par exemple CLERK_AUTHORIZED_PARTIES=https://arcompt.com.");
+} else if (authorizedParties.some((origin) => !origin.startsWith("https://") && !origin.startsWith("http://localhost"))) {
+  fail("Origine autorisée Clerk", `valeur non HTTPS ou non locale : ${authorizedParties.join(", ")}`, "N'autorisez en production que l'origine HTTPS canonique du web ; localhost est réservé au développement.");
+} else {
+  ok("Origine autorisée Clerk", `${authorizedParties.length} origine(s) déclarée(s), valeur(s) non sensible(s)`);
+}
 skip(
-  "Correspondant d'audience (audience mapper)",
-  "invérifiable sans un vrai jeton : c'est l'étape qu'on oublie, et elle donne des 401 partout alors que la connexion réussit",
-  "Dans le fournisseur, sur le client WEB, ajoutez un mapper d'audience qui pose " + (audience ?? "l'audience de l'API") + " dans le claim aud. Preuve : connectez-vous et ouvrez un écran de données.",
+  "Session Clerk réelle",
+  "non vérifiable sans connexion interactive : signature, expiration, sujet Clerk, email vérifié et éventuel second facteur",
+  "Après déploiement, connectez-vous avec un compte Clerk, vérifiez la récupération de mot de passe, puis testez un OWNER/MFA et un utilisateur sans accès au dossier d'un autre tenant.",
+);
+skip(
+  "Proxy Clerk en production",
+  "Next.js utilise /api/__clerk au build de production ; le chargement du navigateur et les cookies n'ont pas été vérifiés ici",
+  "Après déploiement, confirmez que /api/__clerk sert la Frontend API Clerk et que la connexion fonctionne via ce chemin, sans exposer CLERK_SECRET_KEY.",
 );
 
 // ---------------------------------------------------------------------------
@@ -391,7 +383,7 @@ if (liveUrl) {
     // authentification, ce qui est pire qu'une panne.
     const res = await fetch(`${base}/api/proxy/ping`, { redirect: "manual", signal: AbortSignal.timeout(15_000) });
     if (res.status === 401) ok("Accès anonyme", "le proxy refuse une requête sans session (401), comme attendu");
-    else if (res.status === 200) fail("Accès anonyme", "le proxy a répondu 200 SANS session : l'API est servie à qui la demande", "Arrêtez le déploiement. Vérifiez AUTH_MODE=oidc et la configuration de session du web.");
+    else if (res.status === 200) fail("Accès anonyme", "le proxy a répondu 200 SANS session : l'API est servie à qui la demande", "Arrêtez le déploiement. Vérifiez AUTH_MODE=clerk et la configuration de session du web.");
     else warn("Accès anonyme", `réponse ${res.status} au lieu de 401`, "Vérifiez que le web sert bien /api/proxy et que l'API tourne derrière lui.");
   } catch (e) {
     warn("Accès anonyme", `contrôle impossible : ${e instanceof Error ? e.message : String(e)}`, "Sans réponse, rien n'est conclu — reprenez après que le site répond.");

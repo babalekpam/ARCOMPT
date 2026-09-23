@@ -1,5 +1,11 @@
 # Mise en ligne d'ARCOMPT
 
+> **LEGACY — ce guide serveur décrit l'ancien déploiement Keycloak/Auth.js.**
+> Il n'est pas la procédure actuelle et ne doit pas être exécuté pour publier
+> ARCOMPT. Consultez [`DEPLOYMENT-CLERK.md`](DEPLOYMENT-CLERK.md) puis relancez
+> `pnpm preflight`. Les contrôles de base, RLS, services et sauvegardes restent
+> obligatoires ; ARCOMPT n'est pas déclarée prête à publier.
+
 Le dossier d'ensemble — inventaire des composants, ordre des opérations,
 tableau complet des variables et contrôle automatique — est
 [`DEPLOYMENT-PACKAGE.md`](DEPLOYMENT-PACKAGE.md). Ce guide-ci en est la route

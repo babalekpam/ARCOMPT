@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { Context, MiddlewareHandler } from "hono";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import { createClerkClient, verifyToken } from "@clerk/backend";
 import type { Identity, TokenIdentityHints } from "./identity.js";
 import { log } from "./telemetry.js";
 
@@ -149,9 +150,15 @@ declare module "hono" {
 }
 
 export interface AuthOptions {
-  mode: "dev" | "oidc";
+  mode: "dev" | "oidc" | "clerk";
   issuer?: string;
   audience?: string;
+  /** Replit-managed Clerk backend secret. Required in Clerk mode. */
+  clerkSecretKey?: string;
+  /** Exact frontend origins allowed to mint the session token (`azp`). */
+  authorizedParties?: string[];
+  /** Injectable official Clerk user lookup, used only for first-login linking. */
+  clerkUserLookup?: (userId: string) => Promise<{ email?: string; emailVerified: boolean } | null>;
   /**
    * URL du trousseau imposée à la main, court-circuitant la découverte.
    * Par défaut la variable d'environnement `OIDC_JWKS_URI`.
@@ -212,10 +219,22 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
     throw new Error("AUTH_MODE=dev est interdit en production");
   }
   const resolve = opts.resolveIdentity;
-  if (opts.mode === "oidc" && !resolve) {
-    throw new Error("AUTH_MODE=oidc exige un résolveur d'identité (base de données)");
+  if ((opts.mode === "oidc" || opts.mode === "clerk") && !resolve) {
+    throw new Error(`AUTH_MODE=${opts.mode} exige un résolveur d'identité (base de données)`);
   }
   const jwksFor = opts.mode === "oidc" && opts.issuer ? jwksResolverFor(opts) : null;
+  const clerkLookup = opts.clerkUserLookup ?? (opts.clerkSecretKey
+    ? async (userId: string) => {
+        const user = await createClerkClient({ secretKey: opts.clerkSecretKey! }).users.getUser(userId);
+        const address = user.emailAddresses.find((entry) => entry.id === user.primaryEmailAddressId);
+        return address
+          ? { email: address.emailAddress, emailVerified: address.verification?.status === "verified" }
+          : null;
+      }
+    : null);
+  if (opts.mode === "clerk" && (!opts.clerkSecretKey || !clerkLookup || !opts.authorizedParties?.length)) {
+    throw new Error("AUTH_MODE=clerk exige CLERK_SECRET_KEY, CLERK_AUTHORIZED_PARTIES et un résolveur Clerk");
+  }
 
   return async (c, next) => {
     const tenantHeader = c.req.header("x-tenant-id");
@@ -227,7 +246,50 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
     }
     const header = c.req.header("authorization") ?? "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-    if (!token || !jwksFor) return unauthorized(c, "Jeton Bearer requis");
+    if (!token) return unauthorized(c, "Jeton Bearer requis");
+
+    if (opts.mode === "clerk") {
+      let payload: JWTPayload & { fva?: unknown; azp?: unknown };
+      try {
+        payload = await verifyToken(token, {
+          secretKey: opts.clerkSecretKey!,
+          authorizedParties: opts.authorizedParties,
+          headerType: "Bearer",
+        }) as JWTPayload & { fva?: unknown; azp?: unknown };
+      } catch {
+        return unauthorized(c, "Jeton Clerk invalide");
+      }
+      const sub = typeof payload.sub === "string" ? payload.sub : "";
+      // Clerk session tokens carry sid; rejecting tokens without it prevents a
+      // verified machine/JWT-template token from being accepted as a browser session.
+      if (!sub || typeof payload.sid !== "string" || payload.sid.length === 0) return unauthorized(c, "Jeton Clerk sans session (sub/sid)");
+      const existing = resolve ? await resolve(sub, {}) : null;
+      let identity = existing;
+      if (!identity) {
+        try {
+          const account = await clerkLookup!(sub);
+          if (account?.email && account.emailVerified) {
+            identity = await resolve!(sub, { email: account.email, emailVerified: true });
+          }
+        } catch {
+          // A provider lookup outage must not turn into an authorization grant.
+          return c.json({ error: { code: "IDENTITY_PROVIDER_UNAVAILABLE", message: "Profil Clerk inexploitable" } }, 503);
+        }
+      }
+      if (!identity) return forbidden(c, "Compte inconnu dans ARCOMPT : aucun utilisateur ne correspond à ce sujet Clerk");
+      if (identity.suspendedAt) return forbidden(c, "Compte suspendu : contactez l'administrateur de votre organisation");
+      if (identity.memberships.length === 0) return forbidden(c, "Aucun dossier accessible : demandez à être ajouté comme membre");
+      if (identity.mfaRequired && !hasClerkSecondFactor(payload.fva)) {
+        return forbidden(c, "Authentification multifacteur requise par votre organisation : reconnectez-vous avec un second facteur");
+      }
+      if (!tenantHeader) return forbidden(c, "En-tête X-Tenant-Id requis");
+      const membership = identity.memberships.find((m) => m.companyId === tenantHeader);
+      if (!membership) return forbidden(c, "Dossier non autorisé pour cet utilisateur");
+      c.set("auth", { userId: identity.userId, tenantId: membership.companyId, roles: [membership.role], organizationId: identity.organizationId, ...(identity.locale ? { locale: identity.locale } : {}) });
+      if (opts.touchLastActive) void opts.touchLastActive(identity.userId);
+      return next();
+    }
+    if (!jwksFor) return unauthorized(c, "Configuration OIDC absente");
 
     // Le trousseau est résolu à la première requête, jamais au chargement du
     // module. Son indisponibilité n'est pas un jeton invalide : la distinguer
@@ -274,6 +336,12 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
     if (opts.touchLastActive) void opts.touchLastActive(identity.userId);
     return next();
   };
+}
+
+/** Clerk's `fva` is [first-factor verification age, second-factor age]. */
+function hasClerkSecondFactor(fva: unknown): boolean {
+  if (!Array.isArray(fva) || fva.length !== 2) return false;
+  return typeof fva[1] === "number" && Number.isFinite(fva[1]) && fva[1] >= 0;
 }
 
 /** Second facteur prouvé par le claim `amr` (RFC 8176) ou par un `acr` suffisant. */

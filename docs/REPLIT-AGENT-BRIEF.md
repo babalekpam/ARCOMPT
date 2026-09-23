@@ -1,3 +1,10 @@
+# LEGACY NOTICE
+
+This brief predates the Replit-managed Clerk migration. Any Keycloak/Auth.js
+or `KEYCLOAK_*` instruction below is historical and must not be executed for
+the current deployment. Use `docs/DEPLOYMENT-CLERK.md` and `pnpm preflight`;
+passing an identity check alone does not make ARCOMPT ready to publish.
+
 <!--
 SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
 SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary

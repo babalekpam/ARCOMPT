@@ -9,7 +9,7 @@ hidden = [".git", "node_modules", "dist", ".next", ".pnpm-store"]
 run = [
   "bash",
   "-c",
-  "set -uo pipefail; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; corepack pnpm install --frozen-lockfile || exit 1; trap 'kill 0' EXIT; KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_API_AUDIENCE:-arcompt-api}\" corepack pnpm --filter @arcompt/api dev & KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_WEB_CLIENT_ID:-arcompt-web}\" corepack pnpm --filter @arcompt/web dev & wait -n; exit 1",
+  "set -uo pipefail; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; corepack pnpm install --frozen-lockfile || exit 1; trap 'kill 0' EXIT; corepack pnpm --filter @arcompt/api dev & corepack pnpm --filter @arcompt/web dev & wait -n; exit 1",
 ]
 
 [nix]
@@ -34,11 +34,11 @@ requiredFiles = [".replit"]
 # réécrit cette clé si vous y changez le type de déploiement.
 [deployment]
 deploymentTarget = "gce"
-build = ["bash", "-c", "corepack pnpm install --frozen-lockfile && corepack pnpm --filter @arcompt/web build"]
+build = ["bash", "-c", "corepack pnpm install --frozen-lockfile && AUTH_MODE=clerk corepack pnpm --filter @arcompt/web build"]
 run = [
   "bash",
   "-c",
-  "set -uo pipefail; export NODE_ENV=production AUTH_MODE=oidc API_PORT=4000 API_URL=http://127.0.0.1:4000; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; trap 'kill 0' EXIT; KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_API_AUDIENCE:?KEYCLOAK_API_AUDIENCE manquant}\" corepack pnpm --filter @arcompt/api start & KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_WEB_CLIENT_ID:?KEYCLOAK_WEB_CLIENT_ID manquant}\" corepack pnpm --filter @arcompt/web start & wait -n; echo 'ARCOMPT : un des deux processus s est arrete, le deploiement redemarre' >&2; exit 1",
+  "set -uo pipefail; export NODE_ENV=production AUTH_MODE=clerk API_PORT=4000 API_URL=http://127.0.0.1:4000; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; trap 'kill 0' EXIT; corepack pnpm --filter @arcompt/api start & corepack pnpm --filter @arcompt/web start & wait -n; echo 'ARCOMPT : un des deux processus s est arrete, le deploiement redemarre' >&2; exit 1",
 ]
 
 [[ports]]
@@ -48,6 +48,7 @@ externalPort = 80
 [[ports]]
 localPort = 4000
 externalPort = 3000
+
 
 
 
@@ -70,7 +71,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "bash -c 'set -uo pipefail; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; trap \"kill 0\" EXIT; KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_API_AUDIENCE:-arcompt-api}\" corepack pnpm --filter @arcompt/api dev & KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_WEB_CLIENT_ID:-arcompt-web}\" corepack pnpm --filter @arcompt/web dev & wait -n; exit 1'"
+args = "bash -c 'set -uo pipefail; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; trap \"kill 0\" EXIT; corepack pnpm --filter @arcompt/api dev & corepack pnpm --filter @arcompt/web dev & wait -n; exit 1'"
 waitForPort = 3000
 
 [workflows.workflow.metadata]

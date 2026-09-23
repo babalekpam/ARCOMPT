@@ -27,7 +27,7 @@ import {
   type PaymentProvider,
 } from "@arcompt/invoicing";
 
-export type AuthMode = "dev" | "oidc";
+export type AuthMode = "dev" | "oidc" | "clerk";
 
 /** Variables d'opt-out explicites : accepter sciemment une dépendance simulée en production. */
 export const INSECURE_OPT_OUT = {
@@ -76,7 +76,7 @@ export interface AppConfig {
   appUrl: string;
   baseCurrency: string;
   databaseUrl?: string;
-  auth: { mode: AuthMode; issuer?: string; audience?: string };
+  auth: { mode: AuthMode; issuer?: string; audience?: string; secretKey?: string; authorizedParties?: string[] };
   ai: { apiKey?: string; model?: string; simulated: boolean };
   storage: { driver: "r2" | "local" };
   antivirus: { driver: "clamav" | "none" };
@@ -164,12 +164,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
   if (!present(env.DATABASE_URL)) problems.push("DATABASE_URL : absent — aucune base de données à laquelle se connecter.");
 
   // --- Authentification -----------------------------------------------------
-  const mode: AuthMode = env.AUTH_MODE === "oidc" ? "oidc" : "dev";
+  const mode: AuthMode = env.AUTH_MODE === "oidc" ? "oidc" : env.AUTH_MODE === "clerk" ? "clerk" : "dev";
   if (mode !== "oidc") {
-    problems.push("AUTH_MODE : doit valoir « oidc » en production — le mode « dev » accepte l'en-tête X-Tenant-Id sans jeton.");
+    if (mode !== "clerk") problems.push("AUTH_MODE : doit valoir « clerk » ou « oidc » en production — le mode « dev » accepte l'en-tête X-Tenant-Id sans jeton.");
   }
-  if (!present(env.KEYCLOAK_ISSUER)) problems.push("KEYCLOAK_ISSUER : absent — aucun émetteur de jetons à vérifier.");
-  if (!present(env.KEYCLOAK_CLIENT_ID)) problems.push("KEYCLOAK_CLIENT_ID : absent — audience des jetons non vérifiable.");
+  if (mode === "oidc" || mode === "dev") {
+    if (!present(env.KEYCLOAK_ISSUER)) problems.push("KEYCLOAK_ISSUER : absent — aucun émetteur de jetons à vérifier.");
+    if (!present(env.KEYCLOAK_CLIENT_ID)) problems.push("KEYCLOAK_CLIENT_ID : absent — audience des jetons non vérifiable.");
+  }
+  if (mode === "clerk") {
+    if (!present(env.CLERK_SECRET_KEY)) problems.push("CLERK_SECRET_KEY : absent — les jetons Clerk ne peuvent pas être vérifiés.");
+    if (!present(env.CLERK_AUTHORIZED_PARTIES) && !present(env.APP_URL)) problems.push("CLERK_AUTHORIZED_PARTIES ou APP_URL : absent — l'origine de l'application n'est pas vérifiable.");
+  }
 
   // --- Paiements ------------------------------------------------------------
   // Aucun opérateur réel n'est encore implémenté. Deux situations distinctes :
@@ -276,8 +282,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
     ...(present(env.DATABASE_URL) ? { databaseUrl: env.DATABASE_URL } : {}),
     auth: {
       mode,
-      ...(present(env.KEYCLOAK_ISSUER) ? { issuer: env.KEYCLOAK_ISSUER } : {}),
-      ...(present(env.KEYCLOAK_CLIENT_ID) ? { audience: env.KEYCLOAK_CLIENT_ID } : {}),
+      ...(mode === "oidc" && present(env.KEYCLOAK_ISSUER) ? { issuer: env.KEYCLOAK_ISSUER } : {}),
+      ...(mode === "oidc" && present(env.KEYCLOAK_CLIENT_ID) ? { audience: env.KEYCLOAK_CLIENT_ID } : {}),
+      ...(mode === "clerk" && present(env.CLERK_SECRET_KEY) ? { secretKey: env.CLERK_SECRET_KEY } : {}),
+      ...(mode === "clerk" ? { authorizedParties: (env.CLERK_AUTHORIZED_PARTIES ?? env.APP_URL ?? "").split(",").map((v) => v.trim()).filter(Boolean) } : {}),
     },
     ai: {
       ...(present(env.ANTHROPIC_API_KEY) ? { apiKey: env.ANTHROPIC_API_KEY } : {}),

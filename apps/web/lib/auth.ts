@@ -6,7 +6,8 @@ import { redirect } from "next/navigation";
  *
  * - AUTH_MODE=dev : cookie httpOnly `arcompt_dev` (JSON {userId, tenantId, organizationId})
  *   transmis à l'API en X-User-Id / X-Tenant-Id / X-Organization-Id ;
- * - AUTH_MODE=oidc : session Auth.js (Keycloak), jeton transmis en Bearer.
+ * - AUTH_MODE=clerk : session Clerk, jeton court transmis en Bearer par le
+ *   proxy serveur (jamais exposé au navigateur).
  *
  * Dans les deux cas, le dossier courant peut être changé par le cookie
  * `arcompt_tenant` (sélecteur de dossier). L'API reste seule juge de
@@ -83,19 +84,20 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     };
   }
 
-  // Import différé : Auth.js ne s'initialise qu'en mode OIDC.
-  const { auth } = await import("../auth");
+  const { auth } = await import("@clerk/nextjs/server");
   const session = await auth();
-  if (!session?.accessToken) return null;
+  if (!session.userId) return null;
+  const accessToken = await session.getToken();
+  if (!accessToken) throw new Error("Clerk est configuré mais n'a fourni aucun jeton de session");
   const tenantId = tenantOverride || null;
-  const organizationId = session.organizationId ?? null;
+  const organizationId = session.orgId ?? null;
   return {
     mode,
-    userId: session.subjectId ?? session.user?.email ?? "?",
+    userId: session.userId,
     tenantId,
     organizationId,
-    headers: buildHeaders({ mode, tenantId, organizationId, accessToken: session.accessToken }),
-    displayName: session.user?.name ?? session.user?.email ?? session.subjectId ?? "?",
+    headers: buildHeaders({ mode, tenantId, organizationId, accessToken }),
+    displayName: session.userId,
   };
 }
 

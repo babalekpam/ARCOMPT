@@ -1,5 +1,11 @@
 # Mise en ligne d'ARCOMPT sur Replit
 
+> **LEGACY — cette page décrit l'ancien déploiement Keycloak/Auth.js et ne
+> doit pas être exécutée pour le déploiement actuel.** La procédure courante
+> est [`DEPLOYMENT-CLERK.md`](DEPLOYMENT-CLERK.md). Les contrôles de base,
+> RLS, services et sauvegardes restent obligatoires ; ce changement ne signifie
+> pas qu'ARCOMPT est prête à publier.
+
 Le dossier d'ensemble est [`DEPLOYMENT-PACKAGE.md`](DEPLOYMENT-PACKAGE.md) ; la
 version impérative destinée à un agent est
 [`REPLIT-AGENT-BRIEF.md`](REPLIT-AGENT-BRIEF.md).

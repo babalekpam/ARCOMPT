@@ -46,6 +46,34 @@ function problemsOf(env: NodeJS.ProcessEnv): string[] {
 }
 
 describe("loadConfig — production conforme", () => {
+  it("accepte Clerk uniquement avec secret et parties autorisées non vides", () => {
+    const cfg = loadConfig(productionEnv({
+      AUTH_MODE: "clerk",
+      CLERK_SECRET_KEY: "sk_test_example",
+      CLERK_AUTHORIZED_PARTIES: "https://app.example, https://www.example",
+      APP_URL: "",
+      KEYCLOAK_ISSUER: "",
+      KEYCLOAK_CLIENT_ID: "",
+    }), { warn: () => {} });
+    expect(cfg.auth).toEqual({
+      mode: "clerk",
+      secretKey: "sk_test_example",
+      authorizedParties: ["https://app.example", "https://www.example"],
+    });
+  });
+
+  it("refuse Clerk en production sans partie autorisée", () => {
+    const problems = problemsOf(productionEnv({
+      AUTH_MODE: "clerk",
+      CLERK_SECRET_KEY: "sk_test_example",
+      CLERK_AUTHORIZED_PARTIES: "",
+      APP_URL: "",
+      KEYCLOAK_ISSUER: "",
+      KEYCLOAK_CLIENT_ID: "",
+    }));
+    expect(problems.join("\n")).toContain("CLERK_AUTHORIZED_PARTIES");
+  });
+
   it("accepte un environnement de production complet et renvoie les valeurs typées", () => {
     const cfg = loadConfig(productionEnv({ API_PORT: "8080", DEFAULT_CURRENCY: "XAF" }), { warn: () => {} });
     expect(cfg.isProduction).toBe(true);

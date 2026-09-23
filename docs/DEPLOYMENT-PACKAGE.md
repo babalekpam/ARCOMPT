@@ -5,6 +5,10 @@ SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 
 # Dossier de mise en ligne — la plateforme entière
 
+> **LEGACY — les passages Keycloak/Auth.js de ce document sont historiques.**
+> Pour le déploiement actuel, utilisez [`DEPLOYMENT-CLERK.md`](DEPLOYMENT-CLERK.md)
+> et `pnpm preflight`. Ne publiez pas sur la seule base de ce document.
+
 Ce document est le **point d'entrée unique** pour mettre ARCOMPT en ligne. Il ne
 remplace pas les deux procédures pas-à-pas existantes ; il les ordonne, et il
 ajoute ce qu'aucune des deux ne contenait : l'inventaire complet de ce qui
