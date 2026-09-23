@@ -97,3 +97,4 @@ CLERK_AUTHORIZED_PARTIES = "https://caf6d426-fdba-4a8a-bc42-8c5c67b804e2-00-abi9
 
 [userenv.production]
 R2_ACCOUNT_ID = "fbe4af447846ae5501d8bb722f557aa6"
+R2_BUCKET = "arcompt-documents-prod-weur"
