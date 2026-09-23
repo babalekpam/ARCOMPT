@@ -10,10 +10,18 @@
       h1 { font-size: 1.25rem; }
       p { color: #475569; font-size: 0.95rem; }
       a { color: inherit; }
+      /* Marque ARCOMPT — tracé canonique, voir docs/BRAND.md. */
+      .mark { width: 2.25rem; height: 2.25rem; padding: .5rem; border-radius: .5rem; background: #0E5B46; fill: #fff; box-sizing: border-box; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #020617; color: #f1f5f9; }
+        p { color: #94a3b8; }
+        .mark { background: #4FB795; fill: #020617; }
+      }
     </style>
   </head>
   <body>
     <main>
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M11.8 3 H20.2 L25.93 18.2 H28.5 V22 H27.36 L30 29 H22.2 L19.62 22 H12.38 L9.8 29 H2 L4.64 22 H3.5 V18.2 H6.07 Z M16 12.2 L13.79 18.2 H18.21 Z"/></svg>
       <h1>ARCOMPT est hors ligne</h1>
       <p>Cette page n'est pas disponible sans réseau. Les brouillons d'écritures saisis hors ligne restent enregistrés sur cet appareil et seront envoyés au retour de la connexion.</p>
       <p><a href="/">Réessayer</a></p>

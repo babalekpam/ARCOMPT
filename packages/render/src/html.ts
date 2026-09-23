@@ -115,8 +115,22 @@ export function pageHeader(ctx: Ctx, title: string, meta: string[]): string {
   </header>`;
 }
 
+/**
+ * Marque ARCOMPT en SVG inline (aucun réseau : ces gabarits sont rendus par un
+ * Chromium isolé). Tracé canonique documenté dans `docs/BRAND.md`, recopié
+ * depuis `apps/web/components/brand/BrandMark.tsx` ; toute retouche vaut pour
+ * les deux. `fill: currentColor` : la marque prend le gris du pied de page.
+ */
+const MARK_SVG =
+  '<svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M11.8 3 H20.2 L25.93 18.2 H28.5 V22 H27.36 L30 29 H22.2 L19.62 22 H12.38 L9.8 29 H2 L4.64 22 H3.5 V18.2 H6.07 Z M16 12.2 L13.79 18.2 H18.21 Z"/></svg>';
+
+/**
+ * Pied de page : date d'édition puis la mention du logiciel producteur.
+ * La marque ARCOMPT y désigne l'outil qui a produit le document — jamais
+ * l'entreprise cliente, dont l'identité reste dans l'en-tête.
+ */
 export function pageFooter(ctx: Ctx): string {
-  return `<footer class="doc-footer">${esc(ctx.L("generatedOn"))} ${esc(fmtDateTime(ctx.generatedAt, ctx.locale))} · ARCOMPT</footer>`;
+  return `<footer class="doc-footer">${esc(ctx.L("generatedOn"))} ${esc(fmtDateTime(ctx.generatedAt, ctx.locale))} · <span class="producer">${MARK_SVG}ARCOMPT</span></footer>`;
 }
 
 /** Document HTML complet : squelette, style d'impression, filigrane éventuel. */
@@ -150,6 +164,8 @@ body { font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-
 .meta { text-align: right; font-size: 8.5pt; color: #333; min-width: 40%; }
 .doc-title { font-weight: 700; font-size: 11pt; color: #1a3a5c; text-transform: uppercase; letter-spacing: .04em; }
 .doc-footer { margin-top: 10px; padding-top: 4px; border-top: 1px solid #bbb; font-size: 7.5pt; color: #666; text-align: right; }
+.doc-footer .producer { white-space: nowrap; }
+.doc-footer .producer .mark { width: 7pt; height: 7pt; vertical-align: -0.8pt; margin-right: 1.5pt; fill: currentColor; }
 h1 { font-size: 14pt; text-transform: uppercase; margin: 6px 0 4px; color: #1a3a5c; letter-spacing: .04em; }
 h2 { font-size: 11pt; margin: 12px 0 4px; color: #1a3a5c; }
 h3 { font-size: 10pt; margin: 10px 0 3px; }

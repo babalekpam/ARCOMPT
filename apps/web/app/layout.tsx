@@ -10,6 +10,13 @@ export const metadata: Metadata = {
   description: "La comptabilité intelligente des PME de l'espace OHADA.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "ARCOMPT", statusBarStyle: "default" },
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
 };
 
 export const viewport: Viewport = {

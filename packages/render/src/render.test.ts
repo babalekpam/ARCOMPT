@@ -127,6 +127,29 @@ describe("états financiers (HTML)", () => {
   });
 });
 
+describe("marque ARCOMPT dans les documents", () => {
+  const h = renderHtml("statements", output, { company, generatedAt: "2026-01-15T10:00:00Z" });
+
+  it("place la marque au pied de page, comme logiciel producteur", () => {
+    // SVG inline : ces gabarits sont rendus par un Chromium sans réseau.
+    expect(h).toContain('<span class="producer"><svg class="mark"');
+    expect(h).toContain("ARCOMPT</span>");
+    // Elle hérite du gris du pied de page plutôt que d'imposer une couleur.
+    expect(h).toContain("fill: currentColor;");
+  });
+
+  it("ne se substitue pas à l'identité du client, qui reste seule en en-tête", () => {
+    expect(h).toContain("DEMO CI SARL");
+    expect(h.slice(0, h.indexOf('<footer class="doc-footer"'))).not.toContain('class="mark"');
+  });
+
+  it("n'apparaît qu'une fois par pied de page", () => {
+    const footers = h.split('<footer class="doc-footer"').length - 1;
+    expect(footers).toBeGreaterThan(1); // les états financiers font plusieurs pages
+    expect(h.split('class="mark"').length - 1).toBe(footers);
+  });
+});
+
 describe("PDF (Chromium)", () => {
   let chromium: string | null = null;
   try {
@@ -331,6 +354,7 @@ describe("facture, bulletin, rapprochement", () => {
     expect(html).toContain("Wave +225 05 00 00 00 00");
     expect(html).toContain("RIB CI93 SG001 01234 56789012345 67");
     expect(html).toContain("Pénalités de retard");
+    expect(html).toContain('<span class="producer"><svg class="mark"'); // logiciel producteur, sous les mentions du vendeur
     expect(renderHtml("invoice", { ...inv, kind: "CREDIT_NOTE" })).toContain("AVOIR N° FAC-2025-0042");
     expect(renderHtml("invoice", inv, { locale: "en" })).toContain("INVOICE No. FAC-2025-0042");
   });

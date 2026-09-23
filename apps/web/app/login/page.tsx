@@ -7,6 +7,7 @@ import { LocaleSwitcher } from "@/components/shell/LocaleSwitcher";
 import { DevLoginForm } from "@/components/login/DevLoginForm";
 import { KeycloakButton } from "@/components/login/KeycloakButton";
 import { Card } from "@/components/ui/Card";
+import { BrandLockup } from "@/components/brand/BrandMark";
 
 export const metadata: Metadata = { title: "Connexion" };
 
@@ -20,10 +21,7 @@ export default async function LoginPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-10">
       <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-900 text-base font-bold text-white dark:bg-slate-100 dark:text-slate-900">A</span>
-          <span className="text-xl font-semibold tracking-tight">{t("app.name")}</span>
-        </div>
+        <BrandLockup name={t("app.name")} size="lg" />
         <LocaleSwitcher compact />
       </div>
       <Card>
