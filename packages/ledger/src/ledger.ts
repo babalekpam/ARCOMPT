@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { normalizeCurrency, type CurrencyResolver } from "./currency.js";
 import { LedgerError } from "./errors.js";
 import { computeEntryHash } from "./hash.js";
 import { Money, sum } from "./money.js";
+import type { RateProvider } from "./rates.js";
 import type { LedgerStore } from "./store.js";
 import type {
   AccountBalance,
@@ -16,8 +18,20 @@ import type {
 import { assertNoIssues, normalizeAndValidate } from "./validate.js";
 
 export interface LedgerOptions {
-  /** Devise du dossier (ISO 4217). */
+  /**
+   * Devise de repli, utilisée uniquement pour un dossier dont la devise est
+   * inconnue du résolveur (dossier sans colonne `currency` renseignée, ou
+   * moteur construit sans résolveur : tests, calculs hors ligne).
+   */
   baseCurrency: string;
+  /**
+   * Devise de tenue par dossier. C'est elle qui fait foi : un dossier
+   * camerounais en XAF ne doit pas hériter du XOF configuré sur le processus.
+   * Le résolveur porte son propre cache et se partage entre requêtes.
+   */
+  currencyResolver?: CurrencyResolver;
+  /** Table des taux de change, pour convertir les lignes en devise étrangère. */
+  rates?: RateProvider;
   now?: () => Date;
 }
 
@@ -30,12 +44,24 @@ export interface LedgerOptions {
  */
 export class Ledger {
   private readonly now: () => Date;
+  private readonly fallbackCurrency: string;
 
   constructor(
     private readonly store: LedgerStore,
     private readonly options: LedgerOptions,
   ) {
     this.now = options.now ?? (() => new Date());
+    this.fallbackCurrency = normalizeCurrency(options.baseCurrency);
+  }
+
+  /**
+   * Devise de tenue du dossier. La colonne `currency` de `company` l'emporte ;
+   * la devise configurée sur le processus ne sert que de repli pour un dossier
+   * qui n'en déclare aucune.
+   */
+  async baseCurrency(tenantId: Id): Promise<string> {
+    const resolved = await this.options.currencyResolver?.currencyFor(tenantId);
+    return resolved ?? this.fallbackCurrency;
   }
 
   /** Crée un brouillon après validation des invariants applicatifs. */
@@ -47,7 +73,11 @@ export class Ledger {
     const journal = await this.store.getJournalByCode(actor.tenantId, input.journalCode);
     if (!journal) throw new LedgerError("UNKNOWN_JOURNAL", `Journal ${input.journalCode} inconnu`);
 
-    const { lines, issues } = await normalizeAndValidate(this.store, actor.tenantId, input, this.options.baseCurrency);
+    const baseCurrency = await this.baseCurrency(actor.tenantId);
+    const { lines, issues } = await normalizeAndValidate(this.store, actor.tenantId, input, {
+      baseCurrency,
+      ...(this.options.rates ? { rates: this.options.rates } : {}),
+    });
     assertNoIssues(issues);
 
     const found = await this.store.findPeriodForDate(actor.tenantId, input.date);
@@ -90,6 +120,9 @@ export class Ledger {
         credit: l.credit,
         currency: l.currency,
         rate: l.rate,
+        rateSource: l.rateSource,
+        debitBase: l.debitBase,
+        creditBase: l.creditBase,
         analyticCode: l.analyticCode,
         vatCode: l.vatCode,
       })),
@@ -183,7 +216,10 @@ export class Ledger {
         label: l.label,
         currency: l.currency,
         ...(l.partnerId ? { partnerId: l.partnerId } : {}),
+        // Une contrepassation reprend le taux d'origine : elle annule
+        // l'écriture, elle ne constate pas un nouvel écart de change.
         ...(l.rate ? { rate: l.rate } : {}),
+        ...(l.rateSource ? { rateSource: l.rateSource } : {}),
         ...(l.analyticCode ? { analyticCode: l.analyticCode } : {}),
         ...(l.vatCode ? { vatCode: l.vatCode } : {}),
       })),
@@ -205,6 +241,7 @@ export class Ledger {
     const rows = await this.store.accountBalances(tenantId, from, to);
     return {
       tenantId,
+      currency: await this.baseCurrency(tenantId),
       fiscalYearCode: fy.code,
       from,
       to,
@@ -212,6 +249,15 @@ export class Ledger {
       totalDebit: sum(rows.map((r) => r.debit)),
       totalCredit: sum(rows.map((r) => r.credit)),
     };
+  }
+
+  /**
+   * Positions en devise étrangère par compte × tiers × devise : montants
+   * d'origine et contrevaleurs historiques. Entrée de la retranslation de fin
+   * de période (voir `planRetranslation`).
+   */
+  async foreignPositions(tenantId: Id, opts: { from: string; to: string; accountPrefixes?: string[] }) {
+    return this.store.foreignPositions(tenantId, opts.from, opts.to, opts.accountPrefixes ? { accountPrefixes: opts.accountPrefixes } : {});
   }
 
   /** Écritures validées d'un exercice (grand livre), éventuellement limitées à un compte ou préfixe de compte. */

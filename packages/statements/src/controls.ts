@@ -10,6 +10,12 @@ interface Ctx {
   hasPrevious: boolean;
   orphanAccounts: string[];
   system: AccountingSystem;
+  /** Devise de présentation des états (code ISO 4217 normalisé). */
+  currency: string;
+  /** Devise réellement portée par la balance, si le grand livre l'a annoncée. */
+  balanceCurrency?: string;
+  /** Comptes dont le solde porte des fractions sous l'unité monétaire. */
+  subUnitAccounts: string[];
 }
 
 /**
@@ -35,6 +41,40 @@ export function runControls(ctx: Ctx): Control[] {
     totalC = totalC.add(v.credit);
   }
   eq("BALANCE_EQUILIBREE", "Balance équilibrée (total débits = total crédits)", "BLOCKING", totalD, totalC, "La balance de clôture doit être équilibrée avant tout calcul.");
+
+  // Devise. Les états SYSCOHADA n'ont qu'une colonne de montants : la balance
+  // doit déjà être convertie dans la devise de présentation. Le contrôle n'est
+  // possible que si le grand livre annonce la devise de la balance.
+  if (ctx.balanceCurrency !== undefined) {
+    const ok = ctx.balanceCurrency === ctx.currency;
+    out.push({
+      id: "DEVISE_ETATS",
+      label: "Devise des états = devise de tenue du dossier",
+      severity: "BLOCKING",
+      ok,
+      detail: ok
+        ? `États présentés en ${ctx.currency}, devise de tenue du dossier.`
+        : `Les états sont demandés en ${ctx.currency} alors que la balance est tenue en ${ctx.balanceCurrency} : les montants ne seraient pas convertis, seulement réétiquetés.`,
+      expected: ctx.currency,
+      actual: ctx.balanceCurrency,
+    });
+  }
+
+  // Une devise sans sous-unité (XOF, XAF) ne peut pas porter de centimes : ils
+  // viennent d'une conversion et appellent un arrondi décidé par le comptable,
+  // pas subi à l'impression.
+  {
+    const ok = ctx.subUnitAccounts.length === 0;
+    out.push({
+      id: "UNITE_MONETAIRE",
+      label: `Montants exprimés à l'unité du ${ctx.currency}`,
+      severity: "WARNING",
+      ok,
+      detail: ok
+        ? `Aucun solde ne descend sous l'unité monétaire du ${ctx.currency}.`
+        : `Soldes plus fins que l'unité du ${ctx.currency} (résidus de conversion à arrondir) : ${ctx.subUnitAccounts.join(", ")}`,
+    });
+  }
 
   if (actif && passif) {
     eq("ACTIF_EGAL_PASSIF", "Total actif = total passif", "BLOCKING", actif.byCode.BZ!.net, passif.byCode.DZ!.net, "Le total général de l'actif (BZ) doit être égal à celui du passif (DZ).");

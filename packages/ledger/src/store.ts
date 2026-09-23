@@ -3,6 +3,7 @@ import type {
   AccountBalance,
   Actor,
   FiscalYear,
+  ForeignPosition,
   Id,
   Journal,
   JournalEntry,
@@ -44,8 +45,18 @@ export interface LedgerStore {
   ): Promise<JournalEntry>;
   linkReversal(tenantId: Id, originalId: Id, reversalId: Id): Promise<void>;
 
-  /** Soldes cumulés par compte sur un intervalle de dates (écritures validées). */
+  /**
+   * Soldes cumulés par compte sur un intervalle de dates (écritures validées),
+   * dans la devise de tenue du dossier : les montants convertis, jamais les
+   * montants d'origine.
+   */
   accountBalances(tenantId: Id, from: string, to: string): Promise<AccountBalance[]>;
+  /**
+   * Positions en devise étrangère par compte × tiers × devise (écritures
+   * validées) : montants d'origine et contrevaleurs historiques. Base de la
+   * retranslation de fin de période.
+   */
+  foreignPositions(tenantId: Id, from: string, to: string, opts?: { accountPrefixes?: string[] }): Promise<ForeignPosition[]>;
   /** Écritures validées d'un journal dans l'ordre de numérotation (audit, vérification de chaîne). */
   listValidatedEntries(tenantId: Id, journalId: Id): Promise<JournalEntry[]>;
   /** Écritures validées d'un exercice (grand livre), filtrables par compte ou préfixe de compte, triées par date puis numéro. */

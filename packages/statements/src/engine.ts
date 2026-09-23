@@ -1,4 +1,4 @@
-import { Money, type AccountBalance } from "@arcompt/ledger";
+import { CURRENCY_DECIMALS, Money, isCurrencyCode, normalizeCurrency, type AccountBalance } from "@arcompt/ledger";
 import { runControls } from "./controls.js";
 import { evalFormula, indexBalance, type BalanceIndex } from "./formula.js";
 import { computeNotes } from "./notes.js";
@@ -13,6 +13,10 @@ export function computeStatements(input: StatementsInput): StatementsOutput {
   const version = input.templateVersion ?? DEFAULT_TEMPLATE_VERSION;
   const template = TEMPLATES[version];
   if (!template) throw new Error(`Version de gabarit inconnue : ${version}`);
+  // Les états sont mono-devise : la devise de présentation doit être un code
+  // ISO 4217, et la balance fournie doit déjà y être exprimée.
+  if (!isCurrencyCode(input.currency)) throw new Error(`Devise de présentation invalide : "${input.currency}" (code ISO 4217 attendu)`);
+  const currency = normalizeCurrency(input.currency);
 
   const current = indexBalance(input.balance);
   const previous = indexBalance(input.previousBalance ?? []);
@@ -30,13 +34,24 @@ export function computeStatements(input: StatementsInput): StatementsOutput {
     .filter(([n, v]) => !n.startsWith("9") && !v.debit.sub(v.credit).isZero() && !covered.has(n))
     .map(([n]) => n)
     .sort();
-  const controls = runControls({ statements, notes, current, previous, hasPrevious, orphanAccounts, system: input.system });
+  const controls = runControls({
+    statements,
+    notes,
+    current,
+    previous,
+    hasPrevious,
+    orphanAccounts,
+    system: input.system,
+    currency,
+    ...(input.balanceCurrency ? { balanceCurrency: normalizeCurrency(input.balanceCurrency) } : {}),
+    subUnitAccounts: subUnitAccounts(input.balance, currency),
+  });
 
   return {
     templateId: template.id,
     templateVersion: template.version,
     system: input.system,
-    currency: input.currency,
+    currency,
     fiscalYearCode: input.fiscalYearCode,
     statements,
     notes,
@@ -128,6 +143,21 @@ function computeSum(def: LineDefinition, refs: Array<{ code: string; sign: 1 | -
     previousNet: prev,
     accounts: [...accounts].sort(),
   };
+}
+
+/**
+ * Comptes dont le solde porte des fractions plus fines que l'unité monétaire de
+ * la devise de présentation. En XOF ou en XAF, qui n'ont pas de sous-unité, des
+ * centimes ne peuvent venir que d'une conversion : ils signalent un arrondi à
+ * trancher avant publication, pas une erreur d'équilibre.
+ */
+function subUnitAccounts(rows: AccountBalance[], currency: string): string[] {
+  const decimals = CURRENCY_DECIMALS[currency] ?? 2;
+  const out = new Set<string>();
+  for (const r of rows) {
+    if (!r.debit.roundTo(decimals).eq(r.debit) || !r.credit.roundTo(decimals).eq(r.credit)) out.add(r.accountNumber);
+  }
+  return [...out].sort();
 }
 
 /**

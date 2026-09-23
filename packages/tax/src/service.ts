@@ -2,7 +2,7 @@ import type { Sql } from "postgres";
 import { withTenant } from "@arcompt/db";
 import { Money, type Actor, type Id, type JournalLineInput, type Ledger } from "@arcompt/ledger";
 import { computeStatements, type StatementsOutput } from "@arcompt/statements";
-import type { CountryPack } from "@arcompt/country-packs";
+import { assertPackPublished, draftPackNotice, isPackPublished, PackNotPublishedError, packReference, type CountryPack, type OfficialUse } from "@arcompt/country-packs";
 import { filingCalendar } from "./calendar.js";
 import { buildDsfData, dsfWorkbook } from "./dsf.js";
 import { computeIsInstalments } from "./is.js";
@@ -33,6 +33,8 @@ export interface TaxServiceDeps {
   pack?: CountryPack;
   accounts?: Partial<VatAccounts>;
   company?: { name: string; taxIds?: Record<string, string> };
+  /** Environnement lu par la garde des documents légaux (ALLOW_INSECURE_DRAFT_PACK_FILINGS) ; `process.env` par défaut. */
+  env?: Record<string, string | undefined>;
   now?: () => Date;
 }
 
@@ -69,6 +71,33 @@ export class TaxService {
     return this.deps.pack;
   }
 
+  /**
+   * Garde des documents légaux — déclaration validée, dépôt, acomptes d'IS,
+   * liasse DSF. Un pack non PUBLISHED refuse net, sauf échappement explicite de
+   * pré-production, auquel cas le document part marqué non officiel.
+   *
+   * Ce que cette garde ne couvre pas, délibérément : le calcul de TVA à
+   * l'écran, les états financiers, le registre des retenues et le calendrier.
+   * Ce sont des vues internes, pas des documents remis à l'administration, et
+   * une PME qui essaie le produit doit pouvoir les consulter.
+   */
+  private officialFor(artefact: string): OfficialUse {
+    const pack = this.requirePack();
+    try {
+      return assertPackPublished(pack, { artefact, ...(this.deps.env ? { env: this.deps.env } : {}) });
+    } catch (e) {
+      if (e instanceof PackNotPublishedError) {
+        throw new TaxError("PACK_NOT_PUBLISHED", e.message, { pack: packReference(pack), status: pack.status, artefact });
+      }
+      throw e;
+    }
+  }
+
+  /** Officialité d'un calcul non bloquant (TVA calculée) : constatée, jamais opposée. */
+  private packIsOfficial(): boolean {
+    return this.deps.pack ? isPackPublished(this.deps.pack) : true;
+  }
+
   // ---------------------------------------------------------------------------
   // TVA
   // ---------------------------------------------------------------------------
@@ -88,7 +117,7 @@ export class TaxService {
   }
 
   /** Calcule (ou recalcule) la déclaration de TVA d'une période et l'enregistre en COMPUTED. */
-  async computeVat(input: { from: string; to: string; previousCredit?: string }): Promise<{ taxReturn: TaxReturn; computation: VatReturnComputation }> {
+  async computeVat(input: { from: string; to: string; previousCredit?: string }): Promise<{ taxReturn: TaxReturn; computation: VatReturnComputation; official: boolean; packNotice: string | null }> {
     if (input.to < input.from) throw new TaxError("INVALID_INPUT", "Période invalide");
     const existing = await this.findReturn("VAT", input.from, input.to);
     if (existing && (existing.status === "VALIDATED" || existing.status === "FILED")) {
@@ -104,12 +133,17 @@ export class TaxService {
       accounts: this.accounts,
       ...(this.deps.pack ? { pack: this.deps.pack } : {}),
     });
+    // Calcul de TVA : vue interne, jamais refusée — c'est la validation qui
+    // engage. On mémorise seulement l'officialité du pack qui a servi.
+    const official = this.packIsOfficial();
     const data = JSON.parse(JSON.stringify(computation)) as Record<string, unknown>;
     const taxReturn = existing
-      ? await this.updateReturn(existing.id, { status: "COMPUTED", data, amountDue: computation.amountDue })
-      : await this.insertReturn("VAT", input.from, input.to, "COMPUTED", data, computation.amountDue);
+      ? await this.updateReturn(existing.id, { status: "COMPUTED", data, amountDue: computation.amountDue, official })
+      : await this.insertReturn("VAT", input.from, input.to, "COMPUTED", data, computation.amountDue, official);
     await this.audit("tax.vat.compute", taxReturn.id, { from: input.from, to: input.to, amountDue: computation.amountDue.toString() });
-    return { taxReturn, computation };
+    // L'écran doit pouvoir dire que le pack est un brouillon plutôt que de
+    // laisser croire que le montant affiché fait foi.
+    return { taxReturn, computation, official, packNotice: this.deps.pack ? draftPackNotice(this.deps.pack) : null };
   }
 
   /** Crédit reporté par la dernière déclaration validée ou déposée antérieure à `before`. */
@@ -132,6 +166,9 @@ export class TaxService {
     const tr = await this.getReturn(id);
     if (tr.kind !== "VAT") throw new TaxError("INVALID_INPUT", "Déclaration de TVA attendue");
     if (tr.status !== "COMPUTED") throw new TaxError("INVALID_STATE", `Déclaration au statut ${tr.status} : seule une déclaration calculée se valide`);
+    // Une déclaration validée est le montant que le dossier déclare devoir à
+    // l'État : document légal, pack publié exigé.
+    const use = this.officialFor(`Déclaration de TVA ${tr.periodFrom} → ${tr.periodTo}`);
     const collected = Money.parse(String(tr.data.totalCollected ?? "0"));
     const deductible = Money.parse(String(tr.data.totalDeductible ?? "0"));
     const net = Money.parse(String(tr.data.net ?? "0"));
@@ -152,8 +189,8 @@ export class TaxService {
       });
       entryId = entry.id;
     }
-    const updated = await this.updateReturn(id, { status: "VALIDATED", entryId });
-    await this.audit("tax.vat.validate", id, { entryId });
+    const updated = await this.updateReturn(id, { status: "VALIDATED", entryId, official: use.official });
+    await this.audit("tax.vat.validate", id, { entryId, official: use.official, pack: use.packReference, packStatus: use.packStatus });
     return updated;
   }
 
@@ -185,8 +222,10 @@ export class TaxService {
   async markFiled(id: Id, filingReference: string): Promise<TaxReturn> {
     const tr = await this.getReturn(id);
     if (tr.status !== "VALIDATED" && tr.status !== "COMPUTED") throw new TaxError("INVALID_STATE", `Déclaration au statut ${tr.status}`);
-    const updated = await this.updateReturn(id, { status: "FILED", filingReference, filedAt: this.now().toISOString() });
-    await this.audit("tax.file", id, { filingReference });
+    // Marquer déposé, c'est affirmer qu'un document est parti à l'administration.
+    const use = this.officialFor(`Dépôt de la déclaration ${tr.kind} ${tr.periodFrom} → ${tr.periodTo}`);
+    const updated = await this.updateReturn(id, { status: "FILED", filingReference, filedAt: this.now().toISOString(), official: use.official });
+    await this.audit("tax.file", id, { filingReference, official: use.official, pack: use.packReference, packStatus: use.packStatus });
     return updated;
   }
 
@@ -195,6 +234,9 @@ export class TaxService {
   // ---------------------------------------------------------------------------
 
   async isInstalments(input: { fiscalYearCode: string; fiscalResult: string; turnover: string; instalments?: number }): Promise<{ taxReturn: TaxReturn; computation: IsComputation }> {
+    // Échéancier d'acomptes d'IS : entièrement tiré des barèmes du pack et payé
+    // au Trésor. Pack publié exigé.
+    const use = this.officialFor(`Acomptes d'impôt sur les sociétés ${input.fiscalYearCode}`);
     const pack = this.requirePack();
     const fy = await this.fiscalYear(input.fiscalYearCode);
     const computation = computeIsInstalments({
@@ -207,11 +249,11 @@ export class TaxService {
     });
     const existing = await this.findReturn("IS_INSTALMENT", fy.startDate, fy.endDate);
     if (existing && existing.status !== "COMPUTED" && existing.status !== "DRAFT") throw new TaxError("INVALID_STATE", `Acomptes ${existing.status}`);
-    const data = JSON.parse(JSON.stringify(computation)) as Record<string, unknown>;
+    const data = JSON.parse(JSON.stringify({ ...computation, official: use.official, notice: use.notice })) as Record<string, unknown>;
     const taxReturn = existing
-      ? await this.updateReturn(existing.id, { status: "COMPUTED", data, amountDue: computation.due })
-      : await this.insertReturn("IS_INSTALMENT", fy.startDate, fy.endDate, "COMPUTED", data, computation.due);
-    await this.audit("tax.is.compute", taxReturn.id, { due: computation.due.toString() });
+      ? await this.updateReturn(existing.id, { status: "COMPUTED", data, amountDue: computation.due, official: use.official })
+      : await this.insertReturn("IS_INSTALMENT", fy.startDate, fy.endDate, "COMPUTED", data, computation.due, use.official);
+    await this.audit("tax.is.compute", taxReturn.id, { due: computation.due.toString(), official: use.official, pack: use.packReference });
     return { taxReturn, computation };
   }
 
@@ -264,23 +306,34 @@ export class TaxService {
 
   /** Assemble la DSF (états + passage fiscal) et l'enregistre (kind DSF, COMPUTED). */
   async buildDsf(fiscalYearCode: string, opts: DsfAdjustments & { previousFiscalYearCode?: string }): Promise<{ dsf: DsfResult; taxReturn: TaxReturn }> {
+    // La liasse et son classeur sont le document déposé à la DGI : pack publié
+    // exigé. Les états financiers seuls (`statements()`) restent consultables,
+    // ils ne doivent rien au pack.
+    const use = this.officialFor(`Liasse fiscale (DSF) ${fiscalYearCode}`);
     const pack = this.requirePack();
     const fy = await this.fiscalYear(fiscalYearCode);
     const statements = await this.statements(fiscalYearCode, opts.previousFiscalYearCode);
-    const dsf = buildDsfData({ pack, statements, date: fy.endDate, adjustments: opts });
+    const dsf = buildDsfData({ pack, statements, date: fy.endDate, adjustments: opts, official: use });
     const existing = await this.findReturn("DSF", fy.startDate, fy.endDate);
     if (existing && existing.status === "FILED") throw new TaxError("INVALID_STATE", "DSF déjà déposée");
-    const data = JSON.parse(JSON.stringify({ fiscal: dsf.fiscal, controls: statements.controls, publishable: statements.publishable })) as Record<string, unknown>;
+    const data = JSON.parse(
+      JSON.stringify({ fiscal: dsf.fiscal, controls: statements.controls, publishable: statements.publishable, official: dsf.official, notice: dsf.notice }),
+    ) as Record<string, unknown>;
     const taxReturn = existing
-      ? await this.updateReturn(existing.id, { status: "COMPUTED", data, amountDue: dsf.fiscal.isDue })
-      : await this.insertReturn("DSF", fy.startDate, fy.endDate, "COMPUTED", data, dsf.fiscal.isDue);
-    await this.audit("tax.dsf.build", taxReturn.id, { fiscalResult: dsf.fiscal.fiscalResult.toString(), isDue: dsf.fiscal.isDue.toString() });
+      ? await this.updateReturn(existing.id, { status: "COMPUTED", data, amountDue: dsf.fiscal.isDue, official: dsf.official })
+      : await this.insertReturn("DSF", fy.startDate, fy.endDate, "COMPUTED", data, dsf.fiscal.isDue, dsf.official);
+    await this.audit("tax.dsf.build", taxReturn.id, { fiscalResult: dsf.fiscal.fiscalResult.toString(), isDue: dsf.fiscal.isDue.toString(), official: dsf.official });
     return { dsf, taxReturn };
   }
 
-  async dsfWorkbook(fiscalYearCode: string, opts: DsfAdjustments & { previousFiscalYearCode?: string }): Promise<Buffer> {
+  /**
+   * Classeur Excel de la liasse. Il renvoie aussi la liasse : l'appelant a
+   * besoin de savoir si le document est officiel pour nommer le fichier — un
+   * classeur non officiel ne doit pas s'appeler comme le vrai.
+   */
+  async dsfWorkbook(fiscalYearCode: string, opts: DsfAdjustments & { previousFiscalYearCode?: string }): Promise<{ buffer: Buffer; dsf: DsfResult }> {
     const { dsf } = await this.buildDsf(fiscalYearCode, opts);
-    return dsfWorkbook(dsf, this.deps.company ? { company: this.deps.company } : {});
+    return { buffer: await dsfWorkbook(dsf, this.deps.company ? { company: this.deps.company } : {}), dsf };
   }
 
   // ---------------------------------------------------------------------------
@@ -328,11 +381,11 @@ export class TaxService {
     });
   }
 
-  private async insertReturn(kind: TaxReturnKind, from: string, to: string, status: TaxReturn["status"], data: Record<string, unknown>, amountDue: Money): Promise<TaxReturn> {
+  private async insertReturn(kind: TaxReturnKind, from: string, to: string, status: TaxReturn["status"], data: Record<string, unknown>, amountDue: Money, official = true): Promise<TaxReturn> {
     return this.tx(async (tx) => {
       const [r] = await tx`
-        INSERT INTO tax_return (tenant_id, kind, period_from, period_to, status, data, amount_due, created_by)
-        VALUES (${this.deps.ctx.tenantId}, ${kind}, ${from}, ${to}, ${status}, ${tx.json(data as never)}, ${amountDue.toString()}, ${this.deps.ctx.userId})
+        INSERT INTO tax_return (tenant_id, kind, period_from, period_to, status, data, amount_due, official, created_by)
+        VALUES (${this.deps.ctx.tenantId}, ${kind}, ${from}, ${to}, ${status}, ${tx.json(data as never)}, ${amountDue.toString()}, ${official}, ${this.deps.ctx.userId})
         RETURNING ${returnColumns(tx)}`;
       return mapReturn(r!);
     });
@@ -340,14 +393,14 @@ export class TaxService {
 
   private async updateReturn(
     id: Id,
-    patch: { status?: TaxReturn["status"]; data?: Record<string, unknown>; amountDue?: Money; entryId?: Id | null; paymentEntryId?: Id; filingReference?: string; filedAt?: string },
+    patch: { status?: TaxReturn["status"]; data?: Record<string, unknown>; amountDue?: Money; entryId?: Id | null; paymentEntryId?: Id; filingReference?: string; filedAt?: string; official?: boolean },
   ): Promise<TaxReturn> {
     const current = await this.getReturn(id);
     return this.tx(async (tx) => {
       const [r] = await tx`
         UPDATE tax_return
            SET status = ${patch.status ?? current.status}, data = ${tx.json((patch.data ?? current.data) as never)},
-               amount_due = ${(patch.amountDue ?? current.amountDue).toString()},
+               amount_due = ${(patch.amountDue ?? current.amountDue).toString()}, official = ${patch.official ?? current.official},
                entry_id = ${patch.entryId === undefined ? current.entryId : patch.entryId},
                payment_entry_id = ${patch.paymentEntryId ?? current.paymentEntryId},
                filing_reference = ${patch.filingReference ?? current.filingReference},
@@ -378,7 +431,7 @@ export class TaxService {
 
 function returnColumns(tx: Sql) {
   return tx`id, tenant_id, kind, period_from::text AS period_from, period_to::text AS period_to, status, data, amount_due::text AS amount_due,
-    entry_id, payment_entry_id, filing_reference, filed_at, created_at, updated_at`;
+    entry_id, payment_entry_id, filing_reference, filed_at, official, created_at, updated_at`;
 }
 
 function mapReturn(r: Record<string, unknown>): TaxReturn {
@@ -396,6 +449,7 @@ function mapReturn(r: Record<string, unknown>): TaxReturn {
     paymentEntryId: (r.payment_entry_id as Id | null) ?? null,
     filingReference: (r.filing_reference as string | null) ?? null,
     filedAt: iso(r.filed_at),
+    official: r.official === undefined || r.official === null ? true : Boolean(r.official),
     createdAt: iso(r.created_at)!,
     updatedAt: iso(r.updated_at)!,
   };

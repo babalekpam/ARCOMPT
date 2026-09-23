@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Sql } from "postgres";
 import { z } from "zod";
-import { seedCompany, withTenant, type Db } from "@arcompt/db";
+import { decryptTaxIds, encryptTaxIds, seedCompany, tenantCipherIn, withTenant, type Db } from "@arcompt/db";
 import { loadPack as defaultLoadPack, type CountryPack } from "@arcompt/country-packs";
 import { PortalError } from "./errors.js";
 import { audit, iso, isoOrNull, str, strOrNull, type Row } from "./sql.js";
@@ -198,7 +198,20 @@ export class OrganizationService {
         await tx`UPDATE account SET postable = false WHERE tenant_id = ${companyId} AND number <> ${o.number} AND ${o.number} LIKE number || '%'`;
       }
       if (input.taxRegime || input.taxIds) {
-        await tx`UPDATE company SET tax_regime = coalesce(${input.taxRegime ?? null}, tax_regime), tax_ids = tax_ids || ${tx.json(input.taxIds ?? {})} WHERE id = ${companyId}`;
+        // Les identifiants fiscaux sont chiffrés au repos (docs/SECURITY.md §7) :
+        // la fusion se fait en clair en mémoire, puis on réécrit un seul chiffré
+        // et on laisse la colonne jsonb vide.
+        let taxIdsEnc: string | null | undefined;
+        if (input.taxIds) {
+          const cipher = await tenantCipherIn(tx, companyId);
+          const [current] = await tx`SELECT tax_ids, tax_ids_enc FROM company WHERE id = ${companyId}`;
+          const merged = { ...decryptTaxIds(cipher, current?.tax_ids_enc as string | null, current?.tax_ids as Record<string, unknown> | null), ...input.taxIds };
+          taxIdsEnc = encryptTaxIds(cipher, merged);
+        }
+        await tx`
+          UPDATE company SET tax_regime = coalesce(${input.taxRegime ?? null}, tax_regime)
+            ${taxIdsEnc === undefined ? tx`` : tx`, tax_ids = '{}'::jsonb, tax_ids_enc = ${taxIdsEnc}`}
+          WHERE id = ${companyId}`;
       }
       return tx`SELECT * FROM company WHERE id = ${companyId}`;
     });

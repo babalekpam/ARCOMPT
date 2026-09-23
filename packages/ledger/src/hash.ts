@@ -20,6 +20,12 @@ export function canonicalEntryPayload(entry: JournalEntry): string {
       an: l.analyticCode,
       v: l.vatCode,
       l: l.label,
+      // Le montant converti n'entre dans la sérialisation que lorsqu'il diffère
+      // du montant d'origine, c'est-à-dire sur les seules lignes en devise
+      // étrangère. Les écritures monodevises — toutes celles d'avant la
+      // migration 0012 — gardent ainsi exactement le même hash, et la chaîne
+      // existante reste vérifiable, tandis qu'une conversion est scellée.
+      ...(l.debitBase.eq(l.debit) && l.creditBase.eq(l.credit) ? {} : { db: l.debitBase.toString(), cb: l.creditBase.toString() }),
     }));
   return JSON.stringify({
     t: entry.tenantId,

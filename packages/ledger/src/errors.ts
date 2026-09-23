@@ -19,7 +19,12 @@ export type LedgerErrorCode =
   | "TENANT_MISMATCH"
   | "HASH_CHAIN_BROKEN"
   | "IMPORT_UNMAPPED_ACCOUNT"
-  | "IMPORT_UNBALANCED";
+  | "IMPORT_UNBALANCED"
+  | "UNKNOWN_CURRENCY"
+  | "RATE_REQUIRED"
+  | "RATE_INVALID"
+  | "RATE_NOT_APPLICABLE"
+  | "CONVERSION_UNDERFLOW";
 
 export class LedgerError extends Error {
   override name = "LedgerError";

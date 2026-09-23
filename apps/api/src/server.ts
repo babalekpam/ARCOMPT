@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import type { Sql } from "postgres";
 import { createDb } from "@arcompt/db";
-import { Ledger, PostgresStore } from "@arcompt/ledger";
+import { createCompanyCurrencyResolver, Ledger, PostgresRateProvider, PostgresStore } from "@arcompt/ledger";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { beginDraining } from "./health.js";
@@ -20,12 +20,27 @@ await initTelemetry();
 
 const db = createDb();
 
+/**
+ * Devise de tenue : celle du dossier, pas celle du processus. Un dossier
+ * camerounais en XAF ne doit pas se retrouver tenu en XOF parce que l'API a
+ * démarré avec `DEFAULT_CURRENCY=XOF`.
+ *
+ * Le résolveur est construit ici, une fois, et partagé par toutes les requêtes :
+ * relire `company.currency` à chaque écriture coûterait un aller-retour SQL sur
+ * le chemin le plus chaud. Son cache expire (5 minutes par défaut) pour qu'une
+ * correction de devise soit prise en compte sans redémarrage, et
+ * `cfg.baseCurrency` ne sert plus que de repli pour un dossier sans devise.
+ */
+const currencyResolver = createCompanyCurrencyResolver(db as unknown as Sql);
+
 const app = createApp({
   db: db as unknown as Sql,
   auth: { mode: cfg.auth.mode, ...(cfg.auth.issuer ? { issuer: cfg.auth.issuer } : {}), ...(cfg.auth.audience ? { audience: cfg.auth.audience } : {}) },
   ledgerFor: (ctx) =>
     new Ledger(new PostgresStore(db as unknown as Sql, { userId: ctx.userId, ...(ctx.organizationId ? { organizationId: ctx.organizationId } : {}) }), {
       baseCurrency: cfg.baseCurrency,
+      currencyResolver,
+      rates: new PostgresRateProvider(db as unknown as Sql, { userId: ctx.userId, ...(ctx.organizationId ? { organizationId: ctx.organizationId } : {}) }),
     }),
 });
 

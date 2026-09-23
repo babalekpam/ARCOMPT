@@ -63,9 +63,16 @@ export interface JournalLineInput {
   credit?: Money | string;
   partnerId?: Id;
   label?: string;
-  /** Devise et taux si différent de la devise du dossier. */
+  /**
+   * Devise de la ligne. Absente, la ligne est dans la devise du dossier.
+   * Différente, `rate` est obligatoire — à défaut le moteur le cherche dans la
+   * table des taux ; s'il n'en trouve aucun, l'écriture est refusée.
+   */
   currency?: string;
+  /** Taux tel que : montant en `currency` × rate = montant dans la devise du dossier. */
   rate?: string;
+  /** Provenance du taux saisi ('MANUAL' par défaut lorsqu'il vient de la pièce). */
+  rateSource?: string;
   analyticCode?: string;
   vatCode?: string;
 }
@@ -89,10 +96,20 @@ export interface JournalLine {
   accountNumber: string;
   partnerId: Id | null;
   label: string;
+  /** Montant d'origine, dans `currency` : ce que dit la pièce. */
   debit: Money;
   credit: Money;
   currency: string;
+  /** Null lorsque la ligne est déjà dans la devise du dossier. */
   rate: string | null;
+  /** Provenance du taux appliqué ('FIXED', 'BCEAO', 'MANUAL'…), null sans conversion. */
+  rateSource: string | null;
+  /**
+   * Montant converti dans la devise du dossier : ce qui entre dans l'équilibre,
+   * les soldes et les états. Conservé à côté de l'origine, jamais à sa place.
+   */
+  debitBase: Money;
+  creditBase: Money;
   analyticCode: string | null;
   vatCode: string | null;
 }
@@ -134,6 +151,8 @@ export interface AccountBalance {
 
 export interface TrialBalance {
   tenantId: Id;
+  /** Devise de tenue du dossier : tous les montants ci-dessous y sont exprimés. */
+  currency: string;
   fiscalYearCode: string;
   from: string;
   to: string;
@@ -145,4 +164,23 @@ export interface TrialBalance {
 export interface Actor {
   userId: Id;
   tenantId: Id;
+}
+
+/**
+ * Position en devise étrangère d'un compte : montant d'origine et contrevaleur
+ * historique (celle qui figure dans les soldes). Sert à la retranslation de fin
+ * de période, qui compare la contrevaleur historique au cours de clôture.
+ */
+export interface ForeignPosition {
+  accountNumber: string;
+  accountLabel: string;
+  class: AccountClass;
+  partnerId: Id | null;
+  currency: string;
+  /** Cumuls dans la devise d'origine. */
+  foreignDebit: Money;
+  foreignCredit: Money;
+  /** Cumuls convertis aux taux historiques (ceux portés par les lignes). */
+  baseDebit: Money;
+  baseCredit: Money;
 }

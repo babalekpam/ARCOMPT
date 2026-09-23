@@ -194,6 +194,15 @@ export interface PayslipView {
     advances: Array<PayslipLine & { formatted: string }>;
   };
   totals: Record<"gross" | "taxableBase" | "employeeContributions" | "employerContributions" | "incomeTax" | "net" | "advance" | "netToPay" | "employerCost", string>;
+  /**
+   * Vrai seulement si le pack pays est PUBLISHED et revu. Un bulletin n'est pas
+   * refusé sur un pack en cours de rédaction — c'est aussi une pièce
+   * comptable, et le refuser rendrait la paie inutilisable — mais il ne doit
+   * pas laisser croire que les cotisations affichées font autorité :
+   * `packNotice` est la mention à imprimer, en clair, sur l'écran et le PDF.
+   */
+  official: boolean;
+  packNotice: string | null;
 }
 
 /** Ligne du livre de paie : un salarié × un mois. */
@@ -239,4 +248,9 @@ export interface PayrollDeclaration {
   status: DeclarationStatus;
   filingReference: string | null;
   filedAt: string | null;
+  /**
+   * Faux quand la déclaration a été produite depuis un pack pays non PUBLISHED,
+   * sous `ALLOW_INSECURE_DRAFT_PACK_FILINGS=1` : document non officiel.
+   */
+  official: boolean;
 }

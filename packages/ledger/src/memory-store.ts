@@ -8,6 +8,7 @@ import type {
   AccountClass,
   Actor,
   FiscalYear,
+  ForeignPosition,
   Id,
   Journal,
   JournalEntry,
@@ -166,8 +167,9 @@ export class MemoryStore implements LedgerStore {
       if (e.tenantId !== tenantId || e.status !== "VALIDATED" || e.date < from || e.date > to) continue;
       for (const l of e.lines) {
         const cur = acc.get(l.accountNumber) ?? { debit: [], credit: [] };
-        cur.debit.push(l.debit);
-        cur.credit.push(l.credit);
+        // Montants convertis : la balance est tenue dans la devise du dossier.
+        cur.debit.push(l.debitBase);
+        cur.credit.push(l.creditBase);
         acc.set(l.accountNumber, cur);
       }
     }
@@ -183,6 +185,40 @@ export class MemoryStore implements LedgerStore {
       });
     }
     return rows.sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
+  }
+
+  async foreignPositions(tenantId: Id, from: string, to: string, opts: { accountPrefixes?: string[] } = {}): Promise<ForeignPosition[]> {
+    const agg = new Map<string, ForeignPosition>();
+    for (const e of this.entries.values()) {
+      if (e.tenantId !== tenantId || e.status !== "VALIDATED" || e.date < from || e.date > to) continue;
+      for (const l of e.lines) {
+        if (l.rate === null) continue; // ligne déjà dans la devise du dossier
+        if (opts.accountPrefixes && !opts.accountPrefixes.some((p) => l.accountNumber.startsWith(p))) continue;
+        const key = `${l.accountNumber}|${l.partnerId ?? ""}|${l.currency}`;
+        const a = this.accounts.get(`${tenantId}|${l.accountNumber}`);
+        const cur =
+          agg.get(key) ??
+          ({
+            accountNumber: l.accountNumber,
+            accountLabel: a?.label ?? "",
+            class: (a?.class ?? Number(l.accountNumber[0])) as AccountClass,
+            partnerId: l.partnerId,
+            currency: l.currency,
+            foreignDebit: Money.zero(),
+            foreignCredit: Money.zero(),
+            baseDebit: Money.zero(),
+            baseCredit: Money.zero(),
+          } satisfies ForeignPosition);
+        agg.set(key, {
+          ...cur,
+          foreignDebit: cur.foreignDebit.add(l.debit),
+          foreignCredit: cur.foreignCredit.add(l.credit),
+          baseDebit: cur.baseDebit.add(l.debitBase),
+          baseCredit: cur.baseCredit.add(l.creditBase),
+        });
+      }
+    }
+    return [...agg.values()].sort((a, b) => a.accountNumber.localeCompare(b.accountNumber) || a.currency.localeCompare(b.currency) || (a.partnerId ?? "").localeCompare(b.partnerId ?? ""));
   }
 
   async listValidatedEntries(tenantId: Id, journalId: Id): Promise<JournalEntry[]> {

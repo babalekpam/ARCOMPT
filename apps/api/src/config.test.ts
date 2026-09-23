@@ -84,10 +84,30 @@ describe("loadConfig — production conforme", () => {
       { warn: () => {} },
     );
     expect(cfg.problems).toEqual([]);
-    expect(cfg.insecure).toEqual({ ai: true, storage: true, antivirus: true, whatsapp: true });
+    // L'opt-out des packs non publiés reste fermé : il n'est pas posé ici.
+    expect(cfg.insecure).toEqual({ ai: true, storage: true, antivirus: true, whatsapp: true, draftPackFilings: false });
     expect(cfg.ai.simulated).toBe(true);
     expect(cfg.storage.driver).toBe("local");
     expect(cfg.antivirus.driver).toBe("none");
+    expect(cfg.degraded.join(" ")).not.toContain(INSECURE_OPT_OUT.draftPackFilings);
+  });
+
+  it("le pack non publié : l'opt-out ne bloque pas le démarrage mais est annoncé comme dégradé", () => {
+    const base = productionEnv({
+      [INSECURE_OPT_OUT.ai]: "1",
+      [INSECURE_OPT_OUT.storage]: "1",
+      [INSECURE_OPT_OUT.antivirus]: "1",
+      [INSECURE_OPT_OUT.whatsapp]: "1",
+    });
+    const off = loadConfig(base, { warn: () => {} });
+    expect(off.insecure.draftPackFilings).toBe(false);
+
+    const on = loadConfig({ ...base, [INSECURE_OPT_OUT.draftPackFilings]: "1" }, { warn: () => {} });
+    expect(on.insecure.draftPackFilings).toBe(true);
+    expect(on.problems).toEqual([]);
+    const notice = on.degraded.find((d) => d.includes(INSECURE_OPT_OUT.draftPackFilings));
+    expect(notice).toBeDefined();
+    expect(notice).toContain("DOCUMENT NON OFFICIEL");
   });
 
   it("n'accepte pas n'importe quelle valeur comme opt-out", () => {

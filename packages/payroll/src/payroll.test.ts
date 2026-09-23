@@ -38,6 +38,9 @@ const makeService = (tenantId: string, opts: { key?: Buffer } = {}) =>
     ledger: new Ledger(new PostgresStore(appDb as unknown as Sql, { userId, organizationId: orgId }), { baseCurrency: "XOF" }),
     actor: { userId, tenantId, organizationId: orgId },
     crypto: new PayrollCrypto(new EnvKeyProvider({ key: opts.key ?? masterKey })),
+    // Le pack `ci` est en DRAFT : les déclarations sociales sont refusées sans
+    // cet échappement. Le refus est éprouvé par pack-status.test.ts.
+    env: { ALLOW_INSECURE_DRAFT_PACK_FILINGS: "1" },
   });
 
 beforeAll(async () => {

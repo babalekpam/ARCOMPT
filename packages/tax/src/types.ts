@@ -18,6 +18,11 @@ export interface TaxReturn {
   paymentEntryId: Id | null;
   filingReference: string | null;
   filedAt: string | null;
+  /**
+   * Faux quand la déclaration a été produite depuis un pack pays non PUBLISHED,
+   * sous `ALLOW_INSECURE_DRAFT_PACK_FILINGS=1` : document non officiel.
+   */
+  official: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -134,6 +139,10 @@ export interface DsfResult {
   label: string;
   statements: StatementsOutput;
   fiscal: DsfFiscal;
+  /** Vrai seulement si le pack pays est PUBLISHED et revu. */
+  official: boolean;
+  /** Mention « DOCUMENT NON OFFICIEL » à porter sur la liasse ; `null` si officielle. */
+  notice: string | null;
 }
 
 export type DeadlineStatus = "UPCOMING" | "DUE_SOON" | "OVERDUE" | "DONE";
@@ -152,7 +161,7 @@ export interface Deadline {
   kind: TaxReturnKind | null;
 }
 
-export type TaxErrorCode = "NOT_FOUND" | "INVALID_STATE" | "INVALID_INPUT" | "FISCAL_YEAR_NOT_FOUND" | "PACK_REQUIRED";
+export type TaxErrorCode = "NOT_FOUND" | "INVALID_STATE" | "INVALID_INPUT" | "FISCAL_YEAR_NOT_FOUND" | "PACK_REQUIRED" | "PACK_NOT_PUBLISHED";
 
 export class TaxError extends Error {
   override name = "TaxError";

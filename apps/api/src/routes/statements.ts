@@ -17,7 +17,9 @@ export function statementsRoutes(deps: AppDeps) {
         fiscalYear: z.string(),
         previousFiscalYear: z.string().optional(),
         system: z.enum(["NORMAL", "SMT"]).default("NORMAL"),
-        currency: z.string().length(3).default("XOF"),
+        // Sans précision, les états sortent dans la devise de tenue du dossier,
+        // pas dans une devise par défaut du processus.
+        currency: z.string().length(3).optional(),
         templateVersion: z.string().optional(),
       })
       .safeParse(c.req.query());
@@ -27,7 +29,10 @@ export function statementsRoutes(deps: AppDeps) {
     const previous = q.data.previousFiscalYear ? await ledger.trialBalance(auth.tenantId, { fiscalYearCode: q.data.previousFiscalYear }) : null;
     const out = computeStatements({
       system: q.data.system,
-      currency: q.data.currency,
+      currency: q.data.currency ?? current.currency,
+      // La devise réellement portée par la balance : le moteur d'états la
+      // confronte à la devise de présentation par un contrôle bloquant.
+      balanceCurrency: current.currency,
       fiscalYearCode: q.data.fiscalYear,
       balance: current.rows,
       ...(previous ? { previousBalance: previous.rows } : {}),

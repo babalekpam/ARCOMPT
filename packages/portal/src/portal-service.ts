@@ -1,7 +1,7 @@
 import type { Sql } from "postgres";
 import { z } from "zod";
 import { withTenant, type Db } from "@arcompt/db";
-import { loadPack as defaultLoadPack, type CountryPack } from "@arcompt/country-packs";
+import { assertPackPublished, loadPack as defaultLoadPack, PackNotPublishedError, type CountryPack } from "@arcompt/country-packs";
 import { legalFooterFromEnv, missingDocumentMail } from "@arcompt/mailer";
 import { computeDegressiveInvoice, type DegressiveInvoice, type PricingMode } from "./billing.js";
 import { nextDeadlines } from "./deadlines.js";
@@ -58,6 +58,8 @@ export interface OrganizationInvoice extends DegressiveInvoice {
 export interface PortalServiceOptions {
   notifier: Notifier;
   loadPack?: (code: string) => CountryPack;
+  /** Environnement lu par la garde des documents légaux (ALLOW_INSECURE_DRAFT_PACK_FILINGS) ; `process.env` par défaut. */
+  env?: Record<string, string | undefined>;
   now?: () => Date;
   /** Mentions légales en pied des e-mails ; défaut : `MAIL_LEGAL_FOOTER`. */
   legalFooter?: string;
@@ -79,6 +81,7 @@ export class PortalService {
   private readonly packs = new Map<string, CountryPack | null>();
   private readonly now: () => Date;
   private readonly horizon: number;
+  private readonly env: Record<string, string | undefined> | undefined;
 
   constructor(
     private readonly db: Db,
@@ -87,6 +90,7 @@ export class PortalService {
     this.loadPack = opts.loadPack ?? defaultLoadPack;
     this.now = opts.now ?? (() => new Date());
     this.horizon = opts.deadlineHorizonDays ?? 90;
+    this.env = opts.env;
   }
 
   // ---------------------------------------------------------------- tableau de bord
@@ -283,6 +287,17 @@ export class PortalService {
       if (!fy) throw new PortalError("NOT_FOUND", "Exercice introuvable");
       const [c] = await tx`SELECT country_code FROM company WHERE id = ${ctx.tenantId}`;
       const pack = this.pack(str(c?.country_code ?? "").toLowerCase());
+      // Un dépôt est, par définition, ce qui part à l'administration : si le
+      // dossier a un pack pays, il doit être publié. Sans pack, rien n'a changé
+      // (la validation « portail et format requis » ci-dessous tranche).
+      if (pack) {
+        try {
+          assertPackPublished(pack, { artefact: `Dépôt ${input.kind}`, ...(this.env ? { env: this.env } : {}) });
+        } catch (e) {
+          if (e instanceof PackNotPublishedError) throw new PortalError("VALIDATION", e.message);
+          throw e;
+        }
+      }
       const packFiling = pack?.filing.find((f) => f.id.toLowerCase() === input.kind.toLowerCase());
       const portalName = input.portalName ?? packFiling?.portal;
       const format = input.format ?? packFiling?.format;

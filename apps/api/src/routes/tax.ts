@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
-import { withTenant } from "@arcompt/db";
+import { decryptTaxIds, existingTenantCipherIn, withTenant } from "@arcompt/db";
 import { loadPack, PackError, type CountryPack } from "@arcompt/country-packs";
 import { TaxError, TaxService } from "@arcompt/tax";
 import { requireRole } from "../auth.js";
@@ -11,7 +11,8 @@ const money = z.string().regex(/^-?\d+(\.\d{1,4})?$/);
 
 function errorStatus(code: TaxError["code"]): 404 | 409 | 422 {
   if (code === "NOT_FOUND") return 404;
-  if (code === "INVALID_STATE") return 409;
+  // Pack non publié : l'état du pack s'oppose à la demande, pas sa forme.
+  if (code === "INVALID_STATE" || code === "PACK_NOT_PUBLISHED") return 409;
   return 422;
 }
 
@@ -35,7 +36,13 @@ export function taxRoutes(deps: AppDeps) {
   const service = async (c: Context): Promise<TaxService | null> => {
     if (!deps.db) return null;
     const auth = c.get("auth");
-    const [company] = await withTenant(deps.db, auth, (tx) => tx`SELECT name, currency, country_code, accounting_system, tax_ids FROM company WHERE id = ${auth.tenantId}`);
+    const loaded = await withTenant(deps.db, auth, async (tx) => {
+      const [row] = await tx`SELECT name, currency, country_code, accounting_system, tax_ids, tax_ids_enc FROM company WHERE id = ${auth.tenantId}`;
+      if (!row) return null;
+      const cipher = row.tax_ids_enc ? await existingTenantCipherIn(tx, auth.tenantId) : null;
+      return { row, taxIds: decryptTaxIds(cipher, row.tax_ids_enc as string | null, row.tax_ids as Record<string, unknown> | null) };
+    });
+    const company = loaded?.row;
     const pack = company ? packFor(company.country_code as string) : null;
     return new TaxService({
       db: deps.db,
@@ -44,7 +51,7 @@ export function taxRoutes(deps: AppDeps) {
       currency: (company?.currency as string | undefined) ?? "XOF",
       system: (company?.accounting_system as "NORMAL" | "SMT" | undefined) ?? "NORMAL",
       ...(pack ? { pack } : {}),
-      ...(company ? { company: { name: company.name as string, taxIds: (company.tax_ids as Record<string, string>) ?? {} } } : {}),
+      ...(company ? { company: { name: company.name as string, taxIds: loaded!.taxIds } } : {}),
     });
   };
 
@@ -150,10 +157,14 @@ export function taxRoutes(deps: AppDeps) {
       const fiscalYear = c.req.param("fiscalYear")!.replace(/\.xlsx$/, "");
       const q = DsfQuery.safeParse(c.req.query());
       if (!q.success) return invalid(c, q.error.issues);
-      const buffer = await s.dsfWorkbook(fiscalYear, { reintegrations: q.data.reintegrations, deductions: q.data.deductions, ...(q.data.previousFiscalYear ? { previousFiscalYearCode: q.data.previousFiscalYear } : {}) });
+      const { buffer, dsf } = await s.dsfWorkbook(fiscalYear, { reintegrations: q.data.reintegrations, deductions: q.data.deductions, ...(q.data.previousFiscalYear ? { previousFiscalYearCode: q.data.previousFiscalYear } : {}) });
+      // Nom de fichier et en-tête : un classeur produit depuis un pack non
+      // publié ne doit pas ressembler au vrai une fois enregistré sur le poste.
+      const name = dsf.official ? `dsf-${fiscalYear}.xlsx` : `dsf-${fiscalYear}-NON-OFFICIEL.xlsx`;
       return c.body(new Uint8Array(buffer), 200, {
         "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "content-disposition": `attachment; filename="dsf-${fiscalYear}.xlsx"`,
+        "content-disposition": `attachment; filename="${name}"`,
+        ...(dsf.official ? {} : { "x-arcompt-official": "false" }),
       });
     }),
   );

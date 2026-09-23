@@ -56,7 +56,9 @@ beforeAll(async () => {
   appDb = env.appDb;
   notifier = new MockNotifier();
   orgs = new OrganizationService(appDb);
-  portal = new PortalService(appDb, { notifier, now: () => NOW });
+  // Le pack `ci` est en DRAFT : préparer un dépôt est refusé sans l'échappement
+  // de pré-production. Le refus est éprouvé par pack-status.test.ts (fiscalité).
+  portal = new PortalService(appDb, { notifier, now: () => NOW, env: { ALLOW_INSECURE_DRAFT_PACK_FILINGS: "1" } });
   access = new AccessService(appDb, notifier);
 
   firm = await orgs.createOrganization({ name: "Cabinet Test", kind: "FIRM" });

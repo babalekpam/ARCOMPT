@@ -117,3 +117,62 @@ describe("balance de référence demo-ci (SYSCOHADA révisé 2017.1)", () => {
     expect(out.publishable).toBe(true);
   });
 });
+
+describe("devise des états", () => {
+  const rows = [
+    { account: "521", label: "Banque", debit: "1000", credit: "0" },
+    { account: "101", label: "Capital", debit: "0", credit: "1000" },
+  ];
+
+  it("refuse une devise de présentation qui n'est pas un code ISO 4217", () => {
+    expect(() => computeStatements({ system: "NORMAL", currency: "franc", fiscalYearCode: "2025", balance: balanceFromRows(rows) })).toThrow(/ISO 4217/);
+  });
+
+  it("normalise la devise et la reprend dans la sortie", () => {
+    const out = computeStatements({ system: "NORMAL", currency: "xaf", fiscalYearCode: "2025", balance: balanceFromRows(rows) });
+    expect(out.currency).toBe("XAF");
+  });
+
+  it("bloque la publication d'états présentés dans une devise autre que celle de la balance", () => {
+    const desaccord = computeStatements({
+      system: "NORMAL",
+      currency: "XOF",
+      balanceCurrency: "XAF",
+      fiscalYearCode: "2025",
+      balance: balanceFromRows(rows),
+    });
+    const ctrl = desaccord.controls.find((c) => c.id === "DEVISE_ETATS")!;
+    expect(ctrl).toMatchObject({ ok: false, severity: "BLOCKING", expected: "XOF", actual: "XAF" });
+    expect(desaccord.publishable).toBe(false);
+
+    const accord = computeStatements({ system: "NORMAL", currency: "XAF", balanceCurrency: "XAF", fiscalYearCode: "2025", balance: balanceFromRows(rows) });
+    expect(accord.controls.find((c) => c.id === "DEVISE_ETATS")?.ok).toBe(true);
+  });
+
+  it("n'émet le contrôle de devise que si la balance annonce la sienne", () => {
+    const out = computeStatements({ system: "NORMAL", currency: "XOF", fiscalYearCode: "2025", balance: balanceFromRows(rows) });
+    expect(out.controls.find((c) => c.id === "DEVISE_ETATS")).toBeUndefined();
+  });
+
+  it("signale les résidus de conversion sous l'unité monétaire, sans bloquer", () => {
+    const avecCentimes = [
+      { account: "521", label: "Banque", debit: "1000.4567", credit: "0" },
+      { account: "101", label: "Capital", debit: "0", credit: "1000.4567" },
+    ];
+    const xof = computeStatements({ system: "NORMAL", currency: "XOF", fiscalYearCode: "2025", balance: balanceFromRows(avecCentimes) });
+    const ctrl = xof.controls.find((c) => c.id === "UNITE_MONETAIRE")!;
+    expect(ctrl).toMatchObject({ ok: false, severity: "WARNING" });
+    expect(ctrl.detail).toContain("521");
+    // Le franc CFA n'a pas de sous-unité ; l'euro en a deux.
+    const eur = computeStatements({ system: "NORMAL", currency: "EUR", fiscalYearCode: "2025", balance: balanceFromRows([
+      { account: "521", label: "Banque", debit: "1000.45", credit: "0" },
+      { account: "101", label: "Capital", debit: "0", credit: "1000.45" },
+    ]) });
+    expect(eur.controls.find((c) => c.id === "UNITE_MONETAIRE")?.ok).toBe(true);
+  });
+
+  it("le jeu de référence demo-ci reste publiable et sans résidu de conversion", () => {
+    expect(output.controls.find((c) => c.id === "UNITE_MONETAIRE")?.ok).toBe(true);
+    expect(output.publishable).toBe(true);
+  });
+});

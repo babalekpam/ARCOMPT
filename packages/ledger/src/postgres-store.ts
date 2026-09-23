@@ -8,6 +8,7 @@ import type {
   AccountClass,
   Actor,
   FiscalYear,
+  ForeignPosition,
   Id,
   Journal,
   JournalEntry,
@@ -129,13 +130,15 @@ export class PostgresStore implements LedgerStore {
                 ${entry.createdBy}, ${entry.createdAt})`;
       for (const l of entry.lines) {
         await tx`
-          INSERT INTO journal_line (id, tenant_id, entry_id, line_no, account_id, partner_id, label, debit, credit, currency, rate, analytic_code, vat_code)
+          INSERT INTO journal_line (id, tenant_id, entry_id, line_no, account_id, partner_id, label, debit, credit,
+                                    currency, rate, rate_source, debit_base, credit_base, analytic_code, vat_code)
           VALUES (${l.id}, ${entry.tenantId}, ${entry.id}, ${l.lineNo}, ${l.accountId}, ${l.partnerId}, ${l.label},
-                  ${l.debit.toString()}, ${l.credit.toString()}, ${l.currency}, ${l.rate}, ${l.analyticCode}, ${l.vatCode})`;
+                  ${l.debit.toString()}, ${l.credit.toString()}, ${l.currency}, ${l.rate}, ${l.rateSource},
+                  ${l.debitBase.toString()}, ${l.creditBase.toString()}, ${l.analyticCode}, ${l.vatCode})`;
       }
       const rows = await tx`${entrySelect(tx)} WHERE e.tenant_id = ${entry.tenantId} AND e.id = ${entry.id}`;
       return hydrate(tx, rows[0]!);
-    });
+    }).catch(translatePgError);
   }
 
   async deleteDraft(tenantId: Id, entryId: Id): Promise<void> {
@@ -180,7 +183,7 @@ export class PostgresStore implements LedgerStore {
   async accountBalances(tenantId: Id, from: string, to: string): Promise<AccountBalance[]> {
     return this.tx(tenantId, async (tx) => {
       const rows = await tx`
-        SELECT a.number, a.label, a.class, coalesce(sum(l.debit), 0)::text AS debit, coalesce(sum(l.credit), 0)::text AS credit
+        SELECT a.number, a.label, a.class, coalesce(sum(l.debit_base), 0)::text AS debit, coalesce(sum(l.credit_base), 0)::text AS credit
           FROM journal_line l
           JOIN journal_entry e ON e.id = l.entry_id
           JOIN account a ON a.id = l.account_id
@@ -193,6 +196,39 @@ export class PostgresStore implements LedgerStore {
         class: Number(r.class) as AccountClass,
         debit: Money.parse(r.debit as string),
         credit: Money.parse(r.credit as string),
+      }));
+    });
+  }
+
+  async foreignPositions(tenantId: Id, from: string, to: string, opts: { accountPrefixes?: string[] } = {}): Promise<ForeignPosition[]> {
+    return this.tx(tenantId, async (tx) => {
+      // `rate IS NOT NULL` isole les seules lignes converties : une ligne déjà
+      // dans la devise du dossier ne porte pas de position de change.
+      const prefixes = opts.accountPrefixes && opts.accountPrefixes.length > 0 ? opts.accountPrefixes.map((p) => `${p}%`) : null;
+      const rows = await tx`
+        SELECT a.number, a.label, a.class, l.partner_id, l.currency,
+               coalesce(sum(l.debit), 0)::text AS foreign_debit,
+               coalesce(sum(l.credit), 0)::text AS foreign_credit,
+               coalesce(sum(l.debit_base), 0)::text AS base_debit,
+               coalesce(sum(l.credit_base), 0)::text AS base_credit
+          FROM journal_line l
+          JOIN journal_entry e ON e.id = l.entry_id
+          JOIN account a ON a.id = l.account_id
+         WHERE e.tenant_id = ${tenantId} AND e.status = 'VALIDATED' AND e.entry_date BETWEEN ${from} AND ${to}
+           AND l.rate IS NOT NULL
+           AND (${prefixes}::text[] IS NULL OR a.number LIKE ANY (${prefixes}::text[]))
+         GROUP BY a.number, a.label, a.class, l.partner_id, l.currency
+         ORDER BY a.number, l.currency, l.partner_id`;
+      return rows.map((r) => ({
+        accountNumber: r.number as string,
+        accountLabel: r.label as string,
+        class: Number(r.class) as AccountClass,
+        partnerId: (r.partner_id as string | null) ?? null,
+        currency: r.currency as string,
+        foreignDebit: Money.parse(r.foreign_debit as string),
+        foreignCredit: Money.parse(r.foreign_credit as string),
+        baseDebit: Money.parse(r.base_debit as string),
+        baseCredit: Money.parse(r.base_credit as string),
       }));
     });
   }
@@ -250,7 +286,8 @@ function entrySelect(tx: Sql) {
 async function hydrate(tx: Sql, r: Record<string, unknown>): Promise<JournalEntry> {
   const lines = await tx`
     SELECT l.id, l.entry_id, l.line_no, l.account_id, a.number AS account_number, l.partner_id, l.label,
-           l.debit::text AS debit, l.credit::text AS credit, l.currency, l.rate::text AS rate, l.analytic_code, l.vat_code
+           l.debit::text AS debit, l.credit::text AS credit, l.currency, l.rate::text AS rate, l.rate_source,
+           l.debit_base::text AS debit_base, l.credit_base::text AS credit_base, l.analytic_code, l.vat_code
       FROM journal_line l JOIN account a ON a.id = l.account_id
      WHERE l.entry_id = ${r.id as string} ORDER BY l.line_no`;
   return {
@@ -286,6 +323,9 @@ async function hydrate(tx: Sql, r: Record<string, unknown>): Promise<JournalEntr
       credit: Money.parse(l.credit as string),
       currency: l.currency as string,
       rate: (l.rate as string | null) ?? null,
+      rateSource: (l.rate_source as string | null) ?? null,
+      debitBase: Money.parse(l.debit_base as string),
+      creditBase: Money.parse(l.credit_base as string),
       analyticCode: (l.analytic_code as string | null) ?? null,
       vatCode: (l.vat_code as string | null) ?? null,
     })),
@@ -340,6 +380,8 @@ function translatePgError(e: unknown): never {
       throw new LedgerError("HASH_CHAIN_BROKEN", message);
     case "P0006":
       throw new LedgerError("UNKNOWN_ACCOUNT", message);
+    case "P0007":
+      throw new LedgerError("RATE_INVALID", message);
     default:
       throw e;
   }

@@ -37,6 +37,25 @@ Concrètement : les packs permettent de développer et de tester, pas de déclar
 
 Noyau OHADA d'abord (tenue et états, utilisable partout). Puis packs fiscaux complets par vagues : Côte d'Ivoire et Sénégal ; Togo, Bénin et Burkina ; Mali, Niger et zone CEMAC (XAF, interface EN pour le Cameroun).
 
+## Ce que le code refuse
+
+La règle « un pack en `DRAFT` ne produit jamais de déclaration réelle » n'est plus une consigne : elle est appliquée par `packages/country-packs/src/official.ts`, que la fiscalité, la paie et le portail interrogent avant tout document légal.
+
+**Refusé** tant que le pack n'est pas `PUBLISHED` **et** revu (`reviewed_by` renseigné), avec un message qui nomme le pack, son statut et ce qu'il reste à faire :
+
+| Refus | Où |
+| --- | --- |
+| Validation d'une déclaration de TVA | `TaxService.validateVat` |
+| Dépôt d'une déclaration (`FILED`) | `TaxService.markFiled` |
+| Acomptes d'impôt sur les sociétés | `TaxService.isInstalments` |
+| Liasse DSF et son classeur Excel | `TaxService.buildDsf`, `TaxService.dsfWorkbook` |
+| Déclarations sociales et fiscales de paie, et leur dépôt | `PayrollService.declarations`, `PayrollService.fileDeclaration` |
+| Préparation d'un dépôt au portail cabinet | `PortalService.prepareFiling` |
+
+**Non refusé** : la tenue. Écritures, factures, balance, grand livre, états financiers (qui ne dépendent d'aucun pack), calcul de TVA à l'écran, registre des retenues, calendrier des échéances, bulletins de paie et écriture de paie. Une PME qui essaie le produit tient sa comptabilité normalement sur un pack en cours de rédaction. Ce qui est calculé depuis un pack non publié est **marqué** : `tax_return.official`, `payroll_declaration.official`, `PayslipView.packNotice`.
+
+**Échappement de pré-production.** `ALLOW_INSECURE_DRAFT_PACK_FILINGS=1` — explicite, fermé par défaut, greppable, de la même famille que les `ALLOW_INSECURE_*` de `apps/api/src/config.ts`. Il permet à l'expert-comptable d'un dossier d'éprouver le parcours déclaratif complet avant publication du pack de son pays. Il ne rend rien officiel : chaque document produit porte la mention **« DOCUMENT NON OFFICIEL »** (première ligne de chaque onglet du classeur DSF, nom de fichier `dsf-<exercice>-NON-OFFICIEL.xlsx`), et l'artefact est marqué `official = false` en base.
+
 ## Avertissement
 
-Les taux, barèmes, plafonds, comptes et noms de portails livrés dans ce dépôt sont **indicatifs**. Un pack en `DRAFT` ne doit jamais servir à produire une déclaration réelle.
+Les taux, barèmes, plafonds, comptes et noms de portails livrés dans ce dépôt sont **indicatifs**. Un pack en `DRAFT` ne doit jamais servir à produire une déclaration réelle — et, depuis la section précédente, ne le peut plus.

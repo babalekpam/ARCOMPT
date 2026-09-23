@@ -9,6 +9,7 @@ export type PayrollErrorCode =
   | "PAYSLIP_NOT_FOUND"
   | "DECLARATION_NOT_FOUND"
   | "PACK_NOT_FOUND"
+  | "PACK_NOT_PUBLISHED"
   | "SCHEME_INCOMPLETE"
   | "RULE_ERROR"
   | "NET_MISMATCH"
@@ -36,6 +37,7 @@ export class PayrollError extends Error {
       case "RUN_EXISTS":
       case "RUN_STATUS":
       case "MATRICULE_TAKEN":
+      case "PACK_NOT_PUBLISHED":
         return 409;
       case "INVALID_INPUT":
         return 400;

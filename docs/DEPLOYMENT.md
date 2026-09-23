@@ -431,6 +431,13 @@ les vraies coordonnées, soit vous **acceptez explicitement** le repli avec un
 | WhatsApp sortant | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | `ALLOW_INSECURE_WHATSAPP=1` | Les messages sortants sont avalés sans être envoyés |
 | Encaissement mobile money | *(aucun opérateur réel implémenté)* | **aucun** | Laissez `PAYMENT_PROVIDER` **vide** : la fonction est proprement désactivée. La valeur `mock` est refusée en production, sans échappatoire |
 
+Une sixième variable de la même famille ne concerne pas un service extérieur
+mais le pack pays du dossier :
+
+| Fonction | Condition réelle | Échappement | Ce que l'échappement fait vraiment |
+|---|---|---|---|
+| Déclarations, liasse DSF, dépôts | Pack pays en `status: "PUBLISHED"` avec `reviewed_by` | `ALLOW_INSECURE_DRAFT_PACK_FILINGS=1` | Les documents sont produits depuis un pack non publié, **marqués « DOCUMENT NON OFFICIEL »** (bandeau sur chaque onglet du classeur, nom de fichier suffixé, `official = false` en base). Sans lui, ces opérations sont refusées ; la tenue, la facturation et les états financiers ne le sont jamais. Voir `docs/country-packs/README.md` |
+
 De même, laissez `CERTIFICATION_CONNECTOR` **vide**. La valeur `mock`
 imprimerait une référence fiscale et un QR code inventés sur les factures de vos
 clients ; l'API refuse de démarrer avec.

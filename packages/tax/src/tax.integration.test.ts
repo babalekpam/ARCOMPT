@@ -30,9 +30,13 @@ beforeAll(async () => {
   tenantB = (await seedCompany(db, { organizationId: orgId, name: "B", countryCode: "CI", currency: "XOF", packVersion: "ci@2025.1", fiscalYear: fy })).companyId;
   const sql = env.appDb as unknown as Sql;
   const pack = loadPack("ci");
+  // Le pack `ci` est en DRAFT : ces tests décrivent le parcours déclaratif
+  // complet, ils passent donc par l'échappement de pré-production. Le refus
+  // lui-même est éprouvé par pack-status.integration.test.ts.
+  const preprod = { ALLOW_INSECURE_DRAFT_PACK_FILINGS: "1" };
   ledgerA = new Ledger(new PostgresStore(sql, { userId, organizationId: orgId }), { baseCurrency: "XOF" });
-  serviceA = new TaxService({ db: sql, ledger: ledgerA, ctx: { tenantId: tenantA, userId, organizationId: orgId }, currency: "XOF", pack });
-  serviceB = new TaxService({ db: sql, ledger: ledgerA, ctx: { tenantId: tenantB, userId, organizationId: orgId }, currency: "XOF", pack });
+  serviceA = new TaxService({ db: sql, ledger: ledgerA, ctx: { tenantId: tenantA, userId, organizationId: orgId }, currency: "XOF", pack, env: preprod });
+  serviceB = new TaxService({ db: sql, ledger: ledgerA, ctx: { tenantId: tenantB, userId, organizationId: orgId }, currency: "XOF", pack, env: preprod });
 
   const [client] = await withTenant(db, { tenantId: tenantA }, (tx) => tx`INSERT INTO partner (tenant_id, type, name, collective_account) VALUES (${tenantA}, 'CUSTOMER', 'Client', '411') RETURNING id`);
   const [supplier] = await withTenant(db, { tenantId: tenantA }, (tx) => tx`INSERT INTO partner (tenant_id, type, name, collective_account) VALUES (${tenantA}, 'SUPPLIER', 'Fournisseur', '401') RETURNING id`);
@@ -157,7 +161,7 @@ run("Fiscalité — service", () => {
     // Résultat comptable : 1 000 000 − 400 000 − 100 000 = 500 000 ; fiscal : + 10 000.
     expect(dsf.fiscal.accountingResult.toString()).toBe("500000.0000");
     expect(dsf.fiscal.fiscalResult.toString()).toBe("510000.0000");
-    const buffer = await serviceA.dsfWorkbook("2025", { reintegrations: "10000", deductions: "0" });
+    const { buffer } = await serviceA.dsfWorkbook("2025", { reintegrations: "10000", deductions: "0" });
     const ExcelJS = (await import("exceljs")).default;
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as never);

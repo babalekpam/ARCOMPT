@@ -110,7 +110,20 @@ export interface Control {
 
 export interface StatementsInput {
   system: AccountingSystem;
+  /**
+   * Devise de présentation des états. Les états SYSCOHADA sont mono-devise par
+   * construction : une seule colonne de montants, aucune dimension devise.
+   * `balance` doit donc déjà être exprimée dans cette devise — c'est le rôle du
+   * grand livre, qui convertit chaque ligne au moment de l'imputation.
+   */
   currency: string;
+  /**
+   * Devise réellement portée par la balance fournie, telle que le grand livre
+   * l'annonce (`TrialBalance.currency`). Renseignée, elle est confrontée à
+   * `currency` par un contrôle bloquant : produire un bilan « en XOF » à partir
+   * d'une balance tenue en XAF est une erreur silencieuse autrement.
+   */
+  balanceCurrency?: string;
   fiscalYearCode: string;
   /** Balance de clôture N (totaux débit/crédit par compte de dernier niveau, après à-nouveaux). */
   balance: AccountBalance[];

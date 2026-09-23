@@ -1,4 +1,5 @@
 import type { Sql } from "postgres";
+import { decryptTaxId, decryptTaxIds, existingTenantCipherIn } from "@arcompt/db";
 import { Money } from "@arcompt/ledger";
 import { buildEntry, computeDocumentTotals, currencyDecimals, type EventLine, type PostingEvent } from "@arcompt/posting";
 import { BaseService, InvoicingError, assertDate, dateText, daysBetween, isoText, money } from "./base.js";
@@ -297,8 +298,12 @@ export class InvoicingService extends BaseService {
     return this.tx(async (tx) => {
       const doc = await loadSalesDocument(tx, this.tenantId, id);
       const partner = await this.loadPartner(tx, doc.partnerId);
-      const [company] = await tx`SELECT name, country_code, currency, tax_ids FROM company WHERE id = ${this.tenantId}`;
-      const [partnerRow] = await tx`SELECT tax_id FROM partner WHERE tenant_id = ${this.tenantId} AND id = ${doc.partnerId}`;
+      const [company] = await tx`SELECT name, country_code, currency, tax_ids, tax_ids_enc FROM company WHERE id = ${this.tenantId}`;
+      const [partnerRow] = await tx`SELECT tax_id, tax_id_enc FROM partner WHERE tenant_id = ${this.tenantId} AND id = ${doc.partnerId}`;
+      // Identifiants fiscaux chiffrés au repos (docs/SECURITY.md §7) : la facture
+      // les imprime, il faut donc les déchiffrer ici. La colonne en clair n'est
+      // lue que tant que scripts/encrypt-tax-ids.mts n'est pas passé.
+      const cipher = company?.tax_ids_enc || partnerRow?.tax_id_enc ? await existingTenantCipherIn(tx, this.tenantId) : null;
       const totals = computeDocumentTotals(
         doc.lines.map((l) => ({ amount: l.net, ...(l.vatCode ? { vatCode: l.vatCode } : {}) })),
         { pack: this.deps.pack, date: doc.issueDate, currency: doc.currency },
@@ -306,8 +311,13 @@ export class InvoicingService extends BaseService {
       const source = doc.sourceDocumentId ? await tx`SELECT number, kind FROM sales_document WHERE tenant_id = ${this.tenantId} AND id = ${doc.sourceDocumentId}` : [];
       return {
         document: doc,
-        company: { name: company?.name as string, countryCode: company?.country_code as string, currency: company?.currency as string, taxIds: (company?.tax_ids as Record<string, string>) ?? {} },
-        partner: { ...partner, taxId: (partnerRow?.tax_id as string | null) ?? null },
+        company: {
+          name: company?.name as string,
+          countryCode: company?.country_code as string,
+          currency: company?.currency as string,
+          taxIds: decryptTaxIds(cipher, company?.tax_ids_enc as string | null, company?.tax_ids as Record<string, unknown> | null),
+        },
+        partner: { ...partner, taxId: decryptTaxId(cipher, partnerRow?.tax_id_enc as string | null, (partnerRow?.tax_id as string | null) ?? null) },
         vatSummary: totals.byVatCode.map((r) => ({ vatCode: r.vatCode, rate: r.rate, base: r.base, vat: r.vat })),
         source: source[0] ? { number: source[0].number as string, kind: source[0].kind as SalesKind } : null,
         certification: doc.certification,

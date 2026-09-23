@@ -16,6 +16,7 @@
  * une variable `ALLOW_INSECURE_*=1` (greppable, jamais accidentelle).
  */
 
+import { DRAFT_PACK_FILINGS_OPT_OUT } from "@arcompt/country-packs";
 import {
   MockFneConnector,
   MockPaymentProvider,
@@ -32,6 +33,15 @@ export const INSECURE_OPT_OUT = {
   storage: "ALLOW_INSECURE_STORAGE",
   antivirus: "ALLOW_INSECURE_ANTIVIRUS",
   whatsapp: "ALLOW_INSECURE_WHATSAPP",
+  /**
+   * Produire un document légal (déclaration validée ou déposée, acomptes d'IS,
+   * liasse DSF, déclarations de paie, dépôt) depuis un pack pays qui n'est pas
+   * PUBLISHED. Le document est alors produit **marqué « DOCUMENT NON
+   * OFFICIEL »** — voir `packages/country-packs/src/official.ts`. Destiné à la
+   * pré-production : l'expert-comptable du dossier éprouve le parcours complet
+   * avant que le pack de son pays soit publié.
+   */
+  draftPackFilings: DRAFT_PACK_FILINGS_OPT_OUT,
 } as const;
 
 /** Longueur minimale raisonnable pour un secret HMAC de webhook de paiement. */
@@ -72,7 +82,7 @@ export interface AppConfig {
   payments: { provider: string; enabled: boolean; simulated: boolean; webhookSecret?: string };
   certification: { connector: string; simulated: boolean };
   /** Simulations explicitement autorisées (ALLOW_INSECURE_*). */
-  insecure: { ai: boolean; storage: boolean; antivirus: boolean; whatsapp: boolean };
+  insecure: { ai: boolean; storage: boolean; antivirus: boolean; whatsapp: boolean; draftPackFilings: boolean };
   /** Problèmes détectés ; toujours vide en production (sinon `loadConfig` aurait levé). */
   problems: readonly string[];
   /**
@@ -131,7 +141,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
     storage: isOptOutEnabled(env[INSECURE_OPT_OUT.storage]),
     antivirus: isOptOutEnabled(env[INSECURE_OPT_OUT.antivirus]),
     whatsapp: isOptOutEnabled(env[INSECURE_OPT_OUT.whatsapp]),
+    draftPackFilings: isOptOutEnabled(env[INSECURE_OPT_OUT.draftPackFilings]),
   };
+
+  // --- Packs pays -----------------------------------------------------------
+  // Cet opt-out n'empêche pas le démarrage, même en production : c'est son
+  // objet — laisser un dossier éprouver le parcours déclaratif complet avant
+  // que le pack de son pays soit publié. Il ne produit jamais de document
+  // officiel : chaque artefact part marqué « DOCUMENT NON OFFICIEL » et
+  // `tax_return.official` / `payroll_declaration.official` le gardent au repos.
+  // Il est en revanche annoncé au démarrage, comme toute fonction dégradée.
+  if (insecure.draftPackFilings) {
+    degraded.push(
+      `${INSECURE_OPT_OUT.draftPackFilings}=1 : les déclarations, la liasse DSF et les dépôts peuvent être produits depuis un pack pays non PUBLISHED. ` +
+        "Chaque document produit porte la mention « DOCUMENT NON OFFICIEL » et est marqué comme tel en base. À retirer dès que le pack est publié.",
+    );
+  }
 
   // --- Base de données ------------------------------------------------------
   if (!present(env.DATABASE_URL)) problems.push("DATABASE_URL : absent — aucune base de données à laquelle se connecter.");

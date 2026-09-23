@@ -1,6 +1,24 @@
 import type { Sql } from "postgres";
-import { loadPack as defaultLoadPack, PackError, type CountryPack } from "@arcompt/country-packs";
-import { withTenant } from "@arcompt/db";
+import {
+  assertPackPublished,
+  draftPackNotice,
+  isPackPublished,
+  loadPack as defaultLoadPack,
+  PackError,
+  PackNotPublishedError,
+  packReference,
+  type CountryPack,
+  type OfficialUse,
+} from "@arcompt/country-packs";
+import {
+  decryptTaxId,
+  decryptTaxIds,
+  encryptTaxId,
+  existingTenantCipherIn,
+  PARTNER_TAX_ID_DOMAIN,
+  taxIdBlindIndex,
+  withTenant,
+} from "@arcompt/db";
 import { CURRENCY_DECIMALS, Money, sum, type JournalLineInput, type Ledger } from "@arcompt/ledger";
 import { computePayslip, firstDayOfMonth, lastDayOfMonth, periodLabel } from "./compute.js";
 import { PayrollCrypto, UnknownKeyVersionError, type TenantCipher, type TenantKeyRecord } from "./crypto.js";
@@ -36,6 +54,8 @@ export interface PayrollServiceOptions {
   actor: PayrollActor;
   /** Pack pays ; sinon chargé depuis company.country_code. */
   pack?: CountryPack;
+  /** Environnement lu par la garde des documents légaux (ALLOW_INSECURE_DRAFT_PACK_FILINGS) ; `process.env` par défaut. */
+  env?: Record<string, string | undefined>;
   loadPack?: (code: string) => CountryPack;
   crypto?: PayrollCrypto;
   /** Surcharge des comptes d'imputation (sous-comptes du dossier). */
@@ -49,7 +69,7 @@ interface CompanyInfo {
   name: string;
   countryCode: string;
   currency: string;
-  taxIds: Record<string, unknown>;
+  taxIds: Record<string, string>;
 }
 
 const MONEY_TOTALS = ["gross", "employeeContributions", "employerContributions", "incomeTax", "net", "employerCost"] as const;
@@ -91,10 +111,22 @@ export class PayrollService {
 
   async company(): Promise<CompanyInfo> {
     if (this.companyCache) return this.companyCache;
-    const rows = await this.tx((tx) => tx`SELECT id, name, country_code, currency, tax_ids FROM company WHERE id = ${this.actor.tenantId}`);
-    const r = rows[0];
-    if (!r) throw new PayrollError("PACK_NOT_FOUND", "Dossier introuvable");
-    this.companyCache = { id: r.id as string, name: r.name as string, countryCode: String(r.country_code).toLowerCase(), currency: r.currency as string, taxIds: (r.tax_ids as Record<string, unknown>) ?? {} };
+    const info = await this.tx(async (tx) => {
+      const rows = await tx`SELECT id, name, country_code, currency, tax_ids, tax_ids_enc FROM company WHERE id = ${this.actor.tenantId}`;
+      const r = rows[0];
+      if (!r) throw new PayrollError("PACK_NOT_FOUND", "Dossier introuvable");
+      // Lecture : on ne crée pas de clé de données pour un dossier qui n'a
+      // encore rien de chiffré.
+      const cipher = r.tax_ids_enc ? await existingTenantCipherIn(tx, this.actor.tenantId, this.crypto) : null;
+      return {
+        id: r.id as string,
+        name: r.name as string,
+        countryCode: String(r.country_code).toLowerCase(),
+        currency: r.currency as string,
+        taxIds: decryptTaxIds(cipher, r.tax_ids_enc as string | null, r.tax_ids as Record<string, unknown> | null),
+      };
+    });
+    this.companyCache = info;
     return this.companyCache;
   }
 
@@ -119,6 +151,30 @@ export class PayrollService {
       ...(this.opts.contributionAccounts ? { contributionAccounts: this.opts.contributionAccounts } : {}),
     });
     return this.schemeCache;
+  }
+
+  /**
+   * Garde des documents légaux de la paie.
+   *
+   * Refusé sur un pack non PUBLISHED : les déclarations sociales et fiscales de
+   * la période (CNPS, IPRES, ITS…) et leur dépôt — c'est ce qui part chez
+   * l'organisme.
+   *
+   * Non refusé, mais marqué : le bulletin de paie. C'est à la fois une pièce
+   * remise au salarié et une pièce comptable adossée à l'écriture de paie ; le
+   * refuser rendrait la paie intestable alors que l'écriture, elle, reste de la
+   * tenue ordinaire. `PayslipView.packNotice` porte la mention.
+   */
+  private async officialFor(artefact: string): Promise<OfficialUse> {
+    const pack = await this.pack();
+    try {
+      return assertPackPublished(pack, { artefact, ...(this.opts.env ? { env: this.opts.env } : {}) });
+    } catch (e) {
+      if (e instanceof PackNotPublishedError) {
+        throw new PayrollError("PACK_NOT_PUBLISHED", e.message, { pack: packReference(pack), status: pack.status, artefact });
+      }
+      throw e;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -186,17 +242,30 @@ export class PayrollService {
         INSERT INTO payroll_tenant_key (tenant_id, version, wrapped_key, master_key_id, status)
         VALUES (${this.actor.tenantId}, ${version}, ${record.wrappedKey}, ${record.masterKeyId}, 'ACTIVE')`;
       const next = await this.crypto.cipherFor(await this.loadKeys(tx));
-      const rows = await tx`SELECT id, base_salary_enc, bank_details_enc, social_security_number_enc FROM employee WHERE tenant_id = ${this.actor.tenantId}`;
+      const re = (v: unknown) => (v ? next.encrypt(current.decrypt(v as string)) : null);
+      const rows = await tx`SELECT id, base_salary_enc, bank_details_enc, social_security_number_enc, tax_id_enc FROM employee WHERE tenant_id = ${this.actor.tenantId}`;
       for (const r of rows) {
-        const re = (v: unknown) => (v ? next.encrypt(current.decrypt(v as string)) : null);
         await tx`
           UPDATE employee SET base_salary_enc = ${re(r.base_salary_enc)!}, bank_details_enc = ${re(r.bank_details_enc)},
-                              social_security_number_enc = ${re(r.social_security_number_enc)}, updated_at = now()
+                              social_security_number_enc = ${re(r.social_security_number_enc)}, tax_id_enc = ${re(r.tax_id_enc)}, updated_at = now()
           WHERE tenant_id = ${this.actor.tenantId} AND id = ${r.id as string}`;
       }
-      await this.audit(tx, "payroll_key.rotate", "payroll_tenant_key", String(version), { version, previousVersion, reencrypted: rows.length, masterKeyId: record.masterKeyId });
+      // Les identifiants fiscaux partagent la clé de données du dossier : la
+      // rotation les reprend aussi. L'index aveugle, lui, est dérivé de la plus
+      // ancienne version de clé — il ne bouge pas et reste valide.
+      const partners = await tx`SELECT id, tax_id_enc FROM partner WHERE tenant_id = ${this.actor.tenantId} AND tax_id_enc IS NOT NULL`;
+      for (const r of partners) {
+        await tx`UPDATE partner SET tax_id_enc = ${re(r.tax_id_enc)} WHERE tenant_id = ${this.actor.tenantId} AND id = ${r.id as string}`;
+      }
+      const companies = await tx`SELECT id, tax_ids_enc FROM company WHERE id = ${this.actor.tenantId} AND tax_ids_enc IS NOT NULL`;
+      for (const r of companies) {
+        await tx`UPDATE company SET tax_ids_enc = ${re(r.tax_ids_enc)} WHERE id = ${this.actor.tenantId}`;
+      }
+      const reencrypted = rows.length + partners.length + companies.length;
+      await this.audit(tx, "payroll_key.rotate", "payroll_tenant_key", String(version), { version, previousVersion, reencrypted, masterKeyId: record.masterKeyId });
       this.cipherCache = next;
-      return rows.length;
+      this.companyCache = undefined;
+      return reencrypted;
     });
     return { version, previousVersion, reencrypted };
   }
@@ -219,18 +288,19 @@ export class PayrollService {
       const dup = await tx`SELECT 1 FROM employee WHERE tenant_id = ${this.actor.tenantId} AND matricule = ${input.matricule}`;
       if (dup.length > 0) throw new PayrollError("MATRICULE_TAKEN", `Matricule ${input.matricule} déjà utilisé`);
       const [partner] = await tx`
-        INSERT INTO partner (tenant_id, type, name, tax_id, collective_account)
-        VALUES (${this.actor.tenantId}, 'EMPLOYEE', ${fullName(input.lastName, input.firstName)}, ${input.taxId ?? null}, ${scheme.accounts.netDue})
+        INSERT INTO partner (tenant_id, type, name, tax_id_enc, tax_id_bidx, collective_account)
+        VALUES (${this.actor.tenantId}, 'EMPLOYEE', ${fullName(input.lastName, input.firstName)}, ${encryptTaxId(cipher, input.taxId)},
+                ${taxIdBlindIndex(cipher, PARTNER_TAX_ID_DOMAIN, input.taxId)}, ${scheme.accounts.netDue})
         RETURNING id`;
       const [row] = await tx`
         INSERT INTO employee (tenant_id, partner_id, matricule, first_name, last_name, hire_date, leave_date, contract_type, category,
-                              base_salary_enc, allowances, bank_details_enc, social_security_number_enc, tax_id, dependants)
+                              base_salary_enc, allowances, bank_details_enc, social_security_number_enc, tax_id_enc, dependants)
         VALUES (${this.actor.tenantId}, ${partner!.id as string}, ${input.matricule}, ${input.firstName}, ${input.lastName}, ${input.hireDate},
                 ${input.leaveDate ?? null}, ${input.contractType ?? "CDI"}, ${input.category ?? null},
                 ${cipher.encrypt(Money.parse(input.baseSalary).toString())}, ${tx.json((input.allowances ?? []) as never)},
                 ${input.bankDetails ? cipher.encryptJson(input.bankDetails) : null},
                 ${input.socialSecurityNumber ? cipher.encrypt(input.socialSecurityNumber) : null},
-                ${input.taxId ?? null}, ${input.dependants ?? 0})
+                ${encryptTaxId(cipher, input.taxId)}, ${input.dependants ?? 0})
         RETURNING id`;
       const employeeId = row!.id as string;
       await this.audit(tx, "employee.create", "employee", employeeId, { matricule: input.matricule, name: fullName(input.lastName, input.firstName) });
@@ -288,9 +358,13 @@ export class PayrollService {
           allowances = ${tx.json((merged.allowances ?? []) as never)},
           bank_details_enc = ${merged.bankDetails ? cipher.encryptJson(merged.bankDetails) : null},
           social_security_number_enc = ${merged.socialSecurityNumber ? cipher.encrypt(merged.socialSecurityNumber) : null},
-          tax_id = ${merged.taxId ?? null}, dependants = ${merged.dependants ?? 0}, active = ${merged.active}, updated_at = now()
+          tax_id_enc = ${encryptTaxId(cipher, merged.taxId)}, tax_id = NULL,
+          dependants = ${merged.dependants ?? 0}, active = ${merged.active}, updated_at = now()
         WHERE tenant_id = ${this.actor.tenantId} AND id = ${id}`;
-      await tx`UPDATE partner SET name = ${fullName(merged.lastName, merged.firstName)}, tax_id = ${merged.taxId ?? null}, active = ${merged.active} WHERE tenant_id = ${this.actor.tenantId} AND id = ${current.partnerId}`;
+      await tx`
+        UPDATE partner SET name = ${fullName(merged.lastName, merged.firstName)}, tax_id_enc = ${encryptTaxId(cipher, merged.taxId)},
+          tax_id_bidx = ${taxIdBlindIndex(cipher, PARTNER_TAX_ID_DOMAIN, merged.taxId)}, tax_id = NULL, active = ${merged.active}
+        WHERE tenant_id = ${this.actor.tenantId} AND id = ${current.partnerId}`;
       // La piste d'audit ne contient jamais les champs sensibles.
       await this.audit(tx, "employee.update", "employee", id, publicFields(merged), publicFields(current));
     });
@@ -513,7 +587,7 @@ export class PayrollService {
   /** Données prêtes pour le rendu du bulletin (PDF, écran, portail salarié). */
   async payslipView(id: Id): Promise<PayslipView> {
     const payslip = await this.getPayslip(id);
-    const [run, employee, company] = await Promise.all([this.getRun(payslip.runId), this.getEmployee(payslip.employeeId), this.company()]);
+    const [run, employee, company, pack] = await Promise.all([this.getRun(payslip.runId), this.getEmployee(payslip.employeeId), this.company(), this.pack()]);
     const fmt = (v: string) => Money.parse(v).format(payslip.currency);
     const decorate = <T extends PayslipLine>(l: T) => ({ ...l, formatted: fmt(l.employee_amount) });
     const pick = (kind: PayslipLine["kind"]) => payslip.lines.filter((l) => l.kind === kind);
@@ -550,6 +624,8 @@ export class PayrollService {
         netToPay: fmt(payslip.netToPay),
         employerCost: fmt(payslip.employerCost),
       },
+      official: isPackPublished(pack),
+      packNotice: draftPackNotice(pack),
     };
   }
 
@@ -602,6 +678,9 @@ export class PayrollService {
     const run = runs.find((r) => r.month === period.month);
     if (!run) throw new PayrollError("RUN_NOT_FOUND", `Aucun cycle de paie pour ${periodLabel(period.year, period.month)}`);
     if (run.status === "DRAFT") throw new PayrollError("RUN_STATUS", `Cycle ${periodLabel(period.year, period.month)} non calculé`);
+    // Les déclarations de la période partent à la CNPS / l'IPRES / la DGI :
+    // documents légaux, pack publié exigé.
+    const use = await this.officialFor(`Déclarations sociales et fiscales de paie ${periodLabel(period.year, period.month)}`);
     const scheme = await this.scheme();
     const payslips = await this.listPayslips(run.id);
     const agg = new Map<string, { kind: string; label: string; account: string; base: Money; employee: Money; employer: Money }>();
@@ -624,12 +703,12 @@ export class PayrollService {
     await this.tx(async (tx) => {
       for (const d of agg.values()) {
         await tx`
-          INSERT INTO payroll_declaration (tenant_id, kind, label, year, month, base, employee_amount, employer_amount, amount, account)
+          INSERT INTO payroll_declaration (tenant_id, kind, label, year, month, base, employee_amount, employer_amount, amount, account, official)
           VALUES (${this.actor.tenantId}, ${d.kind}, ${d.label}, ${period.year}, ${period.month}, ${d.base.toString()}, ${d.employee.toString()},
-                  ${d.employer.toString()}, ${d.employee.add(d.employer).toString()}, ${d.account})
+                  ${d.employer.toString()}, ${d.employee.add(d.employer).toString()}, ${d.account}, ${use.official})
           ON CONFLICT (tenant_id, kind, year, month) DO UPDATE
             SET label = EXCLUDED.label, base = EXCLUDED.base, employee_amount = EXCLUDED.employee_amount, employer_amount = EXCLUDED.employer_amount,
-                amount = EXCLUDED.amount, account = EXCLUDED.account, updated_at = now()
+                amount = EXCLUDED.amount, account = EXCLUDED.account, official = EXCLUDED.official, updated_at = now()
             WHERE payroll_declaration.status = 'DRAFT'`;
       }
     });
@@ -644,12 +723,14 @@ export class PayrollService {
 
   /** Marque une déclaration comme déposée (référence du portail / récépissé). */
   async fileDeclaration(id: Id, filingReference: string): Promise<PayrollDeclaration> {
+    const use = await this.officialFor("Dépôt d'une déclaration de paie");
     const at = this.now().toISOString();
     const rows = await this.tx(async (tx) => {
       const updated = await tx`
-        UPDATE payroll_declaration SET status = 'FILED', filing_reference = ${filingReference}, filed_at = ${at}, updated_at = now()
+        UPDATE payroll_declaration SET status = 'FILED', filing_reference = ${filingReference}, filed_at = ${at},
+          official = ${use.official}, updated_at = now()
         WHERE tenant_id = ${this.actor.tenantId} AND id = ${id} RETURNING *`;
-      if (updated[0]) await this.audit(tx, "payroll_declaration.file", "payroll_declaration", id, { filingReference });
+      if (updated[0]) await this.audit(tx, "payroll_declaration.file", "payroll_declaration", id, { filingReference, official: use.official, pack: use.packReference });
       return updated;
     });
     if (!rows[0]) throw new PayrollError("DECLARATION_NOT_FOUND", `Déclaration ${id} introuvable`);
@@ -663,7 +744,7 @@ export class PayrollService {
 function employeeSelect(tx: Sql) {
   return tx`
     SELECT e.id, e.tenant_id, e.partner_id, e.matricule, e.first_name, e.last_name, e.hire_date::text AS hire_date, e.leave_date::text AS leave_date,
-           e.contract_type, e.category, e.base_salary_enc, e.allowances, e.bank_details_enc, e.social_security_number_enc, e.tax_id,
+           e.contract_type, e.category, e.base_salary_enc, e.allowances, e.bank_details_enc, e.social_security_number_enc, e.tax_id, e.tax_id_enc,
            e.dependants, e.active, e.created_at, e.updated_at
       FROM employee e`;
 }
@@ -684,7 +765,7 @@ function mapEmployee(r: Record<string, unknown>, cipher: TenantCipher): Employee
     allowances: (r.allowances as Allowance[]) ?? [],
     bankDetails: r.bank_details_enc ? cipher.decryptJson<BankDetails>(r.bank_details_enc as string) : null,
     socialSecurityNumber: r.social_security_number_enc ? cipher.decrypt(r.social_security_number_enc as string) : null,
-    taxId: (r.tax_id as string | null) ?? null,
+    taxId: decryptTaxId(cipher, r.tax_id_enc as string | null, r.tax_id as string | null),
     dependants: Number(r.dependants),
     active: Boolean(r.active),
     createdAt: toIso(r.created_at),
@@ -760,6 +841,7 @@ function mapDeclaration(r: Record<string, unknown>): PayrollDeclaration {
     status: r.status as PayrollDeclaration["status"],
     filingReference: (r.filing_reference as string | null) ?? null,
     filedAt: r.filed_at ? toIso(r.filed_at) : null,
+    official: r.official === undefined || r.official === null ? true : Boolean(r.official),
   };
 }
 

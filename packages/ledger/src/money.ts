@@ -148,6 +148,32 @@ export function parseRate(input: string | number): bigint {
   return sign * (BigInt(m[2] ?? "0") * RATE_FACTOR + BigInt((fracRaw + "0".repeat(RATE_SCALE)).slice(0, RATE_SCALE)));
 }
 
+/** Représentation canonique d'un taux à 10 décimales ("655.9570000000"). */
+export function formatRate(r: bigint): string {
+  const neg = r < 0n;
+  const abs = neg ? -r : r;
+  const whole = abs / RATE_FACTOR;
+  const frac = (abs % RATE_FACTOR).toString().padStart(RATE_SCALE, "0");
+  return `${neg ? "-" : ""}${whole}.${frac}`;
+}
+
+/**
+ * Taux inverse, arrondi à 10 décimales. Utile quand seul le sens opposé d'une
+ * paire est connu ; la conversion perd alors l'exactitude de la parité, ce que
+ * l'appelant doit signaler (le taux effectivement appliqué est celui-ci, pas
+ * celui d'origine).
+ */
+export function invertRate(rate: string | number): string {
+  const r = parseRate(rate);
+  if (r <= 0n) throw new MoneyError(`Taux non inversible : "${rate}"`);
+  return formatRate(divRound(RATE_FACTOR * RATE_FACTOR, r));
+}
+
+/** Multiplie deux taux (chaînage de paires) avec arrondi à 10 décimales. */
+export function composeRates(a: string | number, b: string | number): string {
+  return formatRate(divRound(parseRate(a) * parseRate(b), RATE_FACTOR));
+}
+
 export class MoneyError extends Error {
   override name = "MoneyError";
 }

@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { Money } from "@arcompt/ledger";
-import { packRules, type CountryPack } from "@arcompt/country-packs";
+import { draftPackNotice, isPackPublished, packRules, type CountryPack, type OfficialUse } from "@arcompt/country-packs";
 import type { Decimal } from "@arcompt/rules";
 import type { ComputedStatement, StatementsOutput } from "@arcompt/statements";
 import { TaxError, type DsfAdjustments, type DsfFiscal, type DsfResult } from "./types.js";
@@ -12,6 +12,13 @@ export interface DsfInput {
   /** Date d'évaluation des règles (fin d'exercice). */
   date: string;
   adjustments: DsfAdjustments;
+  /**
+   * Résultat de la garde `assertPackPublished` posée par l'appelant. Absent,
+   * la liasse est réputée non officielle dès que le pack ne l'est pas : cette
+   * fonction est pure, elle ne lit pas l'environnement et ne lève rien — c'est
+   * au service d'opposer le refus.
+   */
+  official?: OfficialUse;
 }
 
 /**
@@ -52,6 +59,8 @@ export function buildDsfData(input: DsfInput): DsfResult {
     label: input.pack.dsf.label,
     statements: input.statements,
     fiscal: { accountingResult, reintegrations, deductions, fiscalResult, turnover, isAmount, imfAmount, isDue, rules: used },
+    official: input.official?.official ?? isPackPublished(input.pack),
+    notice: input.official ? input.official.notice : draftPackNotice(input.pack),
   };
 }
 
@@ -65,6 +74,14 @@ export async function dsfWorkbook(dsf: DsfResult, opts: { company?: { name: stri
   const currency = dsf.statements.currency;
   const num = (m: Money | undefined): number | null => (m === undefined ? null : Number(m.format(currency).replace(/\s/g, "")));
   const header = (ws: ExcelJS.Worksheet, title: string) => {
+    // La mention de non-officialité est la première ligne de chaque onglet :
+    // le classeur est déposé tel quel sur un portail, on ne compte pas sur le
+    // nom du fichier ni sur l'écran qui l'a produit.
+    if (!dsf.official && dsf.notice) {
+      const mark = ws.addRow([dsf.notice]);
+      mark.font = { bold: true, size: 12, color: { argb: "FFB00020" } };
+      ws.addRow([]);
+    }
     ws.addRow([title]).font = { bold: true, size: 14 };
     ws.addRow([opts.company?.name ?? "", `Exercice ${dsf.fiscalYearCode}`, `Pack ${dsf.packCode} ${dsf.packVersion}`, `Devise ${currency}`]);
     if (opts.company?.taxIds) for (const [k, v] of Object.entries(opts.company.taxIds)) ws.addRow([k, v]);
