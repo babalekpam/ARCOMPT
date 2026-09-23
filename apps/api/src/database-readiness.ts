@@ -1,0 +1,120 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
+import type { Sql } from "postgres";
+
+const REQUIRED_TABLES = ["onboarding_bootstrap", "platform_admin", "platform_admin_audit"] as const;
+const REQUIRED_POLICIES = new Map([
+  ["onboarding_bootstrap", "onboarding_bootstrap_access"],
+  ["platform_admin", "platform_admin_internal"],
+  ["platform_admin_audit", "platform_admin_audit_internal"],
+]);
+const REQUIRED_FUNCTIONS = [
+  "public.auth_bootstrap_lookup(text,text)",
+  "public.auth_bootstrap_replay(text)",
+  "public.platform_admin_identity(text)",
+  "public.platform_admin_company(text,uuid)",
+  "public.platform_admin_companies(text)",
+  "public.platform_admin_record_access(text,uuid,text,text)",
+] as const;
+
+function normalized(expression: string | null): string {
+  return (expression ?? "").replace(/\s+/g, " ").trim();
+}
+
+function requiredPolicyExpression(table: string): string {
+  if (table === "onboarding_bootstrap") {
+    return "(clerk_sub = current_setting('app.clerk_sub'::text, true))";
+  }
+  // Compare PostgreSQL's normalized policy expression, not just the policy
+  // name: a permissive USING (true) must never count as a safe Publish.
+  return `(CURRENT_USER = ( SELECT r.rolname FROM (pg_class c JOIN pg_roles r ON ((r.oid = c.relowner))) WHERE (c.oid = ('${table}'::regclass)::oid)))`;
+}
+
+type RoleRow = { name: string; rolsuper: boolean; rolbypassrls: boolean };
+type TableRow = { relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; owned_by_app: boolean };
+type PolicyRow = { tablename: string; policyname: string; qual: string | null; with_check: string | null };
+type FunctionRow = { signature: string; exists: boolean; security_definer: boolean | null; executable: boolean | null };
+
+export type DatabaseSecuritySnapshot = {
+  role: RoleRow;
+  tables: TableRow[];
+  policies: PolicyRow[];
+  functions: FunctionRow[];
+};
+
+/** A read-only, fail-closed check of the database properties this API relies on. */
+export function databaseSecurityProblems(snapshot: DatabaseSecuritySnapshot): string[] {
+  const problems: string[] = [];
+  if (snapshot.role.rolsuper || snapshot.role.rolbypassrls) {
+    problems.push("le rôle applicatif contourne les politiques RLS");
+  }
+
+  const tables = new Map(snapshot.tables.map((table) => [table.relname, table]));
+  for (const name of REQUIRED_TABLES) {
+    if (!tables.has(name)) problems.push(`table ${name} absente`);
+  }
+  for (const table of snapshot.tables) {
+    if (table.owned_by_app) problems.push(`le rôle applicatif possède la table ${table.relname} et peut modifier sa RLS`);
+    if (!table.relrowsecurity || !table.relforcerowsecurity) {
+      problems.push(`RLS non activée et forcée sur ${table.relname}`);
+    }
+    const policies = snapshot.policies.filter((policy) => policy.tablename === table.relname);
+    if (!policies.length) problems.push(`aucune politique RLS sur ${table.relname}`);
+    for (const policy of policies) {
+      if (!policy.qual && !policy.with_check) {
+        problems.push(`politique RLS sans condition : ${table.relname}.${policy.policyname}`);
+      }
+    }
+  }
+  for (const [table, name] of REQUIRED_POLICIES) {
+    const policy = snapshot.policies.find((row) => row.tablename === table && row.policyname === name);
+    if (!policy || !policy.qual || !policy.with_check) {
+      problems.push(`politique requise absente ou incomplète : ${table}.${name}`);
+    } else if (normalized(policy.qual) !== requiredPolicyExpression(table) || normalized(policy.with_check) !== requiredPolicyExpression(table)) {
+      problems.push(`politique requise différente de la règle de développement : ${table}.${name}`);
+    }
+  }
+  for (const signature of REQUIRED_FUNCTIONS) {
+    const fn = snapshot.functions.find((row) => row.signature === signature);
+    if (!fn?.exists || !fn.security_definer || !fn.executable) {
+      problems.push(`fonction sécurisée indisponible pour l'application : ${signature}`);
+    }
+  }
+  return problems;
+}
+
+/** Called before opening the HTTP listener, not from a migration or publish hook. */
+export async function assertProductionDatabaseSecurity(db: Sql): Promise<void> {
+  const [roles, tables, policies, functions] = await Promise.all([
+    db<RoleRow[]>`SELECT current_user AS name, r.rolsuper, r.rolbypassrls
+      FROM pg_roles r WHERE r.rolname = current_user`,
+    db<TableRow[]>`SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity,
+        c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user) AS owned_by_app
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+        AND (c.relrowsecurity OR c.relname IN ('onboarding_bootstrap', 'platform_admin', 'platform_admin_audit'))`,
+    db<PolicyRow[]>`SELECT p.tablename, p.policyname, p.qual, p.with_check
+      FROM pg_policies p WHERE p.schemaname = 'public'`,
+    db<FunctionRow[]>`SELECT f.signature, p.oid IS NOT NULL AS exists, p.prosecdef AS security_definer,
+        has_function_privilege(current_user, p.oid, 'EXECUTE') AS executable
+      FROM (VALUES
+        ('public.auth_bootstrap_lookup(text,text)'),
+        ('public.auth_bootstrap_replay(text)'),
+        ('public.platform_admin_identity(text)'),
+        ('public.platform_admin_company(text,uuid)'),
+        ('public.platform_admin_companies(text)'),
+        ('public.platform_admin_record_access(text,uuid,text,text)')
+      ) AS f(signature)
+      LEFT JOIN pg_proc p ON p.oid = to_regprocedure(f.signature)`,
+  ]);
+  if (!roles[0]) throw new Error("Sécurité de la base de production : rôle de connexion introuvable.");
+  const problems = databaseSecurityProblems({
+    role: roles[0],
+    tables: [...tables],
+    policies: [...policies],
+    functions: [...functions],
+  });
+  if (problems.length) {
+    throw new Error(`Sécurité de la base de production non conforme ; démarrage refusé :\n${problems.map((p) => `  - ${p}`).join("\n")}`);
+  }
+}

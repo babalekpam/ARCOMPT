@@ -6,6 +6,7 @@ import { createDb } from "@arcompt/db";
 import { createCompanyCurrencyResolver, Ledger, PostgresRateProvider, PostgresStore } from "@arcompt/ledger";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { assertProductionDatabaseSecurity } from "./database-readiness.js";
 import { beginDraining } from "./health.js";
 import { initTelemetry, log } from "./telemetry.js";
 
@@ -21,6 +22,14 @@ for (const d of cfg.degraded) log("warn", "api.degraded", { detail: d });
 await initTelemetry();
 
 const db = createDb();
+if (cfg.isProduction) {
+  try {
+    await assertProductionDatabaseSecurity(db);
+  } catch (error) {
+    await db.end({ timeout: 5 });
+    throw error;
+  }
+}
 
 /**
  * Devise de tenue : celle du dossier, pas celle du processus. Un dossier
