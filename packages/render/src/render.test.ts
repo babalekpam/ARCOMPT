@@ -175,7 +175,7 @@ describe("PDF (Chromium)", () => {
     expect(pdf.subarray(0, 4).toString()).toBe("%PDF");
     expect(pdf.length).toBeGreaterThan(10 * 1024);
     // Le navigateur est partagé : un second rendu réutilise l'instance.
-    const again = await renderPdf(renderHtml("trial-balance", trialBalanceView({ tenantId: "t", currency: "XOF", fiscalYearCode: "2025", from: "2025-01-01", to: "2025-12-31", rows: [], totalDebit: Money.zero(), totalCredit: Money.zero() }, "XOF")), { landscape: true, pageNumbers: false });
+    const again = await renderPdf(renderHtml("trial-balance", trialBalanceView({ tenantId: "t", fiscalYearCode: "2025", from: "2025-01-01", to: "2025-12-31", rows: [], totalDebit: Money.zero(), totalCredit: Money.zero() }, "XOF")), { landscape: true, pageNumbers: false });
     expect(again.subarray(0, 4).toString()).toBe("%PDF");
   });
 
@@ -243,7 +243,7 @@ describe("Excel", () => {
 
   it("conserve quatre décimales et le format à deux décimales pour l'euro", async () => {
     const view = trialBalanceView(
-      { tenantId: "t", currency: "EUR", fiscalYearCode: "2025", from: "2025-01-01", to: "2025-12-31", rows: [{ accountNumber: "521", label: "Banque", class: 5, debit: Money.parse("1234.5678"), credit: Money.zero() }], totalDebit: Money.parse("1234.5678"), totalCredit: Money.zero() },
+      { tenantId: "t", fiscalYearCode: "2025", from: "2025-01-01", to: "2025-12-31", rows: [{ accountNumber: "521", label: "Banque", class: 5, debit: Money.parse("1234.5678"), credit: Money.zero() }], totalDebit: Money.parse("1234.5678"), totalCredit: Money.zero() },
       "EUR",
     );
     const wb = await readWorkbook(await trialBalanceWorkbook(view));
