@@ -5,23 +5,73 @@ import type { JournalEntry } from "./types.js";
  * Ancrage externe de la chaîne de hash (SECURITY.md §6, engagement n° 10).
  *
  * Chaque jour, pour chaque dossier, on calcule la racine de Merkle des hashes
- * des écritures validées de la journée (tous journaux confondus, triées par
- * journal puis numéro). Cette racine, jointe à la racine de la veille, forme
+ * déjà chaînés de la journée. Cette racine, jointe à l'ancre de la veille, forme
  * une chaîne d'ancres que l'on publie hors de la plateforme (horodatage
  * qualifié, registre public…). Quiconque détient l'ancre publiée peut prouver
  * qu'une écriture existait, inchangée, à la date de publication.
+ *
+ * **Ce qui est ancré.** Le produit tient deux chaînes de hash (§6 : « chaînage
+ * par hash des écritures **et du journal d'audit** ») : `journal_entry.hash`,
+ * une chaîne par journal, et `audit_log.hash`, une chaîne par dossier. L'ancre
+ * du jour couvre les deux. N'ancrer que les écritures — ce que faisait
+ * `dailyLeaves()` seul — prouverait qu'une écriture existait sans rien prouver
+ * de qui l'a validée, ni du déverrouillage de période qui l'a précédée : la
+ * moitié de la preuve que l'engagement annonce. Chaque feuille porte donc son
+ * domaine (`ENTRY:` / `AUDIT:`), ce qui interdit aussi de faire passer un hash
+ * d'audit pour un hash d'écriture dans une preuve d'inclusion.
  */
 export interface Anchor {
   tenantId: string;
-  /** Jour couvert (AAAA-MM-JJ, date de validation). */
+  /** Jour couvert (AAAA-MM-JJ, en UTC). */
   day: string;
-  /** Racine de Merkle des hashes d'écritures du jour ("" si aucune). */
+  /** Racine de Merkle des feuilles du jour ("" si aucune). */
   merkleRoot: string;
   /** Hash de l'ancre précédente du dossier, ou null pour la première. */
   prevAnchorHash: string | null;
   /** sha256(prevAnchorHash | day | merkleRoot | count). */
   anchorHash: string;
+  /**
+   * Nombre de feuilles scellées par la racine — écritures **et** lignes
+   * d'audit. Le nom est conservé pour ne pas rompre la formule du hash, déjà
+   * publiée ; `DailyAnchor.counts` donne le détail par domaine.
+   */
   entryCount: number;
+}
+
+/** Domaines de feuilles ancrés : les deux chaînes de hash du produit. */
+export type AnchorLeafKind = "ENTRY" | "AUDIT";
+
+/** Une feuille de l'arbre du jour : un hash déjà chaîné, et de quoi le retrouver. */
+export interface AnchorLeaf {
+  kind: AnchorLeafKind;
+  /** `journal_entry.hash` ou `audit_log.hash`. */
+  hash: string;
+  /** Identifiant de la ligne source (`journal_entry.id`, `audit_log.id`). */
+  ref: string;
+}
+
+/**
+ * Valeur canonique d'une feuille. Le domaine est préfixé : sans lui, un hash
+ * d'audit et un hash d'écriture seraient interchangeables dans une preuve.
+ */
+export function leafValue(leaf: Pick<AnchorLeaf, "kind" | "hash">): string {
+  return `${leaf.kind}:${leaf.hash}`;
+}
+
+/** Ancre du jour, avec le détail des feuilles par domaine (informatif : la racine, elle, scelle le contenu réel). */
+export interface DailyAnchor extends Anchor {
+  counts: { entries: number; audit: number };
+}
+
+/**
+ * Ordre canonique des feuilles du jour : les écritures d'abord (dans l'ordre où
+ * l'appelant les a lues — journal puis numéro), les lignes d'audit ensuite
+ * (identifiant croissant). Cet ordre est ce qui rend la racine reproductible
+ * par un tiers des années plus tard ; il ne change pas sans changer la version
+ * du reçu (`ANCHOR_RECEIPT_VERSION`).
+ */
+export function orderLeaves(leaves: AnchorLeaf[]): AnchorLeaf[] {
+  return [...leaves.filter((l) => l.kind === "ENTRY"), ...leaves.filter((l) => l.kind === "AUDIT")];
 }
 
 export interface MerkleProof {
@@ -101,19 +151,96 @@ export function verifyAnchorChain(anchors: Anchor[]): { ok: boolean; brokenAt?: 
 }
 
 /**
- * Fournisseur de publication externe. Implémentations attendues : horodatage
- * qualifié (RFC 3161), registre public (dépôt Git signé, blockchain publique),
- * ou simple envoi par courriel signé au commissaire aux comptes.
+ * Ancre du jour à partir des feuilles des deux chaînes.
+ * Les feuilles sont remises dans l'ordre canonique, puis préfixées de leur
+ * domaine avant hachage.
  */
-export interface AnchorPublisher {
-  publish(anchor: Anchor): Promise<{ reference: string; publishedAt: string }>;
+export function buildDailyAnchor(tenantId: string, day: string, leaves: AnchorLeaf[], prevAnchorHash: string | null): DailyAnchor {
+  const ordered = orderLeaves(leaves);
+  const anchor = buildAnchor(tenantId, day, ordered.map(leafValue), prevAnchorHash);
+  return {
+    ...anchor,
+    counts: {
+      entries: ordered.filter((l) => l.kind === "ENTRY").length,
+      audit: ordered.filter((l) => l.kind === "AUDIT").length,
+    },
+  };
 }
 
-/** Fournisseur de test/développement : mémorise les ancres publiées. */
+/**
+ * Version du reçu. Elle fixe à la fois le texte scellé et les conventions qu'il
+ * suppose (ordre canonique des feuilles, préfixe de domaine, formule du hash
+ * d'ancre). Changer l'une d'elles impose une nouvelle version : un reçu de 2026
+ * doit rester vérifiable en 2036 avec les règles de 2026.
+ */
+export const ANCHOR_RECEIPT_VERSION = "ARCOMPT-ANCHOR-v1";
+
+/**
+ * Texte du reçu : c'est **lui**, et non la ligne de base, que l'on soumet au
+ * tiers. Un horodateur RFC 3161 scelle son empreinte sha256 ; un point de dépôt
+ * signé reçoit le texte entier. Un auditeur le reconstitue depuis la base (ou
+ * depuis l'export) et doit retrouver exactement la même empreinte, caractère
+ * pour caractère — d'où l'absence de tout champ variable (heure de calcul,
+ * numéro de version du logiciel, mise en forme).
+ */
+export function anchorReceipt(anchor: Anchor): string {
+  return [
+    ANCHOR_RECEIPT_VERSION,
+    `tenant=${anchor.tenantId}`,
+    `day=${anchor.day}`,
+    `prev=${anchor.prevAnchorHash ?? "GENESIS"}`,
+    `root=${anchor.merkleRoot === "" ? "EMPTY" : anchor.merkleRoot}`,
+    `leaves=${anchor.entryCount}`,
+    `anchor=${anchor.anchorHash}`,
+    "",
+  ].join("\n");
+}
+
+/** Empreinte sha256 du reçu, en hexadécimal : ce que l'on fait horodater. */
+export function anchorImprint(anchor: Anchor): string {
+  return h(anchorReceipt(anchor));
+}
+
+/** Trace rendue par un tiers après publication. */
+export interface AnchorPublication {
+  /** Nom du publieur effectivement employé (`rfc3161`, `webhook`, `memory`…). */
+  publisher: string;
+  /** Référence courte et citable de la publication (numéro de série, accusé, identifiant du dépôt). */
+  reference: string;
+  /** Horodatage **rendu par le tiers** quand il en rend un ; sinon l'heure d'envoi, et c'est dit. */
+  publishedAt: string;
+  /** Preuve opposable à conserver telle quelle (base64) : jeton RFC 3161, signature du reçu… */
+  proof?: string;
+  /** Ce qu'un auditeur doit faire de `proof`, en une phrase. */
+  verifyWith?: string;
+}
+
+/**
+ * Fournisseur de publication externe. Implémentations livrées : horodatage
+ * RFC 3161 (`Rfc3161AnchorPublisher`), dépôt signé chez l'exploitant
+ * (`SignedEndpointAnchorPublisher`), et le publieur de test ci-dessous.
+ */
+export interface AnchorPublisher {
+  /** Nom court, conservé dans `ledger_anchor.publisher`. */
+  readonly name: string;
+  publish(anchor: Anchor): Promise<AnchorPublication>;
+}
+
+/**
+ * Fournisseur de test/développement : mémorise les ancres publiées.
+ * Ne quitte jamais le processus, donc ne prouve rien à personne — interdit en
+ * production (voir `anchorPublisherFromEnv`).
+ */
 export class MemoryAnchorPublisher implements AnchorPublisher {
+  readonly name = "memory";
   readonly published: Anchor[] = [];
-  async publish(anchor: Anchor) {
+  async publish(anchor: Anchor): Promise<AnchorPublication> {
     this.published.push(anchor);
-    return { reference: `memory:${anchor.tenantId}:${anchor.day}`, publishedAt: new Date().toISOString() };
+    return {
+      publisher: this.name,
+      reference: `memory:${anchor.tenantId}:${anchor.day}`,
+      publishedAt: new Date().toISOString(),
+      verifyWith: "Aucune vérification possible : l'ancre n'a pas quitté le processus.",
+    };
   }
 }

@@ -9,6 +9,7 @@ import { resolveIdentity, touchLastActive, type TokenIdentityHints } from "./ide
 import { rateLimit, securityHeaders } from "./security.js";
 import { BurstDetector, log, raiseSecurityAlert } from "./telemetry.js";
 import { accountsRoutes } from "./routes/accounts.js";
+import { anchoringRoutes } from "./routes/anchoring.js";
 import { assetsRoutes } from "./routes/assets.js";
 import { closingRoutes } from "./routes/closing.js";
 import { documentsRoutes } from "./routes/documents.js";
@@ -99,6 +100,7 @@ export function createApp(deps: AppDeps) {
   api.route("/assets", assetsRoutes(deps));
   api.route("/stock", stockRoutes(deps)); // /articles, /movements, /positions, /counts, /closings
   api.route("/closing", closingRoutes(deps));
+  api.route("/anchors", anchoringRoutes(deps));
   api.route("/", documentsRoutes(deps)); // /documents, /proposals, /assistant, /anomalies
   api.route("/portal", portalRoutes(deps));
   app.route("/v1", api);
