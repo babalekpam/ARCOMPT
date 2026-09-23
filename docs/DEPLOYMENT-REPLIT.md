@@ -1,5 +1,9 @@
 # Mise en ligne d'ARCOMPT sur Replit
 
+Le dossier d'ensemble est [`DEPLOYMENT-PACKAGE.md`](DEPLOYMENT-PACKAGE.md) ; la
+version impérative destinée à un agent est
+[`REPLIT-AGENT-BRIEF.md`](REPLIT-AGENT-BRIEF.md).
+
 Ce guide est la **seconde route de mise en ligne**. La première,
 [`docs/DEPLOYMENT.md`](DEPLOYMENT.md), loue un serveur et y fait tourner sept
 conteneurs derrière Caddy. Celle-ci ne loue rien : tout vit dans un projet

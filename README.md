@@ -92,6 +92,8 @@ arcompt/
 ├── .github/workflows/ci.yml  # lint, typecheck, migrations, tests, build
 ├── docs/
 │   ├── ARCHITECTURE.md  SECURITY.md  MODULES.md  OPERATIONS.md  API.md
+│   ├── DEPLOYMENT-PACKAGE.md # mise en ligne : le dossier complet, à lire en premier
+│   ├── DEPLOYMENT.md  DEPLOYMENT-REPLIT.md  REPLIT-AGENT-BRIEF.md  OFFLINE.md
 │   └── country-packs/
 ├── docker-compose.yml
 └── .env.example
@@ -105,6 +107,7 @@ pnpm test:statements	Non-régression des états sur les balances de référence
 pnpm test:tenancy	Vérifie qu'aucune donnée ne fuit entre dossiers (exige DATABASE_URL)
 pnpm test:e2e	Parcours navigateur (Chromium) contre l'API et le web sur une base peuplée
 pnpm db:migrate / pnpm db:seed	Schéma et données initiales
+pnpm preflight	Contrôle complet avant mise en ligne (base, identité, messagerie, RLS)
 pnpm pack:validate <pays>	Valide un pack pays contre son schéma
 pnpm lint / pnpm typecheck	Qualité du code
 Règles d'or du code
@@ -123,13 +126,13 @@ Ce qui n'est pas encore construit
 Inventaire permanent des stocks : non implémenté. Seul l'inventaire intermittent existe (articles, mouvements valorisés en CUMP ou PEPS, inventaire physique, variation 603x / 73x à la clôture) ; aucun écran web, seulement l'API /v1/stock.
 Encaissement mobile money : aucun opérateur réel, seul un fournisseur simulé en mémoire.
 Facture certifiée (FNE, MECeF…) : aucun connecteur réel, seulement un simulateur.
-Envoi d'e-mails et de SMS : aucun expéditeur ; le port de notification du portail journalise et n'envoie rien.
+Envoi de SMS : aucun expéditeur. L'envoi d'e-mails, lui, est branché (SMTP, `pnpm mail:check`).
 Gestionnaire de clés : la clé maître de paie vient d'une variable d'environnement, aucune implémentation KMS.
-Ancrage externe de la chaîne de hash : calcul et preuves écrits et testés, mais jamais appelés ni publiés.
+Ancrage externe de la chaîne de hash : calculé, testé et outillé (`scripts/anchor-daily.mts`) ; reste à planifier sur le déploiement.
 Application mobile native (Expo) et saisie vocale en langues locales : non commencées.
 Mémoire sémantique (pgvector) : le chemin vectoriel n'est jamais emprunté, la mémoire des catégorisations est lexicale.
 Packs pays : les huit packs sont en brouillon, aucun relu par un expert-comptable.
-Séparation des rôles SQL, sauvegardes et exercices de restauration : procédures manuelles, sans outillage dans le dépôt.
+Séparation des rôles SQL, sauvegardes et exercices de restauration : outillés (`scripts/provision-app-role.mts`, `backup.mts`, `restore-drill.mts`) ; leur planification reste à poser sur le déploiement.
 Détail et justification : docs/ARCHITECTURE.md (« Ce qui n'est pas encore construit »).
 
 Feuille de route

@@ -1,5 +1,10 @@
 # Mise en ligne d'ARCOMPT
 
+Le dossier d'ensemble — inventaire des composants, ordre des opérations,
+tableau complet des variables et contrôle automatique — est
+[`DEPLOYMENT-PACKAGE.md`](DEPLOYMENT-PACKAGE.md). Ce guide-ci en est la route
+serveur, détaillée commande par commande.
+
 Ce guide part du domaine **`arcompt.com`** (enregistré chez GoDaddy) et d'aucun
 serveur, et s'arrête quand un expert-comptable peut se connecter à
 `https://arcompt.com` et saisir une écriture. Il est écrit pour quelqu'un qui

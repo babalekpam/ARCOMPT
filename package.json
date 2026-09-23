@@ -23,6 +23,7 @@
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test:e2e": "playwright test -c e2e/playwright.config.ts",
+    "preflight": "tsx scripts/preflight.mts",
     "mail:check": "tsx scripts/check-mail.mts"
   },
   "devDependencies": {
