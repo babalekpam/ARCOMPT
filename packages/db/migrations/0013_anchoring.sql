@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 -- ARCOMPT — ancrage externe de la chaîne de hash (phase 0013)
 --
 -- SECURITY.md § 6 et engagement n° 10 : « la chaîne de hash est ancrée hors de

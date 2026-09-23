@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 -- Base dédiée à Keycloak, créée au tout premier démarrage de PostgreSQL.
 --
 -- Keycloak stocke ses utilisateurs, ses sessions et ses clés de signature dans

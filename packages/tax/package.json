@@ -6,7 +6,23 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
-  "dependencies": { "@arcompt/ledger": "workspace:*", "@arcompt/db": "workspace:*", "postgres": "^3.4.5", "zod": "^3.24.1", "@arcompt/rules": "workspace:*", "@arcompt/country-packs": "workspace:*", "@arcompt/statements": "workspace:*", "exceljs": "^4.4.0" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@arcompt/ledger": "workspace:*",
+    "@arcompt/db": "workspace:*",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1",
+    "@arcompt/rules": "workspace:*",
+    "@arcompt/country-packs": "workspace:*",
+    "@arcompt/statements": "workspace:*",
+    "exceljs": "^4.4.0"
+  },
+  "author": "ARGILETTE LLC",
+  "license": "LicenseRef-ARGILETTE-Proprietary"
 }

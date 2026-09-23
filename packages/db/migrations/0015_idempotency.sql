@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 -- ARCOMPT — idempotence générale des créations (phase 0015)
 --
 -- POURQUOI

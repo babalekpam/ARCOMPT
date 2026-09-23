@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * File de tâches. Deux adaptateurs : BullMQ + Redis (production, `REDIS_URL`)
  * et exécution en processus (développement sans Redis, tests).

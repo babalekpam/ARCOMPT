@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /** Types des réponses de l'API fiscalité (/v1/tax), copiés du paquet serveur. Montants en chaînes décimales. */
 import type { StatementsOutput } from "@/lib/types";
 

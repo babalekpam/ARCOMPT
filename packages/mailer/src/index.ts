@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { MailError, type Mailer } from "./mailer.js";
 import { NullMailer } from "./null-mailer.js";
 import { SmtpMailer, smtpOptionsFromEnv } from "./smtp.js";

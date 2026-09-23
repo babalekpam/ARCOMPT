@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 -- ARCOMPT — immobilisations et fiscalité (modules assets et tax)
 -- La table fixed_asset existe depuis 0001_core.sql : on la complète.
 

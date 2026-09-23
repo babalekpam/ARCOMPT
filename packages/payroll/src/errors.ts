@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 export type PayrollErrorCode =
   | "EMPLOYEE_NOT_FOUND"
   | "EMPLOYEE_INACTIVE"

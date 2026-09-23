@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Cœur de la restauration, partagé par `scripts/restore.mts` (à la main) et
  * `scripts/restore-drill.mts` (exercice). Un seul chemin de code : l'exercice

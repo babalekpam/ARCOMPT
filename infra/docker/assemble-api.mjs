@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Assemblage de l'image API : transforme la sortie compilée de `tsc` en une
  * arborescence exécutable par `node`, sans TypeScript ni pnpm à l'exécution.

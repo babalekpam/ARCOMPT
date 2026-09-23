@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 -- ARCOMPT — langue du dossier (phase 0016)
 --
 -- La règle de langue (packages/render/src/locale.ts) range quatre sources :

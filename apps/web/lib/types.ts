@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Types des réponses API utilisés par le front. Copiés (et non importés) des
  * paquets serveur : les montants sont des chaînes canoniques à 4 décimales.

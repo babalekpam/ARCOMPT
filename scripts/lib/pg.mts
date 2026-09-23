@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Outillage PostgreSQL commun aux scripts d'exploitation, et — surtout — le
  * garde-fou qui empêche une restauration d'écraser une base vivante.

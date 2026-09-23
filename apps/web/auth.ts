@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Auth.js v5 : fournisseur Keycloak (OIDC) configuré depuis l'environnement.
  * Le jeton d'accès est conservé dans le JWT de session pour être transmis à

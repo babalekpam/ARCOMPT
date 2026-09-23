@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { describe, expect, it } from "vitest";
 import { parseTextCommand } from "./text-command.js";
 import { parseMetaWebhook, normalizePhone } from "./provider.js";

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { describe, expect, it } from "vitest";
 import { ASSISTANT_FOOTER, hasFooter, normalizeQuestion, splitAnswer, SUGGESTED_QUESTION_KEYS } from "./helpers";
 

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { Id, Money } from "@arcompt/ledger";
 
 export type AssetCategory = "INCORPORELLE" | "CORPORELLE" | "FINANCIERE";

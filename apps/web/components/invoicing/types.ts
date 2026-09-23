@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Types des réponses de l'API facturation (/v1/products, /sales, /purchases,
  * /payments, /receivables, /payables, /dunning, /partners). Copiés des paquets

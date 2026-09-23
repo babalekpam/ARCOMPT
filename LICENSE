@@ -1,0 +1,43 @@
+ARCOMPT — Plateforme comptable intelligente OHADA
+Copyright © ARGILETTE LLC. Tous droits réservés. / All rights reserved.
+
+LOGICIEL PROPRIÉTAIRE — PROPRIETARY SOFTWARE
+
+FRANÇAIS
+--------
+Ce logiciel et son code source sont la propriété exclusive d'ARGILETTE LLC.
+Aucune licence, expresse ou implicite, n'est concédée par la seule mise à
+disposition de ce dépôt.
+
+Sont interdits sans autorisation écrite préalable d'ARGILETTE LLC :
+la copie, la modification, la fusion, la publication, la distribution,
+la sous-licence, la vente et la mise à disposition de tout ou partie de ce
+logiciel, ainsi que la création d'œuvres dérivées.
+
+Les marques ARGILETTE et ARCOMPT, les logos et l'identité visuelle sont la
+propriété d'ARGILETTE LLC et ne sont pas concédés par le présent document.
+
+Chaque fichier source porte la signature :
+    SPDX-FileCopyrightText: © ARGILETTE LLC
+    SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
+
+Les composants tiers utilisés par ce logiciel restent régis par leurs propres
+licences ; la présente notice ne s'y substitue pas.
+
+ENGLISH
+-------
+This software and its source code are the exclusive property of ARGILETTE LLC.
+No licence, express or implied, is granted by the mere availability of this
+repository.
+
+Without the prior written permission of ARGILETTE LLC, you may not copy,
+modify, merge, publish, distribute, sub-licence or sell all or part of this
+software, nor create derivative works from it.
+
+The ARGILETTE and ARCOMPT marks, logos and visual identity are the property of
+ARGILETTE LLC and are not granted by this document.
+
+Third-party components used by this software remain governed by their own
+licences; this notice does not replace them.
+
+ARGILETTE LLC — arcompt.com

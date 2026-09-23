@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { parseMetaWebhook, type Button, type InboundMessage, type WhatsAppProvider } from "./provider.js";
 

@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 -- ARCOMPT — statut du pack pays et chiffrement des identifiants fiscaux (0011)
 --
 -- Deux sujets, une migration : tous deux portent sur ce qui sort de

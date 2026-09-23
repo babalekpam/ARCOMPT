@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { PostingEvent, PostingEventKind, PostingTemplate } from "./types.js";
 
 /** Journal de trésorerie : caisse (57x) → CA, sinon banque (521, 5381…) → BQ. */

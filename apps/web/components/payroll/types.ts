@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Types des réponses de l'API paie (/v1/payroll), copiés du paquet serveur.
  * Les montants sont des chaînes décimales ; les champs sensibles peuvent

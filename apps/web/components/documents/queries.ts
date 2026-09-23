@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Lectures côté serveur du module pièces. L'API n'expose pas `GET /documents` :
  * la liste des pièces est dérivée de la file de revue interrogée sur tous les

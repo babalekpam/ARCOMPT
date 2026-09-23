@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /** Déconnexion : efface les cookies applicatifs ; en OIDC, termine aussi la session Auth.js. */
 import { NextResponse } from "next/server";
 import { COOKIES, config } from "@/lib/config";

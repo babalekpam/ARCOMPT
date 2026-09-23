@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Aides pures pour la prévision 13 semaines : échelle des barres CSS (sans
  * bibliothèque graphique) et construction des flux à partir des documents

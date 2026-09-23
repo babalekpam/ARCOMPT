@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /** Agrégats du tableau de bord calculés sur la balance (chaînes, jamais de flottant). */
 import { addAmounts, negate, subAmounts } from "./money";
 import type { TrialBalance } from "./types";

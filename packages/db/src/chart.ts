@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Plan de comptes SYSCOHADA révisé (AUDCIF 2017) — gabarit copié à la création
  * d'un dossier. Les comptes à deux chiffres sont des comptes de regroupement

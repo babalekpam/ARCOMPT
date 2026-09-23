@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { config } from "./config";
 
 /** Exercice courant depuis les paramètres d'URL (`fy`, `prev`) avec repli sur la configuration. */

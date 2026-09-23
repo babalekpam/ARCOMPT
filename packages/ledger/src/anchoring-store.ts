@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Conservation des ancres (table `ledger_anchor`, migration 0013) et lecture
  * des feuilles du jour depuis les deux chaînes de hash du dossier.

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { Hono } from "hono";
 import { createDocumentsInfraFromEnv, createDocumentsServiceFromEnv } from "@arcompt/documents";
 import { MockProvider, PgConversationStore, WhatsAppBot, createProviderFromEnv, verifyMetaSignature, type WhatsAppProvider } from "@arcompt/whatsapp";

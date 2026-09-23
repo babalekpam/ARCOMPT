@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { MessageChannel } from "./types.js";
 
 /** Message sortant (demande de pièce, relance) : envoyé par WhatsApp ou e-mail. */

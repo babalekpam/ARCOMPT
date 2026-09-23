@@ -18,5 +18,7 @@
   },
   "devDependencies": {
     "@types/nodemailer": "^6.4.17"
-  }
+  },
+  "author": "ARGILETTE LLC",
+  "license": "LicenseRef-ARGILETTE-Proprietary"
 }

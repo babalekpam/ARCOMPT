@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { describeApiError, packRefusal, type ApiError, type ApiUnreachableError } from "@/lib/api";
 import { getT } from "@/lib/i18n-server";
 import { Alert } from "@/components/ui/Alert";

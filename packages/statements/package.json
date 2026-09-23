@@ -18,5 +18,7 @@
   },
   "devDependencies": {
     "@arcompt/db": "workspace:*"
-  }
+  },
+  "author": "ARGILETTE LLC",
+  "license": "LicenseRef-ARGILETTE-Proprietary"
 }

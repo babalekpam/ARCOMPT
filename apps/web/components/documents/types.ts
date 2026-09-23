@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Types des réponses de l'API « pièces & IA » (/documents, /proposals,
  * /assistant/ask, /anomalies). Copiés des paquets serveur : les montants sont

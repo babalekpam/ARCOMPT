@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { Money, type JournalEntry, type TrialBalance } from "@arcompt/ledger";
 import type { LedgerAccountView, LedgerLineView, LedgerView, TrialBalanceView } from "./views.js";
 

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { CURRENCY_DECIMALS, Money, isCurrencyCode, normalizeCurrency, type AccountBalance } from "@arcompt/ledger";
 import { runControls } from "./controls.js";
 import { evalFormula, indexBalance, type BalanceIndex } from "./formula.js";

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /** Aides pures du module fiscalité (testables sans React ni réseau). */
 import type { BadgeTone } from "@/components/ui/Badge";
 import type { DeadlineStatus, IsComputation, TaxReturnStatus, VatReturnComputation } from "./types";

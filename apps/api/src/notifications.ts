@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { createMailerFromEnv, dunningMail, legalFooterFromEnv, normalizeLocale, type Mailer } from "@arcompt/mailer";
 import type { DunningDispatch, DunningSender } from "@arcompt/invoicing";
 import type { Notifier, OutboundMessage } from "@arcompt/portal";

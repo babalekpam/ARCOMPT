@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /** Types partagés du portail cabinets. */
 
 export type OrganizationKind = "FIRM" | "COMPANY" | "GROUP";

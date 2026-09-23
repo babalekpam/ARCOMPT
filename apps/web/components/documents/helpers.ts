@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Aides pures du module pièces & IA (testables sans React ni réseau) :
  * tonalités des badges, confiance, liste des pièces dérivée de la file de

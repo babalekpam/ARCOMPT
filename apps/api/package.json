@@ -42,5 +42,7 @@
   },
   "devDependencies": {
     "tsx": "^4.19.2"
-  }
+  },
+  "author": "ARGILETTE LLC",
+  "license": "LicenseRef-ARGILETTE-Proprietary"
 }

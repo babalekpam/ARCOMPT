@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { Decimal, evalExpression, isBareme, RuleError, type Bareme, type Scope, type Value } from "./expression.js";
 
 /**

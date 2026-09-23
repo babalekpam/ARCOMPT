@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Ancrage externe : lecture des ancres, preuve d'inclusion d'une écriture, et
  * déclenchement manuel de l'ancrage d'un dossier (SECURITY.md §6, engagement

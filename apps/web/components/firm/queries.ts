@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /** Lectures serveur partagées du portail : rôle de l'utilisateur courant d'après ses appartenances. */
 import { apiTry } from "@/lib/api";
 import { resolveMyRole } from "./helpers";

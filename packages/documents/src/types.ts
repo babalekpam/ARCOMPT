@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { DocumentExtraction, EntryProposal, GuardIssue } from "@arcompt/ai-gateway";
 
 export interface TenantContext {

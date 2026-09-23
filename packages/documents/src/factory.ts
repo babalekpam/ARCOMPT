@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { AiGateway, AnthropicProvider, type ModelProvider, type ModelRequest, type ModelResponse } from "@arcompt/ai-gateway";
 import { Ledger, PostgresStore } from "@arcompt/ledger";
 import { createStorageFromEnv, type Storage } from "@arcompt/storage";

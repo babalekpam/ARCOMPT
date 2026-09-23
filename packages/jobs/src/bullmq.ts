@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { Queue, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { DEFAULT_ATTEMPTS, DEFAULT_BACKOFF_MS, type EnqueueOptions, type JobHandler, type JobName, type JobPayloads, type JobQueue } from "./queue.js";

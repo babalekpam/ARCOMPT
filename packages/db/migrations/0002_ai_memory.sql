@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 -- Mémoire des catégorisations (pgvector). L'extension est facultative en local :
 -- si elle manque, la table est créée sans colonne vectorielle et la recherche
 -- sémantique est désactivée (la catégorisation retombe sur les règles).

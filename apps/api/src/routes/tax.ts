@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { decryptTaxIds, existingTenantCipherIn, withTenant } from "@arcompt/db";

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Génère la balance de référence « demo-ci » (deux exercices) en passant par
  * le moteur comptable, puis l'écrit dans fixtures/balances/demo-ci/.

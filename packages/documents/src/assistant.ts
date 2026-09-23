@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { withTenant } from "@arcompt/db";
 import { AiGateway, AssistantToolCallSchema, type AssistantToolCall } from "@arcompt/ai-gateway";
 import { Money, type AccountBalance, type Ledger } from "@arcompt/ledger";

@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 -- ---------------------------------------------------------------------------
 -- 0010 — Droits du rôle applicatif : fermer les trous ouverts par
 -- ALTER DEFAULT PRIVILEGES.

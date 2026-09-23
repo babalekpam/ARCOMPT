@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { describe, expect, it } from "vitest";
 import { AiGateway, AiGatewayError, MemoryCallLogger, MockProvider } from "./gateway.js";
 import { checkExtractionArithmetic, checkProposal, duplicateKey, routeProposal } from "./guards.js";

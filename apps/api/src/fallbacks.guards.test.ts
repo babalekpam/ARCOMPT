@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockFneConnector, NullConnector } from "@arcompt/invoicing";
 import { ConfigError, certificationConnectorFromEnv, paymentProvidersFromEnv } from "./config.js";

@@ -280,5 +280,6 @@
   "pack.badge.nonOfficial": "Unofficial",
   "pack.rates.draft": "VAT rates from pack {pack}, awaiting validation: indicative values.",
   "common.packNotPublished": "Refused: pack {pack} is at status {status}. A chartered accountant in that country must validate its rates and scales, and the pack must reach PUBLISHED, before any legal document can be produced from it.",
-  "common.ref": "Ref."
+  "common.ref": "Ref.",
+  "brand.signature": "ARCOMPT — an ARGILETTE platform. © ARGILETTE LLC."
 }

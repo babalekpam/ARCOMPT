@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Aides pures pour l'import de relevés : détection du type de texte (CSV ou
  * lot de SMS mobile money) et construction de la requête d'import.

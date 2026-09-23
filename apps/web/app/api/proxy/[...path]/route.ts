@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Proxy authentifié vers l'API : le navigateur appelle /api/proxy/<chemin>,
  * le serveur Next ajoute les en-têtes d'authentification (Bearer ou X-*) et

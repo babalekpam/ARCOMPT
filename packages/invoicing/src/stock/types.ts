@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { Money } from "@arcompt/ledger";
 import type { Quantity } from "./quantity.js";
 import type { MovementKind, ValuationMethod } from "./valuation.js";

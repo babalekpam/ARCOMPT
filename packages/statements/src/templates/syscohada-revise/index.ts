@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { TemplateSet } from "../../types.js";
 import { BILAN_ACTIF, BILAN_PASSIF } from "./bilan.js";
 import { COMPTE_RESULTAT } from "./compte-resultat.js";

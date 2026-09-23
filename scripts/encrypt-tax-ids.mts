@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Chiffrement des identifiants fiscaux déjà en base — second temps de la
  * migration `0011_pack_status_tax_ids.sql`.

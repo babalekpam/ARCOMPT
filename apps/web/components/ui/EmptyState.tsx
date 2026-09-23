@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { ReactNode } from "react";
 
 export function EmptyState({ title, body, action, icon = "○" }: { title: string; body?: string; action?: ReactNode; icon?: string }) {

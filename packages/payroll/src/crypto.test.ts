@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { EnvKeyProvider, maskSensitive, PayrollCrypto, PayrollCryptoError, resolveMasterKey, TenantCipher, type KeyProvider } from "./crypto.js";

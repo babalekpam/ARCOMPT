@@ -15,5 +15,7 @@
   },
   "dependencies": {
     "postgres": "^3.4.5"
-  }
+  },
+  "author": "ARGILETTE LLC",
+  "license": "LicenseRef-ARGILETTE-Proprietary"
 }

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { AiGateway, CategorizationSchema } from "@arcompt/ai-gateway";
 import type { Sql } from "postgres";
 import { CategorizationMemoryStore } from "./memory.js";

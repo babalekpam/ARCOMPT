@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 -- ARCOMPT — module trésorerie (0004)
 -- Comptes de trésorerie (banque, caisse, mobile money), relevés importés,
 -- lignes de relevé et leur rapprochement avec le grand livre, règles

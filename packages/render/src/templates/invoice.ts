@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { Money } from "@arcompt/ledger";
 import { companyBlock, esc, layout, makeCtx, money, pageFooter, td, type Ctx } from "../html.js";
 import type { InvoiceView, PartyView, RenderOptions, VatSummaryView } from "../views.js";

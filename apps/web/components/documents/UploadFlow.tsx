@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 "use client";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { NetworkError, errorMessage } from "@/lib/api-client";

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Mise en service de l'ancrage : produire l'ancre du jour, la publier hors de
  * la plateforme, et répondre à la seule question qui compte pour un auditeur —

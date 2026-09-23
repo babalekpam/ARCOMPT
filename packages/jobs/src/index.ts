@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { BullMqQueue } from "./bullmq.js";
 import { InProcessQueue } from "./in-process.js";
 import type { JobQueue } from "./queue.js";

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Types des réponses de l'API portail cabinets (/v1/portal/…). Copiés du
  * paquet @arcompt/portal : les montants sont des chaînes décimales.

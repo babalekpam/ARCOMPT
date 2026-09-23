@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 -- ARCOMPT — pièces, capture IA, file de revue, règles de catégorisation, WhatsApp, relances.
 -- L'IA propose, l'humain valide : une ai_proposal n'atteint le grand livre qu'après
 -- validation (status VALIDATED / CORRECTED) par Ledger.post(source = 'AI').

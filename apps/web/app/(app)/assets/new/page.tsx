@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { getT } from "@/lib/i18n-server";
 import { AssetForm } from "@/components/assets/AssetForm";
 import { Card } from "@/components/ui/Card";

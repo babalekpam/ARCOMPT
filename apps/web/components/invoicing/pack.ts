@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Contexte de facturation côté serveur : pack pays du dossier (taux de TVA) et
  * devise. Le pays vient du portail (`/portal/org/companies`) quand il existe,

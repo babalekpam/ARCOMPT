@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { AccountBalance, AccountingSystem, Money } from "@arcompt/ledger";
 
 export type StatementCode = "BILAN_ACTIF" | "BILAN_PASSIF" | "COMPTE_RESULTAT" | "TFT";

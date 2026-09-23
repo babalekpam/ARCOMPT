@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Abstraction du canal WhatsApp Business. Le fournisseur (Meta Cloud API,
  * mock) normalise les messages entrants ; le bot ne connaît que ce format.

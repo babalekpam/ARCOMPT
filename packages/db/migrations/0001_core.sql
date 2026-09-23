@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 -- ARCOMPT — schéma noyau (phase 0)
 -- Toutes les tables métier portent tenant_id et sont protégées par Row-Level Security.
 -- Les invariants comptables sont garantis ici, par la base, pas par l'application.

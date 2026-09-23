@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 export * from "./types.js";
 export { InvoicingError, type InvoicingErrorCode, type InvoicingDeps, type SequenceKind, EVENT_KIND_BY_PURCHASE, EVENT_KIND_BY_PAYMENT } from "./base.js";
 export * from "./certification.js";

@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+-- SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 -- ARCOMPT — facturation, achats, règlements, relances (module invoicing)
 -- Toute table porte tenant_id, RLS forcée, politique tenant_isolation, droits au rôle arcompt_app.
 -- Le grand livre n'est jamais écrit ici : entry_id référence l'écriture posée par Ledger.post().

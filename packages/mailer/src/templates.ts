@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { MailError } from "./mailer.js";
 import { DEFAULT_LOCALE, normalizeLocale, type Locale } from "./locale.js";
 

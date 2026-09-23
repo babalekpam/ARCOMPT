@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Internationalisation légère : un dictionnaire plat par langue, des clés
  * pointées ("nav.entries") et des paramètres {name}. Sans dépendance.

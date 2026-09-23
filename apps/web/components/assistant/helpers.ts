@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Aides pures de l'assistant : questions suggérées, pied de page obligatoire
  * (« Ne remplace pas l'expert-comptable ») et mise en forme de la réponse.

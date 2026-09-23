@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Aides pures du portail cabinets : exercice par défaut d'un nouveau dossier,
  * mois courant, rôle de l'utilisateur, urgence d'une ligne du tableau de bord,

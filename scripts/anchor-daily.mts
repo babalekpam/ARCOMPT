@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Ancrage quotidien : calcule l'ancre de chaque journée révolue et la publie
  * hors de la plateforme (SECURITY.md § 6, engagement n° 10).

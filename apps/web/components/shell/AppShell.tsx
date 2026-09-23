@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { AuthContext } from "@/lib/auth";
@@ -35,6 +37,8 @@ export async function AppShell({ auth, children }: { auth: AuthContext; children
         </header>
         <OfflineIndicator />
         <main className="flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10">{children}</main>
+        {/* Signature de l'éditeur, discrète et présente sur chaque écran. */}
+        <footer className="px-4 pb-24 text-center text-xs text-slate-400 md:px-8 md:pb-6 dark:text-slate-600">{t("brand.signature")}</footer>
       </div>
       <BottomNav />
     </div>

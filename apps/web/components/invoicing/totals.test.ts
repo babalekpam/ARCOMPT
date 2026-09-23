@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { describe, expect, it } from "vitest";
 import { findVatRate, mulRateMinor, parseRate, previewTotals, roundMinor, sumAllocations } from "./totals";
 import type { PackVatRate } from "./types";

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Types des réponses de l'API trésorerie (/v1/treasury). Copiés du paquet
  * serveur : les montants sont des chaînes canoniques à 4 décimales.

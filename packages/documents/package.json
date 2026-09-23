@@ -22,5 +22,7 @@
     "@arcompt/storage": "workspace:*",
     "@arcompt/jobs": "workspace:*",
     "@arcompt/statements": "workspace:*"
-  }
+  },
+  "author": "ARGILETTE LLC",
+  "license": "LicenseRef-ARGILETTE-Proprietary"
 }

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { Money, type AccountingSystem } from "@arcompt/ledger";
 import { evalFormula, type BalanceIndex } from "./formula.js";
 import type { ComputedLine, ComputedNote, ComputedStatement, NoteDefinition, NoteReconciliation, StatementCode } from "./types.js";

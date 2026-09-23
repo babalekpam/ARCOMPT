@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /**
  * Connexion de développement (AUTH_MODE=dev uniquement) : enregistre
  * {userId, tenantId, organizationId} dans un cookie httpOnly.

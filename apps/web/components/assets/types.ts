@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /** Types des réponses de l'API immobilisations (/v1/assets), copiés du paquet serveur. Montants en chaînes décimales. */
 export type AssetCategory = "INCORPORELLE" | "CORPORELLE" | "FINANCIERE";
 export type DepreciationMethod = "LINEAR" | "DEGRESSIVE" | "NONE";

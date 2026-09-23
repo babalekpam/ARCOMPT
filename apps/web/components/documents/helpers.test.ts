@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { describe, expect, it } from "vitest";
 import { buildCorrection, confidenceTone, defaultAnomalyPeriod, documentStatusTone, formatBytes, formatConfidence, groupsToDocuments, isAcceptedFile, proposalTotals, routeTone, toEditableLines } from "./helpers";
 import type { DocumentRecord, ProposalRecord, ReviewQueueGroup } from "./types";

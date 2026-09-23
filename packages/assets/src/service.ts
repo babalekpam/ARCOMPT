@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { Sql } from "postgres";
 import { withTenant } from "@arcompt/db";
 import { Money, sum, type Actor, type Id, type JournalEntryInput, type JournalLineInput, type Ledger } from "@arcompt/ledger";

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /** Types des réponses de l'API clôture (/v1/closing), copiés du paquet serveur. */
 export type ChecklistStatus = "TODO" | "DONE" | "NA";
 

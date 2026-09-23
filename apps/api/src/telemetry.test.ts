@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearSecurityAlertSinks, onSecurityAlert, raiseSecurityAlert, webhookAlertSink, type SecurityAlert } from "./telemetry.js";
 

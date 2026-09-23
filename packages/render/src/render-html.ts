@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { StatementsOutput } from "@arcompt/statements";
 import { renderBankReconciliation } from "./templates/bank-reconciliation.js";
 import { renderInvoice } from "./templates/invoice.js";

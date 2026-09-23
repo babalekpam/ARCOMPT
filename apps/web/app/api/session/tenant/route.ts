@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /** Sélecteur de dossier : mémorise le dossier courant dans un cookie httpOnly. */
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuthContext, UUID_RE } from "@/lib/auth";

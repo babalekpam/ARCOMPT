@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 /** Aides pures du module immobilisations (testables sans React ni réseau). */
 // Import relatif : le projet vitest « web » ne résout pas l'alias `@/` à l'exécution.
 import { addAmounts, subAmounts } from "../../lib/money";

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
+// SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { LocalStorage } from "./local.js";
 import { R2Storage, r2OptionsFromEnv } from "./r2.js";
 import { StorageError, type Storage } from "./storage.js";
