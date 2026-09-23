@@ -19,7 +19,7 @@ export async function StatementTable({ statement, currency }: { statement: Compu
         <caption className="bg-slate-900 px-4 py-2 text-left text-sm font-semibold text-white dark:bg-slate-100 dark:text-slate-900">{statement.title}</caption>
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/60">
           <tr>
-            <th className="px-3 py-2 text-left">Réf.</th>
+            <th className="px-3 py-2 text-left">{t("common.ref")}</th>
             <th className="px-3 py-2 text-left">{t("common.label")}</th>
             <th className="px-2 py-2 text-center">{t("common.note")}</th>
             {hasBrut ? (

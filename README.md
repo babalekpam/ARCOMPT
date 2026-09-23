@@ -2,7 +2,7 @@ ARCOMPT
 
 La comptabilité intelligente des PME de l'espace OHADA. ARCOMPT permet à une PME de facturer, encaisser, payer ses salariés et déclarer ses impôts, puis produit automatiquement ses états financiers conformes au SYSCOHADA révisé : bilan, compte de résultat, tableau des flux de trésorerie, notes annexes et liasse fiscale (DSF).
 
-Statut : phases 0 à 3 livrées côté serveur — moteur comptable avec invariants en base, états financiers et rendu PDF/Excel, facturation, achats, trésorerie et rapprochement, paie chiffrée, immobilisations, fiscalité et DSF, clôture et circuit de visa, capture IA avec file de revue, WhatsApp, portail cabinets, huit packs pays en brouillon. Le web couvre tous les modules (52 pages) avec une PWA hors ligne ; des tests de bout en bout dans Chromium vérifient le parcours PME. Ce qui n'est pas construit — stocks, opérateur de paiement réel, connecteur de certification réel, envoi d'e-mails et de SMS, ancrage exécuté, application mobile native — est listé plus bas.
+Statut : phases 0 à 3 livrées côté serveur — moteur comptable avec invariants en base, états financiers et rendu PDF/Excel, facturation, achats, trésorerie et rapprochement, paie chiffrée, immobilisations, stocks en inventaire intermittent, fiscalité et DSF, clôture et circuit de visa, capture IA avec file de revue, WhatsApp, portail cabinets, huit packs pays en brouillon. Le web couvre tous les modules (52 pages) avec une PWA hors ligne ; des tests de bout en bout dans Chromium vérifient le parcours PME. Ce qui n'est pas construit — inventaire permanent des stocks, opérateur de paiement réel, connecteur de certification réel, envoi d'e-mails et de SMS, ancrage exécuté, application mobile native — est listé plus bas.
 
 Pourquoi ARCOMPT
 Conforme OHADA par construction. Plan de comptes SYSCOHADA, systèmes Normal et SMT, contrôles de cohérence bloquants (actif = passif, résultat bilan = résultat CR, TFT = variation de trésorerie).
@@ -14,7 +14,7 @@ Portail cabinets. Vue multi-dossiers, file de revue, circuit de visa de l'expert
 Fonctionnalités
 Module	Contenu	Phase
 Moteur comptable	Grand livre en partie double, journaux, exercices, inaltérabilité (triggers), piste d'audit, ancrage Merkle conçu et testé mais jamais exécuté	Livré
-États financiers	Bilan, compte de résultat, TFT, PDF et Excel, import de balance ; 16 notes annexes sur environ 36 au référentiel	Livré
+États financiers	Bilan, compte de résultat, TFT, PDF et Excel, import de balance ; 47 notes annexes définies, dont 35 calculées et rapprochées	Livré
 Portail cabinets	Multi-dossiers, file de revue, commentaires, visa, dépôt, facturation cabinet, marque blanche	Livré (API)
 Facturation et dépenses	Devis, factures, avoirs, relances, règlements, capture de pièces par IA ; mobile money derrière un opérateur simulé	Livré (API)
 Trésorerie	Banque, caisse, mobile money, import de relevés, rapprochement, prévision	Livré (API)
@@ -120,7 +120,7 @@ Renseigner identité fiscale, TVA, taxes, paie, DSF, format de dépôt et calend
 Faire valider les valeurs par un expert-comptable du pays.
 Lancer pnpm pack:validate <pays> puis ajouter une balance de référence dans fixtures/.
 Ce qui n'est pas encore construit
-Stocks / inventaire : aucun code, seulement les comptes 31x–38x du plan de comptes.
+Inventaire permanent des stocks : non implémenté. Seul l'inventaire intermittent existe (articles, mouvements valorisés en CUMP ou PEPS, inventaire physique, variation 603x / 73x à la clôture) ; aucun écran web, seulement l'API /v1/stock.
 Encaissement mobile money : aucun opérateur réel, seul un fournisseur simulé en mémoire.
 Facture certifiée (FNE, MECeF…) : aucun connecteur réel, seulement un simulateur.
 Envoi d'e-mails et de SMS : aucun expéditeur ; le port de notification du portail journalise et n'envoie rien.
@@ -138,7 +138,7 @@ Phase	Livrable
 1. États financiers	Bilan, CR, TFT, notes annexes, portail cabinets, premier pack pays
 2. Gestion quotidienne	Facturation, dépenses, trésorerie, mobile money, capture IA, TVA
 3. Paie et fiscalité	Paie par pays, déclarations, DSF, facture certifiée, assistant
-4. Extension	Nouveaux pays, zone CEMAC, stocks, consolidation, API publique
+4. Extension	Nouveaux pays, zone CEMAC, consolidation, API publique
 
 Détails : docs/ARCHITECTURE.md, docs/SECURITY.md, docs/MODULES.md, docs/country-packs/README.md.
 

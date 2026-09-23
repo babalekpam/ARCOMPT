@@ -16,7 +16,7 @@ export function DocumentsNav() {
   const pathname = usePathname();
   const t = useT();
   return (
-    <nav className="-mx-4 mb-4 flex gap-1 overflow-x-auto px-4 md:mx-0 md:px-0" aria-label="Pièces">
+    <nav className="-mx-4 mb-4 flex gap-1 overflow-x-auto px-4 md:mx-0 md:px-0" aria-label={t("documents.nav.label")}>
       {TABS.map((tab) => {
         const active = tab.href === "/documents" ? pathname === "/documents" || /^\/documents\/[0-9a-f-]{36}$/i.test(pathname) : pathname === tab.href || pathname.startsWith(`${tab.href}/`);
         return (

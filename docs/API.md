@@ -179,6 +179,29 @@ Deux familles de routes s'appuient sur des connecteurs simulés : les liens et w
 | POST | `/v1/assets/:id/dispose` | OWNER, ACCOUNTANT |
 
 
+## Stocks (inventaire intermittent)
+
+Aucun mouvement n'est comptabilisé : seule la clôture produit des écritures
+(603x / 73x à 31x–38x), par le moteur d'imputation.
+
+| Méthode | Chemin | Rôles |
+| --- | --- | --- |
+| GET | `/v1/stock/articles` |  |
+| POST | `/v1/stock/articles` | OWNER, ACCOUNTANT |
+| GET | `/v1/stock/articles/:id` |  |
+| PATCH | `/v1/stock/articles/:id` | OWNER, ACCOUNTANT |
+| GET | `/v1/stock/articles/:id/position` |  |
+| GET | `/v1/stock/positions` |  |
+| GET | `/v1/stock/movements` |  |
+| POST | `/v1/stock/movements` | OWNER, ACCOUNTANT, CASHIER |
+| GET | `/v1/stock/counts` |  |
+| POST | `/v1/stock/counts` | OWNER, ACCOUNTANT, CASHIER |
+| GET | `/v1/stock/counts/:id` |  |
+| POST | `/v1/stock/counts/:id/validate` | OWNER, ACCOUNTANT |
+| GET | `/v1/stock/closings/:fiscalYear` |  |
+| POST | `/v1/stock/closings` | OWNER, ACCOUNTANT |
+
+
 ## Clôture et workflow
 
 | Méthode | Chemin | Rôles |

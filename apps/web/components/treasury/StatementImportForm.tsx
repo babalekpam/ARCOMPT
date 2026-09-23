@@ -113,7 +113,7 @@ export function StatementImportForm({ accountId, accountKind, onImported }: { ac
           }}
           rows={6}
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-xs shadow-sm dark:border-slate-700 dark:bg-slate-950"
-          placeholder={kind === "CSV" ? "date;libellé;montant\n01/06/2025;Virement client;150000" : "Vous avez reçu 15000 FCFA de 0700000000. Ref 12345."}
+          placeholder={kind === "CSV" ? t("treasury.import.csvPlaceholder") : t("treasury.import.smsPlaceholder")}
         />
       </Field>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

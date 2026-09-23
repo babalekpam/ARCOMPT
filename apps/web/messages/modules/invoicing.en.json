@@ -1,6 +1,6 @@
 {
   "invoicing.title": "Invoices",
-  "invoicing.subtitle": "Quotes, invoices and customer credit notes; issuing numbers, posts the entry and certifies when the country pack requires it.",
+  "invoicing.subtitle": "Quotes, invoices and customer credit notes. Issuing assigns the number, posts the entry and certifies the invoice when the country pack requires it.",
   "invoicing.list": "Sales documents",
   "invoicing.newQuote": "New quote",
   "invoicing.newInvoice": "New invoice",

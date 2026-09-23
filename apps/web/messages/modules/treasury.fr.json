@@ -162,5 +162,7 @@
   "treasury.forecast.chart": "Graphique",
   "treasury.forecast.noItems": "Aucun flux cette semaine.",
   "treasury.forecast.overdue": "échu",
-  "treasury.forecast.legend": "Barres : vert = encaissements, rouge = décaissements, gris = solde de clôture (échelle commune). Cliquez une semaine pour le détail."
+  "treasury.forecast.legend": "Barres : vert = encaissements, rouge = décaissements, gris = solde de clôture (échelle commune). Cliquez une semaine pour le détail.",
+  "treasury.import.csvPlaceholder": "date;libellé;montant\n01/06/2025;Virement client;150000",
+  "treasury.import.smsPlaceholder": "Vous avez reçu 15000 FCFA de 0700000000. Ref 12345."
 }

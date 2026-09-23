@@ -4,7 +4,13 @@
  * L'API renvoie les montants en chaînes canoniques à 4 décimales ("1234.5000",
  * NUMERIC(20,4)). Ce module reprend la logique de Money.format du paquet ledger
  * sans l'importer : il tourne côté navigateur et ne manipule jamais de flottant.
+ *
+ * La PONCTUATION suit la langue de l'interface, pas la devise : « 1 234,50 »
+ * en français, « 1,234.50 » en anglais. Le nombre de décimales, lui, suit la
+ * devise (le franc CFA n'a pas de centime). Les deux se décident ici, et
+ * `components/ui/Money.tsx` est le seul à les appliquer dans l'interface.
  */
+import { DEFAULT_LOCALE, type Locale } from "./i18n";
 export const SCALE = 4;
 const FACTOR = 10n ** BigInt(SCALE);
 
@@ -62,30 +68,41 @@ function roundMinor(minor: bigint, decimals: number): bigint {
 }
 
 export interface FormatOptions {
-  /** Séparateur de milliers ; espace fine insécable par défaut. */
+  /** Langue d'affichage ; décide des séparateurs. Français par défaut. */
+  locale?: Locale;
+  /** Séparateur de milliers ; celui de la langue par défaut. */
   thousands?: string;
-  /** Séparateur décimal ; virgule en français, point en anglais. */
+  /** Séparateur décimal ; celui de la langue par défaut. */
   decimal?: string;
   /** Affiche "—" pour zéro (tableaux comptables). */
   dashForZero?: boolean;
 }
 
-const DEFAULT_THOUSANDS = "\u202f";
+/**
+ * Séparateurs par langue. Le français prend l'espace fine insécable (U+202F),
+ * qui est la forme typographique correcte et ne laisse jamais « 1 234 » se
+ * couper en fin de ligne.
+ */
+const PUNCTUATION: Record<Locale, { thousands: string; decimal: string }> = {
+  fr: { thousands: "\u202f", decimal: "," },
+  en: { thousands: ",", decimal: "." },
+};
 
 /**
- * Formate un montant selon la devise : "1 235" pour XOF, "1 234,50" pour EUR.
- * Accepte une chaîne canonique ou un bigint d'unités mineures.
+ * Formate un montant : "1 235" / "1,235" pour XOF, "1 234,50" / "1,234.50"
+ * pour EUR. Accepte une chaîne canonique ou un bigint d'unités mineures.
  */
 export function formatAmount(value: string | bigint | null | undefined, currency = "XOF", opts: FormatOptions = {}): string {
   if (value === null || value === undefined || value === "") return "";
+  const p = PUNCTUATION[opts.locale ?? DEFAULT_LOCALE];
   const decimals = CURRENCY_DECIMALS[currency] ?? 2;
   const minor = roundMinor(typeof value === "bigint" ? value : toMinor(value), decimals);
   if (minor === 0n && opts.dashForZero) return "—";
   const neg = minor < 0n;
   const abs = neg ? -minor : minor;
-  const whole = (abs / FACTOR).toString().replace(/\B(?=(\d{3})+(?!\d))/g, opts.thousands ?? DEFAULT_THOUSANDS);
+  const whole = (abs / FACTOR).toString().replace(/\B(?=(\d{3})+(?!\d))/g, opts.thousands ?? p.thousands);
   const frac = (abs % FACTOR).toString().padStart(SCALE, "0").slice(0, decimals);
-  return `${neg ? "-" : ""}${whole}${decimals > 0 ? (opts.decimal ?? ",") + frac : ""}`;
+  return `${neg ? "-" : ""}${whole}${decimals > 0 ? (opts.decimal ?? p.decimal) + frac : ""}`;
 }
 
 export function addAmounts(...values: Array<string | bigint>): string {

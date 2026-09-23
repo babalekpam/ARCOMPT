@@ -19,6 +19,18 @@ import {
   type CompanyHeader,
   type InvoiceView,
   type PayslipView,
+  DEFAULT_LOCALE,
+  formatAmount,
+  formatDate,
+  formatMoney,
+  formatPercent,
+  formatRateText,
+  formatSide,
+  normalizeLocale,
+  noteOutlineEn,
+  noteTitleGloss,
+  resolveLocale,
+  statementLineGloss,
 } from "./index.js";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "fixtures", "balances", "demo-ci");
@@ -62,7 +74,7 @@ describe("états financiers (HTML)", () => {
     expect(html).toContain("Système normal");
     expect(html).toContain("<b>2025</b>");
     expect(html).toContain("Montants en <b>XOF</b>");
-    expect(html).toContain("Capital 5 000 000 XOF");
+    expect(html).toContain("Capital 5\u00a0000\u00a0000\u00a0XOF");
   });
 
   it("rend les quatre états avec leurs colonnes et leurs totaux", () => {
@@ -72,14 +84,14 @@ describe("états financiers (HTML)", () => {
     expect(html).toContain("Compte de résultat");
     expect(html).toContain("Tableau des flux de trésorerie");
     // TOTAL GÉNÉRAL du bilan : 9 164 000 en N, 8 200 000 en N-1.
-    expect(html).toMatch(/<tr class="total"><td class="code">BZ<\/td><td>TOTAL GÉNÉRAL<\/td><td class="note"><\/td>.*?<td class="num">9 164 000<\/td><td class="num">8 200 000<\/td><\/tr>/s);
-    expect(html).toMatch(/DZ<\/td><td>TOTAL GÉNÉRAL<\/td><td class="note"><\/td><td class="num">9 164 000<\/td>/);
+    expect(html).toMatch(/<tr class="total"><td class="code">BZ<\/td><td>TOTAL GÉNÉRAL<\/td><td class="note"><\/td>.*?<td class="num">9\u00a0164\u00a0000<\/td><td class="num">8\u00a0200\u00a0000<\/td><\/tr>/s);
+    expect(html).toMatch(/DZ<\/td><td>TOTAL GÉNÉRAL<\/td><td class="note"><\/td><td class="num">9\u00a0164\u00a0000<\/td>/);
     // Compte de résultat : charges en négatif avec le signe « − », soldes intermédiaires stylés.
-    expect(html).toContain('<tr class="subtotal"><td class="code">XB</td><td>CHIFFRE D&#39;AFFAIRES</td><td class="note"></td><td class="num">6 000 000</td><td class="num">4 000 000</td></tr>');
-    expect(html).toContain('<td class="num neg">−2 000 000</td>');
-    expect(html).toContain('<tr class="total"><td class="code">XI</td><td>RÉSULTAT NET</td><td class="note"></td><td class="num">550 000</td><td class="num">1 200 000</td></tr>');
+    expect(html).toContain('<tr class="subtotal"><td class="code">XB</td><td>CHIFFRE D&#39;AFFAIRES</td><td class="note"></td><td class="num">6\u00a0000\u00a0000</td><td class="num">4\u00a0000\u00a0000</td></tr>');
+    expect(html).toContain('<td class="num neg">−2\u00a0000\u00a0000</td>');
+    expect(html).toContain('<tr class="total"><td class="code">XI</td><td>RÉSULTAT NET</td><td class="note"></td><td class="num">550\u00a0000</td><td class="num">1\u00a0200\u00a0000</td></tr>');
     // TFT
-    expect(html).toContain('ZG</td><td>VARIATION DE LA TRÉSORERIE NETTE DE LA PÉRIODE</td><td class="num neg">−316 000</td>');
+    expect(html).toContain('ZG</td><td>VARIATION DE LA TRÉSORERIE NETTE DE LA PÉRIODE</td><td class="num neg">−316\u00a0000</td>');
     // Actif en paysage, autres en portrait.
     expect(html).toContain('<section class="page landscape">');
     expect(html).toContain("@page landscape { size: A4 landscape; }");
@@ -87,8 +99,8 @@ describe("états financiers (HTML)", () => {
 
   it("rend chaque note avec ses lignes et son rapprochement, et les notes narratives en brouillon", () => {
     expect(html).toContain("Note 7 – Clients");
-    expect(html).toMatch(/Note 7 – Clients<\/h2>[\s\S]*?<td class="num">1 180 000<\/td>/);
-    expect(html).toContain('Rapprochement avec le poste <b>BI</b> (Bilan – Actif – Clients) : <span class="badge ok">OK</span>');
+    expect(html).toMatch(/Note 7 – Clients<\/h2>[\s\S]*?<td class="num">1\u00a0180\u00a0000<\/td>/);
+    expect(html).toContain('Rapprochement avec le poste <b>BI</b> (Bilan – Actif – Clients)\u00a0: <span class="badge ok">OK</span>');
     expect(html).toContain("Note 2 – Informations obligatoires");
     expect((html.match(/BROUILLON À VALIDER/g) ?? []).length).toBe(output.notes.filter((n) => n.status === "DRAFT_REQUIRED").length);
     expect(html).toContain("Méthodes d&#39;évaluation des stocks");
@@ -117,7 +129,11 @@ describe("états financiers (HTML)", () => {
     expect(en).toContain("Normal system");
     expect(en).toContain("DRAFT – TO BE VALIDATED");
     expect(en).toContain("Consistency checks");
-    expect(en).not.toContain("Bilan – Actif");
+    // L'intitulé officiel français reste imprimé sous le titre traduit : c'est lui
+    // qui identifie le formulaire devant l'administration.
+    expect(en).toContain("Official SYSCOHADA caption: Bilan – Actif");
+    // …et les postes gardent leur libellé réglementaire, glosé en anglais.
+    expect(en).toContain('TOTAL ACTIF IMMOBILISÉ <span class="gloss">Total non-current assets</span>');
   });
 
   it("échappe le HTML des données", () => {
@@ -281,9 +297,9 @@ describe("balance générale et grand livre", () => {
     const html = renderHtml("trial-balance", trialBalanceView(tb, "XOF"), { company });
     expect(html).toContain("Balance générale");
     expect(html).toContain("du 01/01/2025 au 31/12/2025");
-    expect(html).toContain('<td class="code">521</td><td>Banques locales</td><td class="num">1 118 000</td><td class="num">–</td><td class="num">1 118 000</td><td class="num">–</td>');
+    expect(html).toContain('<td class="code">521</td><td>Banques locales</td><td class="num">1\u00a0118\u00a0000</td><td class="num">–</td><td class="num">1\u00a0118\u00a0000</td><td class="num">–</td>');
     expect(html).toContain("Total classe 4");
-    expect(html).toMatch(/TOTAL GÉNÉRAL<\/td><td class="num">1 236 000<\/td><td class="num">1 236 000<\/td><td class="num">1 118 000<\/td><td class="num">1 118 000<\/td>/);
+    expect(html).toMatch(/TOTAL GÉNÉRAL<\/td><td class="num">1\u00a0236\u00a0000<\/td><td class="num">1\u00a0236\u00a0000<\/td><td class="num">1\u00a0118\u00a0000<\/td><td class="num">1\u00a0118\u00a0000<\/td>/);
 
     const wb = await readWorkbook(await trialBalanceWorkbook(trialBalanceView(tb, "XOF")));
     expect(findRow(wb.getWorksheet("Balance")!, 1, "411")!.getCell(3).value).toBe(118000);
@@ -303,9 +319,9 @@ describe("balance générale et grand livre", () => {
     const html = renderHtml("ledger", view, { company });
     expect(html).toContain("Grand livre");
     expect(html).toContain("<h2>411 – Clients</h2>");
-    expect(html).toContain('<td class="code">VT</td><td class="code">1</td><td>FAC-001</td><td>Client A</td><td class="num">118 000</td><td class="num">–</td><td class="num">118 000 D</td>');
-    expect(html).toContain("Total du compte</td><td class=\"num\">1 118 000</td><td class=\"num\">–</td><td class=\"num\">1 118 000 D</td>");
-    expect(html).toContain("1 000 000 C"); // capital : solde créditeur
+    expect(html).toContain('<td class="code">VT</td><td class="code">1</td><td>FAC-001</td><td>Client A</td><td class="num">118\u00a0000</td><td class="num">–</td><td class="num">118\u00a0000\u00a0D</td>');
+    expect(html).toContain("Total du compte</td><td class=\"num\">1\u00a0118\u00a0000</td><td class=\"num\">–</td><td class=\"num\">1\u00a0118\u00a0000\u00a0D</td>");
+    expect(html).toContain("1\u00a0000\u00a0000\u00a0C"); // capital : solde créditeur
 
     const only = ledgerViewFromEntries(await ledger.listEntries(TENANT, { fiscalYearCode: "2025", accountNumber: "52" }), { fiscalYearCode: "2025", from: tb.from, to: tb.to, currency: "XOF", accountNumber: "52" });
     expect(only.accounts.map((a) => a.accountNumber)).toEqual(["521"]);
@@ -349,9 +365,9 @@ describe("facture, bulletin, rapprochement", () => {
     expect(html).toContain("01/09/2025");
     expect(html).toContain("Client &amp; Fils");
     expect(html).toContain("7654321 B");
-    expect(html).toContain('<td>Prestation de conseil</td><td class="num">2</td><td class="center">jour</td><td class="num">150 000</td><td class="num"></td><td class="num">18 %</td><td class="num">300 000</td><td class="num">54 000</td><td class="num">354 000</td>');
-    expect(html).toContain("Net à payer : 379 000 XOF");
-    expect(html).toMatch(/<td class="center">0 %<\/td><td class="num">25 000<\/td><td class="num">0<\/td>/); // récapitulatif TVA calculé
+    expect(html).toContain('<td>Prestation de conseil</td><td class="num">2</td><td class="center">jour</td><td class="num">150\u00a0000</td><td class="num"></td><td class="num">18\u00a0%</td><td class="num">300\u00a0000</td><td class="num">54\u00a0000</td><td class="num">354\u00a0000</td>');
+    expect(html).toContain("Net à payer\u00a0: 379\u00a0000\u00a0XOF");
+    expect(html).toMatch(/<td class="center">0\u00a0%<\/td><td class="num">25\u00a0000<\/td><td class="num">0<\/td>/); // récapitulatif TVA calculé
     expect(html).toContain("FNE-2025-ABC123");
     expect(html).toContain('<div class="qr">QR<br>https://fne.example/verify/ABC123</div>');
     expect(html).toContain("Orange Money +225 07 00 00 00 00 (DEMO CI)");
@@ -393,14 +409,14 @@ describe("facture, bulletin, rapprochement", () => {
     expect(html).toContain("E-014");
     expect(html).toContain("Septembre 2025");
     expect(html).toContain("CNPS 123456");
-    expect(html).toContain('SALAIRE BRUT</td><td class="num">530 000</td>');
-    expect(html).toContain('<td>CNPS retraite</td><td class="num">530 000</td><td class="num">6,3 %</td><td class="num">33 390</td><td class="num">7,7 %</td><td class="num">40 810</td>');
-    expect(html).toContain('Total cotisations</td><td class="num">33 390</td><td></td><td class="num">44 835</td>');
-    expect(html).toContain('<td>ITS</td><td class="num">496 610</td><td class="num"></td><td class="num">42 000</td>');
-    expect(html).toContain("NET À PAYER : 454 610 XOF");
-    expect(html).toContain("Coût total employeur : <b>574 835 XOF</b>");
-    expect(html).toContain("Solde de congés (jours) : 12.5");
-    expect(renderHtml("payslip", slip, { locale: "en" })).toContain("NET PAY : 454 610 XOF");
+    expect(html).toContain('SALAIRE BRUT</td><td class="num">530\u00a0000</td>');
+    expect(html).toContain('<td>CNPS retraite</td><td class="num">530\u00a0000</td><td class="num">6,3\u00a0%</td><td class="num">33\u00a0390</td><td class="num">7,7\u00a0%</td><td class="num">40\u00a0810</td>');
+    expect(html).toContain('Total cotisations</td><td class="num">33\u00a0390</td><td></td><td class="num">44\u00a0835</td>');
+    expect(html).toContain('<td>ITS</td><td class="num">496\u00a0610</td><td class="num"></td><td class="num">42\u00a0000</td>');
+    expect(html).toContain("NET À PAYER\u00a0: 454\u00a0610\u00a0XOF");
+    expect(html).toContain("Coût total employeur\u00a0: <b>574\u00a0835\u00a0XOF</b>");
+    expect(html).toContain("Solde de congés (jours)\u00a0: 12,5");
+    expect(renderHtml("payslip", slip, { locale: "en" })).toContain("NET PAY: XOF\u00a0454,610");
   });
 
   it("rapprochement bancaire : soldes, suspens des deux côtés, écart", () => {
@@ -419,13 +435,196 @@ describe("facture, bulletin, rapprochement", () => {
     const html = renderHtml("bank-reconciliation", rec, { company });
     expect(html).toContain("État de rapprochement bancaire");
     expect(html).toContain("Compte courant SGCI");
-    expect(html).toContain('Solde du relevé bancaire 30/09/2025</td><td class="num">1 500 000</td>');
+    expect(html).toContain('Solde du relevé bancaire 30/09/2025</td><td class="num">1\u00a0500\u00a0000</td>');
     expect(html).toContain("Chèque n° 118 fournisseur");
-    expect(html).toContain('<td class="num neg">−80 000</td>');
+    expect(html).toContain('<td class="num neg">−80\u00a0000</td>');
     expect(html).toContain('<span class="badge ok">Rapprochement équilibré</span>');
-    expect(html).toContain("Opérations lettrées : 14");
+    expect(html).toContain("Opérations lettrées\u00a0: 14");
     const ko = renderHtml("bank-reconciliation", { ...rec, adjustedLedgerBalance: "1400000" });
     expect(ko).toContain("Écart à expliquer");
-    expect(ko).toContain('<td class="num">20 000</td>');
+    expect(ko).toContain('<td class="num">20\u00a0000</td>');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bilinguisme
+// ---------------------------------------------------------------------------
+
+describe("d'où vient la langue d'un document", () => {
+  it("suit la précédence demande → destinataire → dossier → opérateur → français", () => {
+    // Le client anglophone l'emporte sur le comptable francophone.
+    expect(resolveLocale({ recipient: "en", company: "fr", user: "fr" })).toBe("en");
+    // Sans destinataire (balance, grand livre), c'est la langue du dossier.
+    expect(resolveLocale({ company: "en", user: "fr" })).toBe("en");
+    // L'opérateur ne tranche que si le dossier ne dit rien.
+    expect(resolveLocale({ user: "en" })).toBe("en");
+    // Une demande explicite passe avant tout le reste.
+    expect(resolveLocale({ requested: "fr", recipient: "en", company: "en", user: "en" })).toBe("fr");
+    // Défaut explicite, jamais celui du serveur.
+    expect(resolveLocale({})).toBe("fr");
+    expect(DEFAULT_LOCALE).toBe("fr");
+  });
+
+  it("saute une source absente, vide ou dans une langue non gérée", () => {
+    expect(resolveLocale({ recipient: null, company: undefined, user: "en" })).toBe("en");
+    expect(resolveLocale({ recipient: "", company: "en" })).toBe("en");
+    expect(resolveLocale({ recipient: "de", company: "en" })).toBe("en");
+    expect(resolveLocale({ recipient: "de" })).toBe("fr");
+  });
+
+  it("accepte les étiquettes régionales", () => {
+    expect(normalizeLocale("en-GB")).toBe("en");
+    expect(normalizeLocale("FR_fr")).toBe("fr");
+    expect(normalizeLocale("fr-CI")).toBe("fr");
+    expect(normalizeLocale("de-DE")).toBeUndefined();
+    expect(normalizeLocale(null)).toBeUndefined();
+  });
+});
+
+describe("mise en forme par langue", () => {
+  it("sépare les milliers et les décimales à la française ou à l'anglaise", () => {
+    // XOF n'a pas de décimale, EUR en a deux : cela vient de la devise, pas de la langue.
+    expect(formatAmount("1234567", "XOF", "fr")).toBe("1\u00a0234\u00a0567");
+    expect(formatAmount("1234567", "XOF", "en")).toBe("1,234,567");
+    expect(formatAmount("1234.5", "EUR", "fr")).toBe("1\u00a0234,50");
+    expect(formatAmount("1234.5", "EUR", "en")).toBe("1,234.50");
+  });
+
+  it("place le code devise après le montant en français, avant en anglais", () => {
+    expect(formatMoney("1234.5", "EUR", "fr")).toBe("1\u00a0234,50\u00a0EUR");
+    expect(formatMoney("1234.5", "EUR", "en")).toBe("EUR\u00a01,234.50");
+  });
+
+  it("écrit les dates sans ambiguïté dans les deux langues", () => {
+    expect(formatDate("2025-03-15", "fr")).toBe("15/03/2025");
+    // Ni 15/03 ni 03/15 : le mois en lettres, lisible partout.
+    expect(formatDate("2025-03-15", "en")).toBe("15 Mar 2025");
+    expect(formatDate("2025-12-01", "en")).toBe("1 Dec 2025");
+    expect(formatDate(null, "en")).toBe("");
+  });
+
+  it("espace le pourcentage selon la langue et respecte les taux non numériques", () => {
+    expect(formatPercent("18", "fr")).toBe("18\u00a0%");
+    expect(formatPercent("18", "en")).toBe("18%");
+    expect(formatRateText("6,3 %", "en")).toBe("6.3%");
+    expect(formatRateText("6.3 %", "fr")).toBe("6,3\u00a0%");
+    expect(formatRateText("forfait", "en")).toBe("forfait");
+    expect(formatRateText(undefined, "en")).toBe("");
+  });
+
+  it("nomme le sens du solde comme l'écrit chaque langue", () => {
+    expect(formatSide("1234", "XOF", "fr")).toBe("1\u00a0234\u00a0D");
+    expect(formatSide("-1234", "XOF", "fr")).toBe("1\u00a0234\u00a0C");
+    expect(formatSide("1234", "XOF", "en")).toBe("1,234\u00a0Dr");
+    expect(formatSide("-1234", "XOF", "en")).toBe("1,234\u00a0Cr");
+  });
+});
+
+describe("documents en anglais", () => {
+  it("facture : libellés, montants, dates et deux-points anglais, devise devant", () => {
+    const inv: InvoiceView = {
+      number: "INV-2025-0007",
+      issueDate: "2025-09-01",
+      dueDate: "2025-10-01",
+      currency: "EUR",
+      seller: { name: "DEMO CI SARL" },
+      buyer: { name: "Acme Trading Ltd", country: "Ghana" },
+      lines: [{ description: "Advisory services", quantity: "2", unit: "day", unitPrice: "1500", vatRate: "18", totalHt: "3000", vatAmount: "540", totalTtc: "3540" }],
+      totalHt: "3000",
+      totalVat: "540",
+      totalTtc: "3540",
+    };
+    const en = renderHtml("invoice", inv, { locale: "en" });
+    expect(en).toContain('<html lang="en">');
+    expect(en).toContain("INVOICE No. INV-2025-0007");
+    expect(en).toContain("Issue date: <b>1 Sep 2025</b>");
+    expect(en).toContain("Due date: <b>1 Oct 2025</b>");
+    expect(en).toContain("Bill to");
+    expect(en).toContain('<td class="num">18%</td>');
+    expect(en).toContain('<td class="num">3,000.00</td>');
+    expect(en).toContain("Amount due: EUR\u00a03,540.00");
+    // Rien de français ne doit subsister.
+    expect(en).not.toContain("FACTURE");
+    expect(en).not.toContain("Net à payer");
+    expect(en).not.toContain("01/09/2025");
+
+    const fr = renderHtml("invoice", inv, { locale: "fr" });
+    expect(fr).toContain("Net à payer\u00a0: 3\u00a0540,00\u00a0EUR");
+    expect(fr).toContain("Date d&#39;émission\u00a0: <b>01/09/2025</b>");
+  });
+
+  it("états financiers : titre traduit, intitulé officiel français conservé, postes glosés", () => {
+    const en = renderHtml("statements", output, { locale: "en", company });
+    expect(en).toContain("<h1>Balance sheet – Assets</h1>");
+    expect(en).toContain("Official SYSCOHADA caption: Bilan – Actif");
+    expect(en).toContain('CHIFFRE D&#39;AFFAIRES <span class="gloss">Revenue</span>');
+    expect(en).toContain('RÉSULTAT NET <span class="gloss">Net profit or loss</span>');
+    expect(en).toContain("Current year");
+    expect(en).toContain("Prior year");
+    expect(en).toContain("Generated on");
+    // Le français n'ajoute aucune glose.
+    const fr = renderHtml("statements", output, { locale: "fr", company });
+    expect(fr).not.toContain('class="gloss"');
+    expect(fr).not.toContain("Official SYSCOHADA caption");
+  });
+
+  it("chaque poste du référentiel a sa glose anglaise", () => {
+    for (const st of Object.values(output.statements)) {
+      for (const line of st?.lines ?? []) expect(statementLineGloss(line.code), `poste ${line.code} sans glose`).toBeTypeOf("string");
+    }
+  });
+
+  it("chaque note a son titre anglais, et chaque trame de rédaction sa version anglaise", () => {
+    // Garde-fou de complétude : une note ajoutée au référentiel sans son
+    // anglais laisserait un bloc français au milieu d'un document anglais.
+    for (const note of output.notes) {
+      expect(noteTitleGloss(note.number), `note ${note.number} sans titre anglais`).toBeTypeOf("string");
+      if ((note.outline?.length ?? 0) > 0) {
+        expect(noteOutlineEn(note.number), `note ${note.number} sans trame anglaise`).toBeDefined();
+      }
+    }
+  });
+
+  it("balance, grand livre et rapprochement : sens Dr/Cr, dates et séparateurs anglais", () => {
+    const view = {
+      fiscalYearCode: "2025",
+      from: "2025-01-01",
+      to: "2025-12-31",
+      currency: "XOF",
+      rows: [{ accountNumber: "411100", label: "Trade receivables", debit: "1234567", credit: "0" }],
+      totalDebit: "1234567",
+      totalCredit: "0",
+    };
+    const en = renderHtml("trial-balance", view, { locale: "en" });
+    expect(en).toContain("Trial balance");
+    expect(en).toContain("Account name");
+    expect(en).toContain('<td class="num">1,234,567</td>');
+    expect(en).toContain("from 1 Jan 2025 to 31 Dec 2025");
+    expect(en).not.toContain("01/01/2025");
+  });
+
+  it("bulletin de paie : taux re-ponctués et mention de conservation en anglais", () => {
+    const slip: PayslipView = {
+      employee: { fullName: "Ama Mensah" },
+      period: { start: "2025-09-01", end: "2025-09-30" },
+      currency: "XOF",
+      earnings: [{ label: "Basic salary", amount: "500000" }],
+      grossPay: "500000",
+      contributions: [{ label: "CNPS pension", base: "500000", employeeRate: "6,3 %", employeeAmount: "31500", employerRate: "7,7 %", employerAmount: "38500" }],
+      totalEmployeeContributions: "31500",
+      totalEmployerContributions: "38500",
+      incomeTax: [{ label: "PAYE", base: "468500", amount: "40000" }],
+      netPay: "428500",
+      employerCost: "538500",
+      leaveBalanceDays: "12.5",
+    };
+    const en = renderHtml("payslip", slip, { locale: "en" });
+    expect(en).toContain("PAYSLIP");
+    expect(en).toContain("Period: <b>1 Sep 2025 – 30 Sep 2025</b>");
+    expect(en).toContain('<td class="num">6.3%</td>');
+    expect(en).toContain("NET PAY: XOF\u00a0428,500");
+    expect(en).toContain("Leave balance (days): 12.5");
+    expect(en).toContain("Keep this payslip indefinitely.");
+    expect(en).not.toContain("6,3");
   });
 });

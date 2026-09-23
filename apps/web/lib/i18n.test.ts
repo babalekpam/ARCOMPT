@@ -24,11 +24,12 @@ describe("i18n", () => {
     expect(missingKeys("en", "fr")).toEqual([]);
   });
 
-  it("reconnaît les langues et formate les dates ISO", () => {
+  it("reconnaît les langues et date sans ambiguïté dans chaque langue", () => {
     expect(isLocale("fr")).toBe(true);
     expect(isLocale("de")).toBe(false);
     expect(formatDate("fr", "2025-03-15")).toBe("15/03/2025");
-    expect(formatDate("en", "2025-03-15")).toBe("2025-03-15");
+    expect(formatDate("en", "2025-03-15")).toBe("15 Mar 2025");
+    expect(formatDate("en", "2025-12-01")).toBe("1 Dec 2025");
     expect(formatDate("fr", null)).toBe("");
   });
 });

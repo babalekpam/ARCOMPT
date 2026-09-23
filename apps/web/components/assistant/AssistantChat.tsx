@@ -6,7 +6,7 @@ import type { AssistantAnswer } from "@/components/documents/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { inputClass } from "@/components/ui/Field";
-import { nextMessageId, normalizeQuestion, splitAnswer, SUGGESTED_QUESTIONS, type ChatMessage } from "./helpers";
+import { nextMessageId, normalizeQuestion, splitAnswer, SUGGESTED_QUESTION_KEYS, type ChatMessage } from "./helpers";
 
 /**
  * Assistant conversationnel : une question → un outil de lecture typé côté
@@ -70,7 +70,7 @@ export function AssistantChat() {
               </div>
             );
           }
-          const { body, footer } = splitAnswer(m.text);
+          const { body, footer } = splitAnswer(m.text, t("assistant.footer"));
           return (
             <div key={m.id} className="flex">
               <div className="max-w-[85%] rounded-2xl rounded-bl-sm border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800">
@@ -99,7 +99,7 @@ export function AssistantChat() {
       <div className="border-t border-slate-200 p-3 dark:border-slate-800">
         <p className="mb-2 text-xs text-slate-500">{t("assistant.suggested")}</p>
         <div className="mb-3 flex flex-wrap gap-2">
-          {SUGGESTED_QUESTIONS.map((q) => (
+          {SUGGESTED_QUESTION_KEYS.map((key) => t(key)).map((q) => (
             <button key={q} type="button" onClick={() => void ask(q)} disabled={busy} className="rounded-full border border-slate-300 px-3 py-1 text-xs hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800">
               {q}
             </button>

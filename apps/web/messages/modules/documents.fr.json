@@ -158,5 +158,10 @@
   "assistant.tools.get_cash_position": "Trésorerie",
   "assistant.tools.get_trial_balance": "Balance",
   "assistant.tools.get_vat_summary": "Synthèse TVA",
-  "assistant.tools.explain_statement_line": "Poste des états financiers"
+  "assistant.tools.explain_statement_line": "Poste des états financiers",
+  "documents.nav.label": "Pièces et IA",
+  "assistant.footer": "Ne remplace pas l'expert-comptable",
+  "assistant.q.receivables": "Qui me doit de l'argent ?",
+  "assistant.q.cash": "Quelle est ma trésorerie ?",
+  "assistant.q.explainLine": "Explique-moi le poste BI du bilan"
 }

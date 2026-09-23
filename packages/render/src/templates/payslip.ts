@@ -1,19 +1,25 @@
-import { companyBlock, esc, fmt, fmtDate, layout, makeCtx, pageFooter, td } from "../html.js";
+import { companyBlock, esc, layout, makeCtx, pageFooter, td, type Ctx } from "../html.js";
 import type { PayslipItemView, PayslipView, RenderOptions } from "../views.js";
 
 /**
  * Bulletin de paie : identification employeur/salarié, éléments de
  * rémunération jusqu'au brut, cotisations (parts salariale et patronale),
  * impôt sur salaires, net à payer et coût employeur.
+ *
+ * Le lecteur est le SALARIÉ : la langue du bulletin est la sienne, pas celle
+ * du gestionnaire de paie. Les taux fournis par le module de paie sont
+ * re-ponctués (« 6,3 % » devient « 6.3% » en anglais) ; les libellés de
+ * cotisation, eux, restent tels que le pack pays les nomme, parce qu'ils
+ * désignent des organismes réels (CNPS, CNSS, ITS) qui n'ont pas de traduction.
  */
 export function renderPayslip(p: PayslipView, opts: RenderOptions = {}): string {
   const ctx = makeCtx(opts, p.currency);
-  const c = p.currency;
-  const periodLabel = p.period.label ?? `${fmtDate(p.period.start, ctx.locale)} – ${fmtDate(p.period.end, ctx.locale)}`;
+  const periodLabel = p.period.label ?? `${ctx.d(p.period.start)} – ${ctx.d(p.period.end)}`;
 
   const contributions = p.contributions
     .map(
-      (r) => `<tr><td>${esc(r.label)}</td>${td(r.base, c, { zero: "zero" })}<td class="num">${esc(r.employeeRate ?? "")}</td>${td(r.employeeAmount, c, { zero: "zero" })}<td class="num">${esc(r.employerRate ?? "")}</td>${td(r.employerAmount, c, { zero: "zero" })}</tr>`,
+      (r) =>
+        `<tr><td>${esc(r.label)}</td>${td(ctx, r.base, { zero: "zero" })}<td class="num">${esc(ctx.rate(r.employeeRate))}</td>${td(ctx, r.employeeAmount, { zero: "zero" })}<td class="num">${esc(ctx.rate(r.employerRate))}</td>${td(ctx, r.employerAmount, { zero: "zero" })}</tr>`,
     )
     .join("\n");
 
@@ -22,10 +28,10 @@ export function renderPayslip(p: PayslipView, opts: RenderOptions = {}): string 
   ${companyBlock(opts.company, ctx)}
   <div class="meta">
     <div class="doc-title">${esc(ctx.L("payslip"))}</div>
-    <div>${esc(ctx.L("period"))} : <b>${esc(periodLabel)}</b></div>
-    ${p.paymentDate ? `<div>${esc(ctx.L("paymentDate"))} : ${esc(fmtDate(p.paymentDate, ctx.locale))}</div>` : ""}
-    ${p.paymentMode ? `<div>${esc(ctx.L("paymentMode"))} : ${esc(p.paymentMode)}</div>` : ""}
-    <div>${esc(ctx.L("currency"))} : ${esc(c)}</div>
+    <div>${ctx.kv(esc(ctx.L("period")), `<b>${esc(periodLabel)}</b>`)}</div>
+    ${p.paymentDate ? `<div>${ctx.kv(esc(ctx.L("paymentDate")), esc(ctx.d(p.paymentDate)))}</div>` : ""}
+    ${p.paymentMode ? `<div>${ctx.kv(esc(ctx.L("paymentMode")), esc(p.paymentMode))}</div>` : ""}
+    <div>${ctx.kv(esc(ctx.L("currency")), esc(ctx.currency))}</div>
   </div>
 </header>
 <div class="row">
@@ -36,7 +42,7 @@ export function renderPayslip(p: PayslipView, opts: RenderOptions = {}): string 
       ${kv(ctx.L("employeeNumber"), p.employee.employeeNumber)}
       ${kv(ctx.L("jobTitle"), p.employee.jobTitle)}
       ${kv(ctx.L("category"), p.employee.category)}
-      ${kv(ctx.L("hireDate"), p.employee.hireDate ? fmtDate(p.employee.hireDate, ctx.locale) : undefined)}
+      ${kv(ctx.L("hireDate"), p.employee.hireDate ? ctx.d(p.employee.hireDate) : undefined)}
       ${kv(ctx.L("socialSecurityNumber"), p.employee.socialSecurityNumber)}
       ${kv(ctx.L("workedTime"), p.workedTime)}
     </table>
@@ -46,30 +52,30 @@ export function renderPayslip(p: PayslipView, opts: RenderOptions = {}): string 
 <h3>${esc(ctx.L("earnings"))}</h3>
 <table class="fin">
 <thead><tr><th>${esc(ctx.L("label"))}</th><th>${esc(ctx.L("base"))}</th><th>${esc(ctx.L("rate"))}</th><th>${esc(ctx.L("amount"))}</th></tr></thead>
-<tbody>${items(p.earnings, c)}
-<tr class="total"><td colspan="3">${esc(ctx.L("grossPay"))}</td>${td(p.grossPay, c, { zero: "zero" })}</tr></tbody>
+<tbody>${items(ctx, p.earnings)}
+<tr class="total"><td colspan="3">${esc(ctx.L("grossPay"))}</td>${td(ctx, p.grossPay, { zero: "zero" })}</tr></tbody>
 </table>
 <h3>${esc(ctx.L("contributions"))}</h3>
 <table class="fin">
 <thead><tr><th>${esc(ctx.L("label"))}</th><th>${esc(ctx.L("base"))}</th><th>${esc(ctx.L("rate"))}</th><th>${esc(ctx.L("employeeShare"))}</th><th>${esc(ctx.L("rate"))}</th><th>${esc(ctx.L("employerShare"))}</th></tr></thead>
 <tbody>${contributions}
-<tr class="total"><td colspan="3">${esc(ctx.L("totalContributions"))}</td>${td(p.totalEmployeeContributions, c, { zero: "zero" })}<td></td>${td(p.totalEmployerContributions, c, { zero: "zero" })}</tr></tbody>
+<tr class="total"><td colspan="3">${esc(ctx.L("totalContributions"))}</td>${td(ctx, p.totalEmployeeContributions, { zero: "zero" })}<td></td>${td(ctx, p.totalEmployerContributions, { zero: "zero" })}</tr></tbody>
 </table>
 <h3>${esc(ctx.L("incomeTax"))}</h3>
 <table class="fin">
 <thead><tr><th>${esc(ctx.L("label"))}</th><th>${esc(ctx.L("base"))}</th><th>${esc(ctx.L("rate"))}</th><th>${esc(ctx.L("amount"))}</th></tr></thead>
-<tbody>${items(p.incomeTax, c)}</tbody>
+<tbody>${items(ctx, p.incomeTax)}</tbody>
 </table>
-${p.otherDeductions?.length ? `<h3>${esc(ctx.L("otherDeductions"))}</h3><table class="fin"><tbody>${items(p.otherDeductions, c)}</tbody></table>` : ""}
-${p.nonTaxableAllowances?.length ? `<h3>${esc(ctx.L("allowances"))}</h3><table class="fin"><tbody>${items(p.nonTaxableAllowances, c)}</tbody></table>` : ""}
+${p.otherDeductions?.length ? `<h3>${esc(ctx.L("otherDeductions"))}</h3><table class="fin"><tbody>${items(ctx, p.otherDeductions)}</tbody></table>` : ""}
+${p.nonTaxableAllowances?.length ? `<h3>${esc(ctx.L("allowances"))}</h3><table class="fin"><tbody>${items(ctx, p.nonTaxableAllowances)}</tbody></table>` : ""}
 <div class="row">
   <div class="col">
-    ${p.cumulative ? `<h3>${esc(ctx.L("cumulative"))}</h3><table class="kv">${kv(ctx.L("grossPay"), fmt(p.cumulative.grossPay, c, { zero: "zero" }))}${kv(ctx.L("incomeTax"), fmt(p.cumulative.incomeTax, c, { zero: "zero" }))}${kv(ctx.L("netPay"), fmt(p.cumulative.netPay, c, { zero: "zero" }))}</table>` : ""}
-    ${p.leaveBalanceDays !== undefined ? `<div class="small">${esc(ctx.L("leaveBalance"))} : ${esc(p.leaveBalanceDays)}</div>` : ""}
+    ${p.cumulative ? `<h3>${esc(ctx.L("cumulative"))}</h3><table class="kv">${kv(ctx.L("grossPay"), ctx.n(p.cumulative.grossPay, { zero: "zero" }))}${kv(ctx.L("incomeTax"), ctx.n(p.cumulative.incomeTax, { zero: "zero" }))}${kv(ctx.L("netPay"), ctx.n(p.cumulative.netPay, { zero: "zero" }))}</table>` : ""}
+    ${p.leaveBalanceDays !== undefined ? `<div class="small">${esc(ctx.kv(ctx.L("leaveBalance"), ctx.rate(p.leaveBalanceDays)))}</div>` : ""}
   </div>
   <div class="col">
-    <div class="total-box">${esc(ctx.L("netPay"))} : ${esc(fmt(p.netPay, c, { zero: "zero" }))} ${esc(c)}</div>
-    <p class="right small">${esc(ctx.L("employerCost"))} : <b>${esc(fmt(p.employerCost, c, { zero: "zero" }))} ${esc(c)}</b></p>
+    <div class="total-box">${esc(ctx.kv(ctx.L("netPay"), ctx.m(p.netPay, { zero: "zero" })))}</div>
+    <p class="right small">${ctx.kv(esc(ctx.L("employerCost")), `<b>${esc(ctx.m(p.employerCost, { zero: "zero" }))}</b>`)}</p>
   </div>
 </div>
 <p class="small muted">${esc(ctx.L("payslipKeep"))}</p>
@@ -82,6 +88,6 @@ function kv(label: string, value: string | undefined): string {
   return value ? `<tr><td class="k">${esc(label)}</td><td>${esc(value)}</td></tr>` : "";
 }
 
-function items(rows: PayslipItemView[], currency: string): string {
-  return rows.map((r) => `<tr><td>${esc(r.label)}</td>${td(r.base, currency, { zero: "zero" })}<td class="num">${esc(r.rate ?? "")}</td>${td(r.amount, currency, { zero: "zero" })}</tr>`).join("\n");
+function items(ctx: Ctx, rows: PayslipItemView[]): string {
+  return rows.map((r) => `<tr><td>${esc(r.label)}</td>${td(ctx, r.base, { zero: "zero" })}<td class="num">${esc(ctx.rate(r.rate))}</td>${td(ctx, r.amount, { zero: "zero" })}</tr>`).join("\n");
 }

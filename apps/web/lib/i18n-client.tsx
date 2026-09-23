@@ -4,7 +4,7 @@
  * injecté par le layout racine (quelques Ko) pour éviter un aller-retour.
  */
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { createTranslator, interpolate, type Locale, type Messages, type Params, type Translator } from "./i18n";
+import { DEFAULT_LOCALE, createTranslator, interpolate, type Locale, type Messages, type Params, type Translator } from "./i18n";
 
 interface I18nContextValue {
   locale: Locale;
@@ -30,4 +30,16 @@ export function useI18n(): I18nContextValue {
 
 export function useT(): Translator {
   return useI18n().t;
+}
+
+/**
+ * Langue courante, tolérante à l'absence de fournisseur.
+ *
+ * `useI18n` lève hors du fournisseur, ce qui est juste pour `t()` : un écran
+ * sans dictionnaire est un bug. Mais un îlot de mise en forme — un montant, une
+ * date — doit pouvoir se rendre dans un arbre de test ou une prévisualisation
+ * sans faire tomber la page ; il retombe alors sur la langue par défaut.
+ */
+export function useLocale(): Locale {
+  return useContext(I18nContext)?.locale ?? DEFAULT_LOCALE;
 }

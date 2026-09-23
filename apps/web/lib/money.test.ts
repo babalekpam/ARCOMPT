@@ -15,6 +15,16 @@ describe("money (chaînes, jamais de flottant)", () => {
     expect(formatAmount("12.3456", "EUR", { decimal: "." })).toBe("12.35");
   });
 
+  it("ponctue selon la langue de l'interface, pas selon la devise", () => {
+    // Les décimales viennent de la devise, les séparateurs de la langue.
+    expect(formatAmount("1234567.0000", "XOF", { locale: "en" })).toBe("1,234,567");
+    expect(formatAmount("1234.5000", "EUR", { locale: "en" })).toBe("1,234.50");
+    expect(formatAmount("1234.5000", "EUR", { locale: "fr" })).toBe("1\u202f234,50");
+    expect(formatAmount("-5000.0000", "XOF", { locale: "en" })).toBe("-5,000");
+    // Une ponctuation imposée reste prioritaire sur celle de la langue.
+    expect(formatAmount("1234.5000", "EUR", { locale: "en", thousands: " ", decimal: "," })).toBe("1 234,50");
+  });
+
   it("gère le tiret pour zéro et les valeurs vides", () => {
     expect(formatAmount("0.0000", "XOF", { dashForZero: true })).toBe("—");
     expect(formatAmount("0.0000", "XOF")).toBe("0");

@@ -55,7 +55,7 @@ export async function parseApiResponse<T>(res: Response): Promise<T> {
   }
   if (!res.ok) {
     const err = (body as { error?: ApiErrorBody } | null)?.error;
-    throw new ApiError(res.status, err?.code ?? `HTTP_${res.status}`, err?.message ?? res.statusText ?? "Erreur API", err?.details);
+    throw new ApiError(res.status, err?.code ?? `HTTP_${res.status}`, err?.message ?? (res.statusText || `HTTP ${res.status}`), err?.details);
   }
   return body as T;
 }

@@ -86,10 +86,25 @@ export function missingKeys(from: Locale, to: Locale): string[] {
   return src.filter((k) => !dst.has(k));
 }
 
-/** Format de date court selon la langue, sans dépendance (dates ISO AAAA-MM-JJ). */
+const EN_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+
+/**
+ * Date courte selon la langue, sans dépendance (dates ISO AAAA-MM-JJ).
+ *
+ * L'anglais écrit le mois en lettres — « 15 Mar 2025 » — plutôt qu'un
+ * tout-chiffres : « 15/03/2025 » et « 03/15/2025 » se lisent tous les deux
+ * selon le pays, et rien ne les distingue. C'est le même format que celui des
+ * documents produits (`@arcompt/render`), pour qu'un écran et le PDF qu'il
+ * exporte ne datent pas la même pièce de deux façons.
+ */
 export function formatDate(locale: Locale, iso: string | null | undefined): string {
   if (!iso) return "";
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   if (!m) return iso;
-  return locale === "en" ? `${m[1]}-${m[2]}-${m[3]}` : `${m[3]}/${m[2]}/${m[1]}`;
+  const [, y, mo, d] = m as unknown as [string, string, string, string];
+  if (locale === "en") {
+    const month = EN_MONTHS[Number(mo) - 1];
+    return month ? `${Number(d)} ${month} ${y}` : `${y}-${mo}-${d}`;
+  }
+  return `${d}/${mo}/${y}`;
 }

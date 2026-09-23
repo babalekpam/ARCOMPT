@@ -279,5 +279,6 @@
   "pack.badge.draft": "Pack {status}",
   "pack.badge.nonOfficial": "Non officiel",
   "pack.rates.draft": "Taux de TVA du pack {pack}, en cours de validation : valeurs indicatives.",
-  "common.packNotPublished": "Refusé : le pack {pack} est au statut {status}. Un expert-comptable du pays doit valider ses taux et barèmes, et le pack passer en PUBLISHED, avant qu'un document légal puisse en être tiré."
+  "common.packNotPublished": "Refusé : le pack {pack} est au statut {status}. Un expert-comptable du pays doit valider ses taux et barèmes, et le pack passer en PUBLISHED, avant qu'un document légal puisse en être tiré.",
+  "common.ref": "Réf."
 }

@@ -24,6 +24,14 @@ export interface CompanyHeader {
   /** Forme juridique (SARL, SA, SAS, EI…). */
   legalForm?: string;
   capital?: Amount;
+  /**
+   * Devise du capital social, si elle diffère de celle du document. Une
+   * facture libellée en euros à un client ghanéen n'a pas transformé le
+   * capital de la société ivoirienne : il reste en francs CFA, et l'imprimer
+   * « EUR 5 000 000 » serait faux. Absente, la devise du document est reprise
+   * — le cas ordinaire d'un dossier qui facture dans sa propre monnaie.
+   */
+  capitalCurrency?: string;
   identifiers?: Identifier[];
   address?: string;
   city?: string;
@@ -35,6 +43,12 @@ export interface CompanyHeader {
 }
 
 export interface RenderOptions {
+  /**
+   * Langue du document. Elle est RÉSOLUE par l'appelant avec `resolveLocale`
+   * (voir `locale.ts`), qui applique la précédence : demande explicite →
+   * destinataire → dossier → opérateur → français. Un gabarit ne la déduit
+   * jamais lui-même ; en son absence il retombe sur `DEFAULT_LOCALE`.
+   */
   locale?: Locale;
   company?: CompanyHeader;
   /** Horodatage ISO imprimé en pied de page (défaut : maintenant). */

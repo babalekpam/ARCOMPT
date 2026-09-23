@@ -1,6 +1,6 @@
 {
   "documents.title": "Documents & AI",
-  "documents.subtitle": "Upload your documents, the AI proposes, you validate. Nothing is posted without a human.",
+  "documents.subtitle": "Upload your documents; the AI suggests, you approve. Nothing is posted without a human.",
   "documents.tab.list": "Documents",
   "documents.tab.upload": "Upload",
   "documents.tab.review": "Review queue",
@@ -158,5 +158,10 @@
   "assistant.tools.get_cash_position": "Cash position",
   "assistant.tools.get_trial_balance": "Trial balance",
   "assistant.tools.get_vat_summary": "VAT summary",
-  "assistant.tools.explain_statement_line": "Statement line"
+  "assistant.tools.explain_statement_line": "Statement line",
+  "documents.nav.label": "Documents and AI",
+  "assistant.footer": "Not a substitute for your accountant",
+  "assistant.q.receivables": "Who owes me money?",
+  "assistant.q.cash": "How much cash do I have?",
+  "assistant.q.explainLine": "Explain line BI of the balance sheet"
 }

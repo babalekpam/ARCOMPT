@@ -162,5 +162,7 @@
   "treasury.forecast.chart": "Chart",
   "treasury.forecast.noItems": "No flow this week.",
   "treasury.forecast.overdue": "overdue",
-  "treasury.forecast.legend": "Bars: green = inflows, red = outflows, grey = closing balance (shared scale). Click a week for details."
+  "treasury.forecast.legend": "Bars: green = inflows, red = outflows, grey = closing balance (shared scale). Click a week for details.",
+  "treasury.import.csvPlaceholder": "date;description;amount\n01/06/2025;Customer transfer;150000",
+  "treasury.import.smsPlaceholder": "You have received 15000 FCFA from 0700000000. Ref 12345."
 }

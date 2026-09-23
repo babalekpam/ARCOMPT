@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ASSISTANT_FOOTER, hasFooter, normalizeQuestion, splitAnswer, SUGGESTED_QUESTIONS } from "./helpers";
+import { ASSISTANT_FOOTER, hasFooter, normalizeQuestion, splitAnswer, SUGGESTED_QUESTION_KEYS } from "./helpers";
 
 describe("assistant helpers", () => {
   it("détecte et sépare le pied de page obligatoire", () => {
@@ -21,6 +21,6 @@ describe("assistant helpers", () => {
     expect(normalizeQuestion("  Qui   me doit ? ")).toBe("Qui me doit ?");
     expect(normalizeQuestion("a")).toBeNull();
     expect(normalizeQuestion("x".repeat(2001))).toBeNull();
-    expect(SUGGESTED_QUESTIONS).toHaveLength(3);
+    expect(SUGGESTED_QUESTION_KEYS).toHaveLength(3);
   });
 });

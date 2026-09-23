@@ -38,6 +38,7 @@ Un fichier par module dans `packages/db/migrations/`, préfixe réservé :
 | `0007_documents_ai.sql` | pièces, propositions, file de revue, mémoire, WhatsApp |
 | `0008_closing_portal.sql` | clôture, workflow d'exercice, commentaires, dépôts, invitations |
 | `0009_identity.sql` | résolution d'identité : appartenances et rôles lus dans `company_member` |
+| `0014_inventory.sql` | stocks : articles, mouvements valorisés, inventaire physique, variation de clôture |
 
 Modèle de table :
 

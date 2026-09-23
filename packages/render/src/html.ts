@@ -1,76 +1,75 @@
-import { Money } from "@arcompt/ledger";
 import { t, type LabelKey } from "./i18n.js";
+import { DEFAULT_LOCALE } from "./locale.js";
+import {
+  DASH,
+  NBSP,
+  colon,
+  formatAmount,
+  formatDate,
+  formatDateTime,
+  formatMoney,
+  formatPercent,
+  formatRateText,
+  formatSide,
+  labelled,
+  money,
+  type FmtOptions,
+} from "./format.js";
 import type { Amount, CompanyHeader, Locale, RenderOptions } from "./views.js";
 
 /**
- * Briques communes des gabarits HTML : échappement, mise en forme des
- * montants et des dates, en-tête d'entreprise, squelette de document et
- * feuille de style d'impression A4.
+ * Briques communes des gabarits HTML : échappement, en-tête d'entreprise,
+ * squelette de document et feuille de style d'impression A4.
+ *
+ * La mise en forme des nombres et des dates vit dans `format.ts` ; elle est
+ * exposée ici par le contexte de rendu (`Ctx`), pour qu'un gabarit n'ait
+ * jamais à savoir dans quelle langue il travaille.
  */
+
+export { DASH, NBSP, colon, formatAmount, formatDate, formatDateTime, formatMoney, formatPercent, formatRateText, formatSide, labelled, money, type FmtOptions };
 
 export function esc(value: unknown): string {
   if (value === null || value === undefined) return "";
   return String(value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 }
 
-export function money(a: Amount): Money {
-  return Money.parse(a);
-}
-
-export interface FmtOptions {
-  /** Affichage du zéro : tiret (états officiels) ou « 0 ». */
-  zero?: "dash" | "zero";
-  /** Négatifs : signe moins typographique « − » ou parenthèses. */
-  negative?: "minus" | "parentheses";
-}
-
-/** Montant formaté via Money.format (séparateur de milliers, décimales de la devise). */
-export function fmt(a: Amount | undefined, currency: string, opts: FmtOptions = {}): string {
-  if (a === undefined) return "";
-  const m = money(a);
-  if (m.isZero()) return opts.zero === "zero" ? Money.zero().format(currency) : "–";
-  const abs = m.abs().format(currency);
-  if (!m.isNegative()) return abs;
-  return opts.negative === "parentheses" ? `(${abs})` : `−${abs}`;
-}
-
-/** Solde avec sens : « 1 234 D » (débiteur) ou « 1 234 C » (créditeur). */
-export function fmtDC(a: Amount, currency: string): string {
-  const m = money(a);
-  if (m.isZero()) return "–";
-  return `${m.abs().format(currency)} ${m.isNegative() ? "C" : "D"}`;
-}
-
-/** Date ISO → « 31/12/2025 » (fr) ou « 2025-12-31 » (en) ; toute autre chaîne est rendue telle quelle. */
-export function fmtDate(iso: string | undefined | null, locale: Locale): string {
-  if (!iso) return "";
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return iso;
-  return locale === "fr" ? `${m[3]}/${m[2]}/${m[1]}` : `${m[1]}-${m[2]}-${m[3]}`;
-}
-
-export function fmtDateTime(iso: string, locale: Locale): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const date = fmtDate(d.toISOString(), locale);
-  const hh = String(d.getUTCHours()).padStart(2, "0");
-  const mm = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${date} ${hh}:${mm} UTC`;
-}
-
-/** Contexte de rendu partagé par un document. */
+/**
+ * Contexte de rendu d'un document : sa langue, sa devise, et tous les
+ * raccourcis de mise en forme déjà liés à l'une et à l'autre. Un gabarit
+ * écrit `ctx.n(montant)` et `ctx.d(date)` sans jamais tester la langue :
+ * c'est ce qui empêche un « 31/12/2025 » de réapparaître dans un document
+ * anglais au détour d'une ligne oubliée.
+ */
 export interface Ctx {
   locale: Locale;
   currency: string;
   company: CompanyHeader | undefined;
   generatedAt: string;
   watermark: string | undefined;
-  /** Raccourci de traduction. */
+  /** Libellé traduit. */
   L: (key: LabelKey) => string;
+  /** Montant nu : « 1 234,50 » / « 1,234.50 ». */
+  n: (a: Amount | undefined, opts?: FmtOptions) => string;
+  /** Montant et code devise : « 1 234,50 XOF » / « XOF 1,234.50 ». */
+  m: (a: Amount | undefined, opts?: FmtOptions) => string;
+  /** Date ISO : « 31/12/2025 » / « 31 Dec 2025 ». */
+  d: (iso: string | undefined | null) => string;
+  /** Horodatage ISO, fuseau dit. */
+  dt: (iso: string) => string;
+  /** Solde avec son sens : « 1 234 D » / « 1,234 Dr ». */
+  dc: (a: Amount) => string;
+  /** Taux fourni par un module amont, re-ponctué (« 6,3 % » / « 6.3% »). */
+  rate: (text: string | undefined) => string;
+  /** Pourcentage à partir d'un nombre nu (« 18 » → « 18 % » / « 18% »). */
+  pct: (value: string | number) => string;
+  /** « Libellé : valeur », espacé selon la langue. */
+  kv: (label: string, value: string) => string;
+  /** Deux-points espacé selon la langue. */
+  colon: string;
 }
 
 export function makeCtx(opts: RenderOptions, currency: string): Ctx {
-  const locale = opts.locale ?? "fr";
+  const locale = opts.locale ?? DEFAULT_LOCALE;
   return {
     locale,
     currency,
@@ -78,19 +77,30 @@ export function makeCtx(opts: RenderOptions, currency: string): Ctx {
     generatedAt: opts.generatedAt ?? new Date().toISOString(),
     watermark: opts.watermark,
     L: (key) => t(locale, key),
+    n: (a, o = {}) => formatAmount(a, currency, locale, o),
+    m: (a, o = {}) => formatMoney(a, currency, locale, o),
+    d: (iso) => formatDate(iso, locale),
+    dt: (iso) => formatDateTime(iso, locale),
+    dc: (a) => formatSide(a, currency, locale),
+    rate: (text) => formatRateText(text, locale),
+    pct: (value) => formatPercent(value, locale),
+    kv: (label, value) => labelled(locale, label, value),
+    colon: colon(locale),
   };
 }
 
 /** Cellule numérique alignée à droite, classe `neg` pour les négatifs. */
-export function td(a: Amount | undefined, currency: string, opts: FmtOptions = {}, extraClass = ""): string {
+export function td(ctx: Ctx, a: Amount | undefined, opts: FmtOptions = {}, extraClass = ""): string {
   const neg = a !== undefined && money(a).isNegative();
-  return `<td class="num${neg ? " neg" : ""}${extraClass ? " " + extraClass : ""}">${fmt(a, currency, opts)}</td>`;
+  return `<td class="num${neg ? " neg" : ""}${extraClass ? " " + extraClass : ""}">${ctx.n(a, opts)}</td>`;
 }
 
 /** Bloc d'identification de l'entreprise (nom, forme, identifiants, adresse). */
 export function companyBlock(company: CompanyHeader | undefined, ctx: Ctx, tagClass = "company"): string {
   if (!company) return `<div class="${tagClass}"><div class="company-name">—</div></div>`;
-  const legal = [company.legalForm, company.capital !== undefined ? `${ctx.L("capital")} ${fmt(company.capital, ctx.currency, { zero: "zero" })} ${esc(ctx.currency)}` : ""].filter(Boolean).join(" · ");
+  const capitalCurrency = company.capitalCurrency ?? ctx.currency;
+  const capital = company.capital !== undefined ? `${ctx.L("capital")} ${formatMoney(company.capital, capitalCurrency, ctx.locale, { zero: "zero" })}` : "";
+  const legal = [company.legalForm, capital].filter(Boolean).join(" · ");
   const ids = (company.identifiers ?? []).map((i) => `<span class="id"><b>${esc(i.label)}</b> ${esc(i.value)}</span>`).join(" · ");
   const address = [company.address, [company.city, company.country].filter(Boolean).join(", ")].filter(Boolean).join("<br>");
   const contact = [company.phone, company.email].filter(Boolean).map(esc).join(" · ");
@@ -138,7 +148,7 @@ const MARK_IMG = `<img class="mark" alt="" src="${MARK_PNG_DATA_URI}">`;
  * l'entreprise cliente, dont l'identité reste dans l'en-tête.
  */
 export function pageFooter(ctx: Ctx): string {
-  return `<footer class="doc-footer">${esc(ctx.L("generatedOn"))} ${esc(fmtDateTime(ctx.generatedAt, ctx.locale))} · <span class="producer">${MARK_IMG}ARCOMPT</span></footer>`;
+  return `<footer class="doc-footer">${esc(ctx.L("generatedOn"))} ${esc(ctx.dt(ctx.generatedAt))} · <span class="producer">${MARK_IMG}ARCOMPT</span></footer>`;
 }
 
 /** Document HTML complet : squelette, style d'impression, filigrane éventuel. */
@@ -180,6 +190,10 @@ h3 { font-size: 10pt; margin: 10px 0 3px; }
 .small { font-size: 8pt; color: #444; }
 .ids .id { margin-right: 4px; }
 .muted { color: #666; }
+/* Glose anglaise d'un intitulé réglementaire : présente mais visiblement seconde. */
+.gloss { color: #556; font-style: italic; font-size: 8pt; }
+table.fin tr.total .gloss, table.fin tr.subtotal .gloss, table.fin tr.grand .gloss { font-weight: 400; }
+.official { margin: 0 0 6px; }
 table.fin { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
 table.fin th, table.fin td { border: 1px solid #8a8a8a; padding: 2.5px 5px; vertical-align: top; }
 table.fin th { background: #e8eef5; font-weight: 600; text-align: center; font-size: 8.5pt; }

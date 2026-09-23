@@ -21,7 +21,7 @@ Ce guide décrit le déploiement et l'exploitation d'ARCOMPT conformément à `S
 cp .env.example .env            # renseigner les secrets depuis le gestionnaire de secrets
 docker compose up -d            # PostgreSQL + Redis
 pnpm install
-pnpm db:migrate                 # migrations 0001 → 0010, sous le compte propriétaire du schéma
+pnpm db:migrate                 # toutes les migrations, sous le compte propriétaire du schéma
 
 # Une fois par base : créer le rôle de connexion applicatif, puis basculer
 # DATABASE_URL de l'API et du worker dessus (voir « Rôles SQL »).
@@ -242,6 +242,8 @@ deux manque, ne lancez pas de campagne de relances.
 | `ANTHROPIC_API_KEY` | Passerelle IA | Trimestrielle |
 | `R2_SECRET_ACCESS_KEY` | Object store | Annuelle |
 | `SMTP_PASSWORD` | Relais d'envoi des e-mails | À chaque changement de fournisseur |
+| `BACKUP_ENCRYPTION_KEY` | Chiffrement des archives de sauvegarde | Annuelle. **La rotation ne rechiffre pas les archives existantes** : gardez l'ancienne clé au coffre aussi longtemps que les sauvegardes qu'elle ouvre. Une clé perdue = des sauvegardes perdues. |
+| `ANCHOR_SIGNING_KEY` | Signature Ed25519 des reçus d'ancre (publieur `endpoint`) | Annuelle. Conservez et publiez les clés **publiques** successives : un reçu de 2026 se vérifie avec la clé de 2026. |
 
 Jamais dans le code, les images ni les journaux : `apps/api/src/security.ts` masque les motifs de secrets dans les journaux.
 
@@ -249,34 +251,276 @@ Jamais dans le code, les images ni les journaux : `apps/api/src/security.ts` mas
 
 ## Sauvegardes et reprise
 
-**Procédures manuelles.** Le dépôt ne contient ni script de sauvegarde, ni script de restauration, ni harnais d'exercice de reprise : tout ce qui suit s'exécute à la main, sur la console de l'hébergeur et en ligne de commande. À outiller.
+Trois scripts, une seule idée : **une sauvegarde qu'on n'a jamais relue n'est
+pas une sauvegarde, c'est un fichier**. Chacun fait donc plus que son nom le
+laisse croire — la sauvegarde produit de quoi se vérifier, la restauration
+refuse les cibles ambiguës, et l'exercice contrôle ce qu'il a restauré au lieu
+de se féliciter d'un `psql` silencieux.
 
-- Objectifs : RPO ≤ 15 min, RTO ≤ 4 h ; pas de fenêtre de maintenance autour des échéances fiscales (voir `GET /v1/tax/calendar`).
-- Neon : restauration à un instant donné (PITR) activée ; copie chiffrée dans une seconde région. À activer et vérifier depuis la console : rien dans le dépôt ne le configure.
-- Chaque trimestre : restauration d'une sauvegarde sur un environnement isolé, puis `Ledger.verifyChain` sur chaque journal pour prouver l'intégrité. La vérification de la chaîne d'ancres (`verifyAnchorChain`) n'a pas d'objet tant qu'aucune ancre n'est produite (voir ci-dessous).
-- Chaque année : exercice complet de reprise incluant la reconstruction de la clé maître de paie depuis le gestionnaire de secrets.
+| Script | Rôle |
+| --- | --- |
+| `scripts/backup.mts` | `pg_dump` → gzip → AES-256-GCM, plus un manifeste scellé (HMAC). `--verify` relit une archive existante de bout en bout. |
+| `scripts/restore.mts` | Déchiffre, confronte au manifeste, restaure. Refuse par défaut toute cible qui n'annonce pas être jetable. |
+| `scripts/restore-drill.mts` | Exercice : crée une base jetable, y restaure, **vérifie**, rapporte, supprime. Sort en code 1 au premier contrôle rouge. |
+
+Objectifs inchangés : RPO ≤ 15 min, RTO ≤ 4 h ; pas de fenêtre de maintenance
+autour des échéances fiscales (`GET /v1/tax/calendar`). Les scripts ne
+remplacent pas le PITR de l'hébergeur — un dump quotidien ne tient pas un RPO de
+15 minutes. Ils couvrent ce que le PITR ne couvre pas : une copie **hors de
+l'hébergeur**, chiffrée sous une clé qui n'est pas la sienne, et la preuve
+régulière qu'elle se restaure.
+
+### Sauvegarder
+
+```bash
+BACKUP_ENCRYPTION_KEY="$(cat /run/secrets/backup_key)" \
+DATABASE_URL=postgres://<compte_de_sauvegarde>@<hôte>:5432/<base> \
+  pnpm exec tsx scripts/backup.mts --out /var/backups/arcompt
+```
+
+Produit deux fichiers : `<base>-<horodatage>.sql.gz.enc` et son
+`.manifest.json`. **Copiez les deux** hors site : l'archive sans son manifeste
+reste restaurable, mais plus vérifiable.
+
+- `BACKUP_ENCRYPTION_KEY` : base64 de 32 octets (`openssl rand -base64 32`),
+  injectée depuis le gestionnaire de secrets. **Absente, le script refuse** : il
+  n'existe aucun repli « sauvegarde en clair ». Une archive ARCOMPT contient dix
+  ans d'écritures, des salaires et des identifiants fiscaux.
+- Chaque archive tire sa propre clé de données (HKDF sur un sel aléatoire) ;
+  l'en-tête (sel, IV, base d'origine) est authentifié par le sceau GCM, donc il
+  ne se maquille pas.
+- Le manifeste porte l'empreinte du chiffré, l'empreinte du SQL en clair, la
+  liste des migrations appliquées et des décomptes témoins, le tout scellé par
+  un HMAC dérivé de la même clé : un décompte retouché à la main est démasqué.
+- Perdre `BACKUP_ENCRYPTION_KEY`, c'est perdre toutes les sauvegardes prises
+  sous cette clé. Elle vit dans le gestionnaire de secrets **et** dans le
+  coffre de reprise, pas seulement dans la configuration du conteneur.
+
+Contrôle d'une archive, sans rien restaurer :
+
+```bash
+BACKUP_ENCRYPTION_KEY=… pnpm exec tsx scripts/backup.mts --verify /var/backups/arcompt/<archive>
+```
+
+Le script déchiffre l'archive **entièrement** (le sceau GCM ne se vérifie qu'au
+dernier octet) et confronte les deux empreintes au manifeste. Un octet retourné,
+un transfert interrompu ou une clé différente échouent ici, pas le jour de la
+panne.
+
+### Restaurer
+
+```bash
+# cible jetable : le nom l'annonce, rien d'autre à faire
+BACKUP_ENCRYPTION_KEY=… pnpm exec tsx scripts/restore.mts \
+  --file /var/backups/arcompt/<archive> \
+  --target postgres://arcompt@<hôte>:5432/arcompt_drill_20250304
+
+# vraie reprise, sur une base qui n'est pas jetable : deux gestes exigés
+ALLOW_DESTRUCTIVE_RESTORE=1 BACKUP_ENCRYPTION_KEY=… pnpm exec tsx scripts/restore.mts \
+  --file … --target postgres://…/arcompt --confirm arcompt --reset
+```
+
+Le mode de défaillance contre lequel ce script est écrit n'est pas « la
+restauration échoue » : c'est **« la restauration réussit, sur la mauvaise
+base »**. Une commande juste, lancée avec le `DATABASE_URL` de production encore
+dans le terminal, détruit tout sans rien afficher d'anormal. Trois refus, dans
+cet ordre :
+
+1. `--target` est obligatoire : `DATABASE_URL` n'est jamais pris par défaut ;
+2. si le nom de la base n'annonce pas une cible jetable (`…_drill`, `…_test`,
+   `scratch_…`, `…_restore`, `…_tmp`, `…_sandbox`), il faut **retaper ce nom**
+   (`--confirm <base>`) **et** poser `ALLOW_DESTRUCTIVE_RESTORE=1`. L'un sans
+   l'autre ne suffit pas : une variable oubliée dans un shell et un nom
+   copié-collé au hasard doivent rester sans effet ;
+3. si la base contient déjà des dossiers, il faut `--reset`.
+
+Le chemin de la vraie reprise existe donc, il est documenté, et il ne s'emprunte
+pas par distraction. Après restauration, le script confronte les décomptes au
+manifeste et **échoue** s'ils divergent : une restauration partielle ne se met
+pas en service.
+
+Restauration sur un **autre cluster** : le dump conserve propriétaires et
+privilèges (c'est ce qui rend le modèle de droits vérifiable). Créez donc
+d'abord les rôles sur le cluster d'accueil — `arcompt_app` naît d'une migration,
+le rôle de connexion vient de `scripts/provision-app-role.mts`.
+
+### Exercice trimestriel
+
+```bash
+BACKUP_ENCRYPTION_KEY=… DATABASE_URL=postgres://<compte_de_service>@<hôte>:5432/<base> \
+  pnpm exec tsx scripts/restore-drill.mts            # prend la dernière archive de ./backups
+```
+
+Le harnais crée `arcompt_drill_<horodatage>`, y restaure l'archive, puis
+**contrôle ce qu'il a restauré** — parce qu'un `psql` qui rend la main sans
+erreur prouve que du SQL s'est exécuté, pas que la comptabilité est intacte :
+
+| Contrôle | Ce qu'il prouve |
+| --- | --- |
+| Restauration | L'archive se déchiffre et s'exécute entièrement |
+| Historique des migrations | Le schéma restauré porte les migrations de la sauvegarde |
+| Décomptes de lignes | Aucune table n'a perdu de ligne en chemin |
+| Énumération des dossiers | Les contrôles suivants portent sur **tous** les dossiers, pas sur un sous-ensemble |
+| Chaînes de hash du grand livre | `Ledger.verifyChain` par dossier et par journal : hashes et numéros se recalculent |
+| Chaîne de la piste d'audit | Chaînage **et** recalcul du digest de chaque ligne d'`audit_log` |
+| Chaîne d'ancres | `verifyAnchorChain`, **et** recalcul de chaque racine de Merkle depuis les données restaurées |
+| Soldes par compte et période | `account_balance` recalculé depuis les lignes d'écriture |
+
+Le rapport dit, pour chaque contrôle, **ce qui a été examiné** (nombre
+d'écritures, de lignes d'audit, d'ancres). Un contrôle qui n'avait rien à
+examiner — sauvegarde sans ancre, base sans écriture validée — est marqué
+`IGNORÉ` et n'est jamais compté comme réussi : c'est la différence entre « tout
+va bien » et « je n'ai rien regardé ». Tout contrôle rouge fait sortir le script
+en code 1 et **conserve** la base d'exercice pour l'autopsie ; un exercice
+réussi la supprime (`--keep` pour la garder).
+
+Consignez dans le registre d'exploitation : la date, l'archive éprouvée, la
+durée totale (c'est votre mesure de RTO réelle) et le rapport.
+
+### Exercice annuel de reconstruction des clés
+
+L'exercice trimestriel ne touche pas aux clés. Une fois par an, refaites la
+chaîne complète depuis le coffre, sur la base d'exercice :
+
+1. récupérer `BACKUP_ENCRYPTION_KEY` **depuis le coffre de reprise**, pas depuis
+   la configuration du conteneur de production — c'est le geste éprouvé ;
+2. dérouler `restore-drill.mts` avec cette seule copie ;
+3. récupérer de même `PAYROLL_ENCRYPTION_KEY` et déchiffrer un bulletin sur la
+   base restaurée (`PayrollService`) : une sauvegarde dont les données de paie
+   sont irrécupérables n'est pas une sauvegarde ;
+4. récupérer `ANCHOR_SIGNING_KEY` si le publieur « endpoint » est en service, et
+   revérifier la signature d'un reçu d'ancre déjà publié.
 
 ## Ancrage externe
 
-**Conçu et testé, pas encore exécuté.** `packages/ledger/src/anchoring.ts` sait calculer la racine de Merkle quotidienne des écritures validées d'un dossier, chaîner les ancres et produire des preuves d'inclusion ; ces fonctions sont couvertes par des tests unitaires. Mais rien ne les appelle : aucune tâche de fond ne les déclenche, aucune migration ne crée de table d'ancre, et le seul publieur livré (`MemoryAnchorPublisher`) garde les ancres en mémoire du processus, donc les perd au redémarrage.
+`packages/ledger/src/anchoring.ts` calcule la racine de Merkle quotidienne, la
+chaîne d'ancres et les preuves d'inclusion. Depuis la migration
+`0013_anchoring.sql`, ces ancres sont **conservées** (`ledger_anchor`),
+**publiées** hors de la plateforme et **servies** par l'API.
 
-Mettre l'ancrage en service suppose trois chantiers, aucun commencé : une table d'ancres et sa migration, une tâche quotidienne qui appelle le calcul par dossier, et une implémentation d'`AnchorPublisher` vers un tiers (horodatage qualifié, registre public ou envoi signé au commissaire aux comptes) dont on conserve les références. Tant que ce n'est pas fait, ne présentez pas l'ancrage comme une garantie offerte aux clients.
+### Ce qui est ancré, et pourquoi
+
+Le produit tient deux chaînes de hash : `journal_entry.hash` (une par journal) et
+`audit_log.hash` (une par dossier). **L'ancre couvre les deux.** N'ancrer que les
+écritures prouverait qu'une écriture existait le 3 mars sans rien prouver de qui
+l'a validée, ni du déverrouillage de période qui l'a précédée — la moitié de ce
+que l'engagement n° 10 annonce. Chaque feuille porte son domaine (`ENTRY:` /
+`AUDIT:`), ce qui interdit de présenter un hash d'audit à la place d'un hash
+d'écriture dans une preuve.
+
+Une ancre par dossier et par journée **révolue** (UTC) ayant produit quelque
+chose. Le jour courant n'est jamais ancré : une journée ouverte reçoit encore des
+écritures, et sa racine ne se recalculerait plus demain. Les journées sans
+activité ne sont pas ancrées : la chaîne n'exige pas des jours contigus.
+
+### Configuration
+
+| Variable | Rôle |
+| --- | --- |
+| `ANCHOR_PUBLISHER` | `rfc3161`, `endpoint`, ou `memory` (hors production). **Absente : l'ancrage est coupé**, et annoncé comme dégradé au démarrage. |
+| `ANCHOR_TSA_URL` | `rfc3161` : URL de l'autorité d'horodatage (https exigé en production). |
+| `ANCHOR_TSA_AUTH` | `rfc3161` : en-tête `Authorization` si la TSA est sous contrat. Facultatif. |
+| `ANCHOR_TSA_POLICY_OID` | `rfc3161` : OID de politique exigé de la TSA. Facultatif. |
+| `ANCHOR_ENDPOINT_URL` | `endpoint` : point de dépôt des reçus signés (https exigé en production). |
+| `ANCHOR_SIGNING_KEY` | `endpoint` : clé privée Ed25519, PEM PKCS#8 ou base64 du DER (`openssl genpkey -algorithm ed25519 -outform DER \| base64 -w0`). |
+| `ANCHOR_ENDPOINT_AUTH` | `endpoint` : en-tête `Authorization` du point de dépôt. Facultatif. |
+
+Règle habituelle de la maison : variable absente = fonction coupée et annoncée,
+configuration posée à moitié = refus de démarrer en production,
+simulateur = interdit en production. `ANCHOR_PUBLISHER=memory` garde les ancres
+dans la mémoire du processus : utile en développement, refusé si
+`NODE_ENV=production`. **Aucune ancre n'est jamais marquée publiée sans qu'un
+tiers en ait accusé réception** : en cas d'échec, elle reste `FAILED` avec son
+motif, et la prochaine exécution la reprend.
+
+Lequel choisir. `rfc3161` est le seul qui atteste une **date** opposable : le
+jeton est signé par un tiers et se vérifie avec sa chaîne de certification
+publique, des années plus tard, sans nous. `endpoint` prouve l'origine et
+l'intégrité du reçu (signature Ed25519) mais pas sa date — celle-ci ne vaut que
+ce que vaut le registre du destinataire. Prenez `rfc3161` ; réservez `endpoint`
+au cas où aucune TSA n'est disponible, et remettez alors la clé **publique** au
+commissaire aux comptes.
+
+### Tâche quotidienne
+
+```bash
+ANCHOR_PUBLISHER=rfc3161 ANCHOR_TSA_URL=https://<autorité>/tsr \
+DATABASE_URL=postgres://<compte_de_service>@<hôte>:5432/<base> \
+  pnpm exec tsx scripts/anchor-daily.mts
+```
+
+À poser dans l'ordonnanceur, une fois par jour, après minuit UTC. Idempotent :
+relancé, il ne refait que ce qui manque ; une nuit manquée est rattrapée le
+lendemain sans trou dans la chaîne. `--dry-run` énumère sans rien écrire ;
+`--tenant <uuid>` restreint à un dossier.
+
+Le script énumère `company`, qui est en **RLS forcée** : employez le compte de
+migration ou un compte de service, jamais le rôle applicatif. S'il n'énumère
+aucun dossier, il le dit et sort en erreur plutôt que de terminer sur un succès
+vide. Il sort également en erreur si une publication a échoué, ou si une journée
+d'activité est devenue inancrable (activité antérieure à la dernière ancre :
+signe d'une écriture antidatée ou d'une horloge qui a reculé).
+
+Le même travail est déclenchable à la demande par l'API :
+`POST /v1/anchors/build` (rôles OWNER, ACCOUNTANT, REVIEWER), avec ou sans
+`{"day":"AAAA-MM-JJ"}`.
+
+### Ce qu'un auditeur fait d'une ancre
+
+`GET /v1/anchors/proof?entry=<uuid>` (ou `?audit=<id>`) rend, d'un coup : l'ancre
+du jour de l'écriture, la preuve de Merkle qui l'y relie, le **reçu** exact qui a
+été soumis au tiers, et la preuve tierce (`publicationProof`, base64). Quatre
+gestes, aucun ne dépendant d'ARCOMPT :
+
+1. recalculer le hash de l'écriture depuis son contenu (`computeEntryHash`, la
+   sérialisation canonique est dans `packages/ledger/src/hash.ts`) et vérifier
+   qu'il est bien la feuille de la preuve, préfixée de `ENTRY:` ;
+2. replier la preuve de Merkle sur la racine : à chaque étape,
+   `sha256("node:" + gauche + droite)`, les feuilles étant
+   `sha256("leaf:" + valeur)` ;
+3. vérifier que le reçu contient cette racine, et que son empreinte sha256 est
+   celle scellée par le tiers :
+   `printf '%s' "<reçu>" | sha256sum` ;
+4. vérifier la preuve tierce. Pour `rfc3161` :
+
+   ```bash
+   printf '%s' "<reçu>" > recu.txt
+   printf '%s' "<publicationProof>" | base64 -d > ancre.tsr
+   openssl ts -reply -in ancre.tsr -text            # empreinte et heure attestées
+   openssl ts -verify -data recu.txt -in ancre.tsr -CAfile <chaîne de la TSA>
+   ```
+
+   Pour `endpoint` : la preuve est un JSON base64 portant la signature Ed25519 du
+   reçu et la clé publique ; `openssl pkeyutl -verify -pubin -inkey cle.pem
+   -rawin -in recu.txt -sigfile signature.bin`.
+
+`GET /v1/anchors/chain` vérifie l'ensemble d'un dossier et distingue les deux
+échecs : `chain` rompu (la table d'ancres a été réécrite) et `tampered` (la
+racine d'un jour ne se recalcule plus depuis les données — c'est la
+falsification que tout ce dispositif existe pour lever). `unpublished` liste les
+ancres qui ne sont jamais sorties : elles ne prouvent rien à un tiers.
+
+Enfin, `ledger_anchor` est immuable par trigger, comme le grand livre :
+suppression interdite, contenu figé, et une ancre publiée ne se republie pas. Le
+rôle applicatif n'a pas `DELETE` dessus.
 
 ## Surveillance
 
 - Journaux structurés JSON sans montants nominatifs ni données de paie ; OpenTelemetry et Sentry sont pris en charge et s'activent en renseignant `OTEL_EXPORTER_OTLP_ENDPOINT` ou `SENTRY_DSN` (chargement dynamique au démarrage, `apps/api/src/telemetry.ts`). Non renseignées, l'API se contente des journaux structurés.
 - Alertes de sécurité (`apps/api/src/telemetry.ts`) : rafale d'échecs d'authentification, rejets RLS (403), webhooks invalides ou rejoués, pics d'appels IA, divergences paiements / écritures, limitation de débit. Brancher un `AlertSink` vers l'astreinte.
+- Ancrage externe : la tâche `scripts/anchor-daily.mts` sort en code 1 dès qu'une ancre n'est pas sortie de la plateforme — branchez-la sur l'alerte de l'ordonnanceur. Une ancre qui reste `PENDING` ou `FAILED` veut dire que l'engagement n° 10 n'est pas tenu pour cette journée-là, et cela ne se rattrape pas tout seul indéfiniment : la chaîne se construit dans l'ordre.
 - Contrôles de cohérence comptable (`GET /v1/anomalies`, contrôles des états) : certains signaux de fraude sont plus visibles dans les chiffres que dans les journaux techniques.
 
 ## Revue trimestrielle
 
-Aucune de ces étapes n'est automatisée : la revue est une liste à dérouler à la main.
+Les points 4 et 5 sont outillés ; les autres restent une liste à dérouler à la main.
 
 1. Tests de fuite entre dossiers et contrôle du modèle de droits (`pnpm test:tenancy`, qui couvre `db.test.ts` et `provision.test.ts`) sur la version déployée. Sur la base de production, le même contrôle s'obtient en relançant `scripts/provision-app-role.mts` : il revérifie les 30 droits attendus sans rien changer d'autre que le mot de passe fourni.
 2. Revue des droits (`GET /v1/portal/org/entitlement-review`) et suspension des comptes inactifs. Les rôles se lisent et se modifient dans `company_member` depuis le portail, avec effet à la requête suivante.
 3. Audit du journal des accès administrateur et des demandes break-glass.
-4. Vérification des chaînes de hash (`Ledger.verifyChain`) ; la vérification des ancres attendra leur mise en service.
-5. Test de restauration.
+4. Vérification des chaînes de hash et de la chaîne d'ancres. Sur la base en service : `GET /v1/anchors/chain` par dossier (il recalcule chaque racine de Merkle depuis les données du jour, ce que `verifyAnchorChain` seul ne fait pas) et `GET /v1/entries/chain/<journal>`. Sur une copie restaurée, `scripts/restore-drill.mts` fait les deux, plus la piste d'audit et les soldes, et le point 5 est alors couvert par le même passage.
+5. Exercice de restauration : `pnpm exec tsx scripts/restore-drill.mts`. Consignez le rapport et la durée — c'est la mesure de RTO réelle.
+6. Contrôle de l'ancrage : aucune ancre en `PENDING` ou `FAILED` depuis plus de 48 h (`GET /v1/anchors`), et aucune journée d'activité inancrable signalée par `scripts/anchor-daily.mts`.
 
 ## Conformité pays
 

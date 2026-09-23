@@ -91,7 +91,8 @@ describe("expéditeur des relances", () => {
     const sent = mailer.last()!;
     expect(sent.to).toBe("client@exemple.test");
     expect(sent.subject).toBe("Mise en demeure : facture FAC-2025-001");
-    expect(sent.text).toContain("800,00 XOF");
+    // Le XOF n'a pas de décimale : la relance réclame « 800 XOF », pas « 800,00 XOF ».
+    expect(sent.text).toContain("800\u00a0XOF");
     expect(sent.text).toContain("Contactez-nous avant le 30.");
     expect(sent.text).toContain(FOOTER);
     expect(sent.text).not.toMatch(/\{\{|\}\}/);

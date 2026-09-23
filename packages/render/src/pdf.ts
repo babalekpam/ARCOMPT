@@ -1,5 +1,7 @@
 import { existsSync } from "node:fs";
 import { chromium, type Browser } from "playwright-core";
+import { DEFAULT_LOCALE } from "./locale.js";
+import type { Locale } from "./views.js";
 
 /**
  * Conversion HTML → PDF par Chromium (playwright-core, sans téléchargement de
@@ -16,6 +18,12 @@ export interface PdfOptions {
   margin?: { top?: string; right?: string; bottom?: string; left?: string };
   /** Pied de page « Page x / y » (défaut : oui). */
   pageNumbers?: boolean;
+  /**
+   * Langue du pied de page de pagination. Il est écrit par Chromium, hors du
+   * HTML : c'est le seul texte du PDF que les gabarits ne voient pas passer,
+   * et le seul qui resterait en français si on l'oubliait.
+   */
+  locale?: Locale;
   timeoutMs?: number;
 }
 
@@ -64,6 +72,16 @@ async function getBrowser(): Promise<Browser> {
   return browserPromise;
 }
 
+/**
+ * Pagination : « Page 3 / 12 » en français, « Page 3 of 12 » en anglais. Le
+ * « / » français est la forme d'usage sur les états comptables ; l'anglais
+ * écrit « of », et « Page 3 / 12 » y passerait pour une coquille.
+ */
+function pageFooterTemplate(locale: Locale): string {
+  const separator = locale === "en" ? "of" : "/";
+  return `<div style="font-family:Helvetica,Arial,sans-serif;font-size:7pt;color:#666;width:100%;text-align:center;">Page <span class="pageNumber"></span> ${separator} <span class="totalPages"></span></div>`;
+}
+
 /** Rend un document HTML (tel que produit par `renderHtml`) en PDF. */
 export async function renderPdf(html: string, opts: PdfOptions = {}): Promise<Buffer> {
   const browser = await getBrowser();
@@ -83,8 +101,7 @@ export async function renderPdf(html: string, opts: PdfOptions = {}): Promise<Bu
       margin: opts.margin ?? { top: "12mm", right: "11mm", bottom: "14mm", left: "11mm" },
       displayHeaderFooter: pageNumbers,
       headerTemplate: "<span></span>",
-      footerTemplate:
-        '<div style="font-family:Helvetica,Arial,sans-serif;font-size:7pt;color:#666;width:100%;text-align:center;">Page <span class="pageNumber"></span> / <span class="totalPages"></span></div>',
+      footerTemplate: pageFooterTemplate(opts.locale ?? DEFAULT_LOCALE),
     });
     return Buffer.from(pdf);
   } finally {

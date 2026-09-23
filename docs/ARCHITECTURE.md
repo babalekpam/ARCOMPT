@@ -46,7 +46,7 @@ flowchart TD
 | Packs pays | Taux, barèmes, modèles DSF, formats de dépôt | De code exécutable : données et règles déclaratives seulement |
 | Couche IA | Lecture de pièces, propositions, assistant | De comptabilisation sans validation humaine |
 
-**Dans le dépôt.** `packages/ledger` (moteur comptable), `packages/statements` (moteur d'états), `packages/rules` + `packages/country-packs` (packs pays), `packages/ai-gateway` (couche IA), `apps/api` (API + auth), `apps/web` (PWA). Les modules métier sont en place — `packages/invoicing` (facturation et achats), `packages/treasury`, `packages/payroll`, `packages/tax`, `packages/assets`, `packages/closing`, via `packages/posting` — et n'écrivent qu'à travers `Ledger.createDraft` / `Ledger.post`. Il n'existe pas de module de stocks (voir § 7).
+**Dans le dépôt.** `packages/ledger` (moteur comptable), `packages/statements` (moteur d'états), `packages/rules` + `packages/country-packs` (packs pays), `packages/ai-gateway` (couche IA), `apps/api` (API + auth), `apps/web` (PWA). Les modules métier sont en place — `packages/invoicing` (facturation et achats), `packages/treasury`, `packages/payroll`, `packages/tax`, `packages/assets`, `packages/closing`, via `packages/posting` — et n'écrivent qu'à travers `Ledger.createDraft` / `Ledger.post`. Les stocks sont dans `packages/invoicing/src/stock` (voir § 7).
 
 ## 3. Stack technique
 
@@ -102,6 +102,8 @@ Toute la plateforme repose sur deux tables, `journal_entry` et `journal_line`, p
 | `document` | Pièce justificative (R2), hash SHA-256, données extraites | Liée à l'écriture ; conservation 10 ans (AUDCIF) |
 | `reconciliation` | Lettrage et rapprochement bancaire | Lie des `journal_line` entre elles |
 | `fixed_asset` | Immobilisations, plan d'amortissement | Génère les dotations ; alimente les notes annexes |
+| `stock_article`, `stock_movement` | Articles stockés et mouvements valorisés (CUMP ou PEPS) | Quantités et valeurs seulement : aucun mouvement n'est comptabilisé (inventaire intermittent) |
+| `stock_count`, `stock_closing` | Inventaire physique valorisé et variation de fin d'exercice | La clôture produit les écritures 603x / 73x ; une seule par exercice |
 | `audit_log` | Qui, quoi, quand, avant / après | Insertion seule, chaîné par hash |
 
 **Invariants garantis par la base, pas par l'application** (`packages/db/migrations/0001_core.sql`) :
@@ -145,14 +147,18 @@ Le suffixe `:D` ou `:C` ne retient que les soldes débiteurs ou créditeurs, par
 | Bilan (actif / passif) | Oui | Simplifié | Soldes de clôture, classes 1–5 |
 | Compte de résultat | Oui, avec soldes intermédiaires | Recettes / dépenses | Classes 6, 7, 8 |
 | Tableau des flux de trésorerie | Oui | Non | Variations N / N-1 + retraitements (CAFG, cessions) |
-| Notes annexes (environ 36 au référentiel) | Oui | 2 à 3 notes | Grand livre + modules |
+| Notes annexes (47 notes définies, environ 36 au référentiel) | Oui, les 47 | 4 notes essentielles (2, 7, 17, 35) | Grand livre + modules |
 | Liasse fiscale (DSF) | Selon pays | Selon pays | États OHADA + états fiscaux du pack pays |
 
 **Notes annexes : le différenciateur.** Trois familles : notes chiffrées dérivées du grand livre (calculées, rapprochées de leur poste), notes alimentées par un module (immobilisations, paie), notes narratives (brouillon IA à valider, jamais exporté sans relecture).
 
-**Couverture réelle.** Le référentiel SYSCOHADA révisé compte environ 36 notes ; `packages/statements/src/templates/syscohada-revise/notes.ts` est explicitement un **extrait** et en définit **16** (2, 3A, 3C, 6, 7, 8, 11, 13, 16A, 17, 18, 21, 24, 27A, 27B, 35). Les autres notes restent à écrire : une liasse produite aujourd'hui est incomplète sur ce point et doit être complétée à la main.
+**Couverture réelle.** Le référentiel SYSCOHADA révisé compte environ 36 notes ; `packages/statements/src/templates/syscohada-revise/notes.ts` en définit **47** : 1, 2, 3A, 3B, 3C, 3D, 3E, 4, 5, 6, 7, 8, 8A, 9, 10, 11, 12, 12B, 13, 14, 14B, 15, 16A, 16B, 16C, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27A, 27B, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37. Le compte dépasse 36 parce que les sous-notes comptent séparément et que six numéros (8A, 12B, 14B, 16C, 36, 37) ont été ajoutés pour porter des informations exigées sans poste dédié : dépréciations de l'actif circulant, transferts de charges, variation des capitaux propres, échéancier des créances et des dettes, engagements hors bilan, parties liées.
 
-**Contrôles bloquants** : total actif = total passif ; résultat du bilan = résultat du compte de résultat ; variation de trésorerie du TFT = trésorerie nette N − N-1 ; aucun solde orphelin ; total de chaque note = poste correspondant. **Alertes non bloquantes** : caisse créditrice, compte d'attente 47 non soldé, TVA de sens inhabituel, capitaux propres inférieurs à la moitié du capital (AUSCGIE).
+**35 notes sont calculées** depuis la balance et rapprochées d'un ou de plusieurs postes ; **12 exigent une saisie** parce que l'information n'est pas dans le grand livre et n'est donc pas dérivée : sûretés réelles (1), règles et méthodes (2), contrats de location-acquisition (3B), nature des mouvements de capitaux propres (14B), engagements de retraite (16B), échéances des créances et des dettes (16C), effectifs (27B), cinq derniers exercices et affectation du résultat (31), ratios de synthèse (34), événements postérieurs (35), engagements hors bilan (36), parties liées (37). Elles sortent au statut `DRAFT_REQUIRED`, sans aucun montant, avec la trame de ce qu'il faut fournir.
+
+**Encore indicatif.** Les numéros de notes, leurs intitulés et la table de passage comptes → lignes sont indicatifs, au même titre que les taux des packs pays : un expert-comptable inscrit dans le pays de dépôt doit les confronter au formulaire officiel de la liasse avant tout dépôt réel.
+
+**Contrôles bloquants** : total actif = total passif ; résultat du bilan = résultat du compte de résultat ; variation de trésorerie du TFT = trésorerie nette N − N-1 ; aucun solde orphelin ; total de chaque note chiffrée = poste (ou somme de postes) correspondant, un contrôle par note. **Alertes non bloquantes** : caisse créditrice, compte d'attente 47 non soldé, TVA de sens inhabituel, capitaux propres inférieurs à la moitié du capital (AUSCGIE).
 
 **Tests.** `fixtures/balances/demo-ci/` contient une balance de référence sur deux exercices, produite par le moteur comptable, avec les postes attendus vérifiés à la main ; `pnpm test:statements` la rejoue. Les balances réelles validées par un expert-comptable s'ajoutent au même endroit.
 
@@ -175,9 +181,9 @@ Chaque module émet des événements métier qu'un « posting engine » transfor
 | Paie | Salariés, bulletins, cotisations, livre de paie, déclarations sociales | 661 / 664 à 422, 431, 447 |
 | Fiscalité | TVA périodique, retenues, acomptes IS, DSF annuelle | Liquidation 443 / 445 à 444 |
 | Immobilisations | Fiche, plan d'amortissement, cessions | 681 à 28x ; alimente les notes annexes |
-| Stocks (**non implémenté**) | Inventaire simple, variation de stock | 603x / 31x–38x |
+| Stocks | Articles, mouvements valorisés (CUMP ou PEPS), inventaire physique, variation de clôture | 603x / 73x à 31x–38x |
 
-Sauf la dernière ligne, ces modules existent dans le dépôt (voir le tableau d'état d'implémentation). **Les stocks n'existent pas** : aucun paquet, aucune table, aucun écran, aucune route. Seuls les comptes 31x–38x figurent au plan de comptes SYSCOHADA ; la ligne reste ici parce que le besoin est réel, pas parce que le code l'est.
+Ces modules existent tous dans le dépôt (voir le tableau d'état d'implémentation). Les stocks sont tenus en **inventaire intermittent**, la méthode qu'applique la quasi-totalité des PME de l'espace OHADA : les achats vont en charges (601, 602, 604…) au fil de l'exercice, les mouvements de stock sont suivis en quantité et en valeur sans être comptabilisés, et seule la clôture passe deux écritures par le moteur d'imputation — annulation du stock initial (603x/73x à 3xx) puis constatation du stock final inventorié (3xx à 603x/73x). L'**inventaire permanent** (une écriture par mouvement) n'est pas implémenté. Aucun écran web n'existe encore : le module est exposé par l'API (`/v1/stock/...`).
 
 Facture électronique certifiée (FNE en Côte d'Ivoire, MECeF au Bénin…) : connecteur de certification par pays prévu dès la conception (`certified_invoice` dans le pack). Aucun connecteur réel n'est livré : `packages/invoicing/src/certification.ts` ne contient que `NullConnector` et `MockFneConnector` (simulateur activé par `CERTIFICATION_CONNECTOR=mock`). Banque et mobile money : API des agrégateurs, import de relevés lus par l'IA, puis partenariats bancaires directs — l'import et le rapprochement sont livrés, la connexion aux agrégateurs ne l'est pas. Clôture assistée : liste de contrôle mensuelle et annuelle puis verrouillage de la période.
 
@@ -253,9 +259,9 @@ L'exercice se verrouille seulement une fois l'accusé de dépôt joint au dossie
 | 1. États financiers | 8–10 semaines | Bilan, compte de résultat, TFT, notes annexes, contrôles, PDF officiel, portail cabinets, premier pack pays | Cabinets comptables |
 | 2. Gestion quotidienne | 10–12 semaines | Facturation, dépenses, trésorerie, mobile money, rapprochement, capture IA, TVA | PME en direct |
 | 3. Paie et fiscalité complète | 10–12 semaines | Paie par pays, déclarations, DSF, facture certifiée, assistant | PME + cabinets |
-| 4. Extension | Continu | Nouveaux packs pays, zone CEMAC, stocks, consolidation, SYCEBNL, API publique | Groupes, ONG |
+| 4. Extension | Continu | Nouveaux packs pays, zone CEMAC, consolidation, SYCEBNL, API publique | Groupes, ONG |
 
-**Où en est-on.** Les livrables des phases 0 à 3 sont dans le dépôt, à trois réserves près : les connecteurs externes (paiement, certification, portails DGI) sont simulés, les packs pays restent en brouillon et les notes annexes sont partielles. La phase 4 n'est pas commencée. Le détail est dans « Ce qui n'est pas encore construit », en fin de document.
+**Où en est-on.** Les livrables des phases 0 à 3 sont dans le dépôt, à trois réserves près : les connecteurs externes (paiement, certification, portails DGI) sont simulés, les packs pays restent en brouillon, et les notes annexes, désormais complètes en structure, gardent une numérotation et une table de passage indicatives, non validées par un professionnel inscrit. La phase 4 n'est pas commencée. Le détail est dans « Ce qui n'est pas encore construit », en fin de document.
 
 | Risque | Impact | Parade |
 | --- | --- | --- |
@@ -276,7 +282,7 @@ L'exercice se verrouille seulement une fois l'accusé de dépôt joint au dossie
 | Schéma et invariants | `packages/db/migrations/0001…0009`, tests `db` | Fait, testé contre PostgreSQL (RLS, triggers, chaînage) |
 | Plan de comptes SYSCOHADA | `packages/db/src/chart.ts` | Fait (indicatif) |
 | Moteur comptable | `packages/ledger` | Fait : brouillon/validation, contrepassation, chaînage, balance, import. Ancrage Merkle : code écrit et testé unitairement, mais jamais appelé ni publié (voir « Ce qui n'est pas encore construit ») |
-| Moteur d'états | `packages/statements` | Fait : bilan, CR, TFT, notes, contrôles, fixture de référence |
+| Moteur d'états | `packages/statements` | Fait : bilan, CR, TFT, 47 notes annexes, contrôles, fixture de référence |
 | Rendu PDF / Excel | `packages/render` | Fait : états, balance, grand livre, facture, bulletin, rapprochement ; Chromium + ExcelJS |
 | Règles et packs pays | `packages/rules`, `packages/country-packs` | Fait : 8 packs (CI, SN, TG, BJ, BF, ML, NE, CM), tous en `status: "DRAFT"`, aucun relu par un expert-comptable |
 | Posting engine | `packages/posting` | Fait : modèles paramétrés pour tous les événements métier |
@@ -284,6 +290,7 @@ L'exercice se verrouille seulement une fois l'accusé de dépôt joint au dossie
 | Trésorerie | `packages/treasury` | Fait : comptes, import CSV/SMS, rapprochement automatique borné, LLM sur ambiguïtés, caisse, prévision 13 semaines |
 | Paie | `packages/payroll` | Fait : salariés chiffrés (enveloppe, rotation), bulletins par pack, livre de paie, déclarations, écritures |
 | Immobilisations | `packages/assets` | Fait : plans linéaire/dégressif, dotations idempotentes, cessions, notes 3A/3C |
+| Stocks | `packages/invoicing/src/stock`, migration `0014_inventory.sql`, routes `/v1/stock` | Fait : articles (unité, CUMP ou PEPS), mouvements valorisés en bigint, inventaire physique et écart, variation de clôture par le posting engine. Inventaire intermittent seulement ; aucun écran web |
 | Fiscalité | `packages/tax` | Fait : TVA périodique et liquidation, acomptes IS/IMF, retenues, DSF Excel, calendrier |
 | Clôture et workflow | `packages/closing` | Fait : listes de contrôle, clôture bloquée par les contrôles, déverrouillage approuvé, circuit tenue → révision → états → visa → dépôt → verrouillé |
 | Pièces, IA, assistant | `packages/documents`, `packages/storage`, `packages/jobs` | Fait : capture, extraction, propositions en tampon, file de revue, mémoire des corrections, assistant à outils typés, anomalies |
@@ -300,14 +307,15 @@ Liste tenue à jour volontairement : tout ce qui est décrit plus haut comme cib
 
 | Sujet | État réel |
 | --- | --- |
-| Stocks / inventaire | Aucun code : ni paquet, ni table, ni écran. Seuls les comptes 31x–38x existent au plan de comptes |
+| Inventaire permanent des stocks | Non implémenté : seul l'inventaire intermittent existe. `stock_movement.entry_id` est prévu mais reste toujours NULL |
+| Écrans web des stocks | Aucun : le module n'est accessible que par l'API `/v1/stock` |
 | Encaissement mobile money | Aucun agrégateur réel ; seul `MockPaymentProvider` (liens en mémoire, webhooks signés localement) |
 | Facture certifiée (FNE, MECeF…) | Aucun connecteur réel ; `NullConnector` et `MockFneConnector` seulement |
 | Envoi de SMS | Aucun expéditeur : le canal `SMS` d'une relance est refusé, jamais simulé. `packages/treasury/src/sms.ts` **lit** des SMS mobile money, il n'en envoie pas |
 | Gestionnaire de clés (KMS) | Interface `KeyProvider` présente, mais seule `EnvKeyProvider` est livrée : la clé maître vient de l'environnement |
 | Ancrage externe de la chaîne de hash | Racine de Merkle et preuves d'inclusion écrites et testées (`packages/ledger/src/anchoring.ts`), mais aucun appelant, aucune table d'ancre en migration et un seul publieur, `MemoryAnchorPublisher`, qui garde tout en mémoire. Rien n'est publié à ce jour |
 | Recherche sémantique (pgvector) | Chemin vectoriel présent mais jamais emprunté : aucun embedding n'est calculé. La mémoire des catégorisations est lexicale |
-| Notes annexes | 16 notes définies sur environ 36 au référentiel |
+| Notes annexes | 47 notes définies (35 calculées, 12 en attente de saisie) ; numéros, intitulés et table de passage indicatifs, non validés par un professionnel inscrit |
 | Application mobile native (Expo) | Non commencée ; seule la PWA existe |
 | Saisie vocale en langues locales | Non commencée |
 | Packs pays | 8 packs, tous en `DRAFT`, aucun `reviewed_by`, aucun publié ; une seule balance de référence (`fixtures/balances/demo-ci`) |
