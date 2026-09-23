@@ -1,11 +1,24 @@
 # Mise en ligne d'ARCOMPT
 
-Ce guide part d'un domaine acheté chez GoDaddy et d'aucun serveur, et s'arrête
-quand un expert-comptable peut se connecter à `https://arcompt.votre-domaine.ci`
-et saisir une écriture. Il est écrit pour quelqu'un qui n'a jamais déployé.
+Ce guide part du domaine **`arcompt.com`** (enregistré chez GoDaddy) et d'aucun
+serveur, et s'arrête quand un expert-comptable peut se connecter à
+`https://arcompt.com` et saisir une écriture. Il est écrit pour quelqu'un qui
+n'a jamais déployé.
 
 Prévoir **une heure et demie** la première fois, dont une bonne demi-heure
 d'attente (propagation DNS, premier démarrage de Keycloak).
+
+Les quatre noms utilisés dans tout ce document :
+
+| Nom | Sert à |
+|---|---|
+| `arcompt.com` | L'application (nom canonique) |
+| `www.arcompt.com` | Redirection permanente vers `arcompt.com` |
+| `api.arcompt.com` | L'API — uniquement pour les webhooks entrants |
+| `auth.arcompt.com` | Keycloak, le fournisseur d'identité |
+
+L'adresse IP du serveur est notée `203.0.113.10` dans les exemples : remplacez-la
+partout par celle que votre hébergeur vous donnera.
 
 > **Ce qui est déployé ici est une première version de test.** La section
 > [Ce qui n'est pas encore de la production](#ce-qui-nest-pas-encore-de-la-production)
@@ -38,20 +51,20 @@ d'attente (propagation DNS, premier démarrage de Keycloak).
 Un seul serveur fait tourner sept conteneurs :
 
 ```
-                     Internet
-                        │ 80 / 443
-                  ┌─────▼─────┐
-                  │   Caddy   │  certificats TLS automatiques
-                  └──┬───┬──┬─┘
-       arcompt.…     │   │  │     auth.arcompt.…
-                     │   │  └──────────────► keycloak  (identité)
-                     │   └──api.arcompt.…──► api       (métier, webhooks)
-                     └──────────────────────► web      (PWA Next.js)
-                                                │
-                            ┌───────────────────┼───────────┐
-                            ▼                   ▼           ▼
-                        postgres             redis       worker
-                      (comptabilité)     (file d'attente) (tâches de fond)
+                       Internet
+                          │ 80 / 443
+                    ┌─────▼─────┐
+                    │   Caddy   │  certificats TLS automatiques
+                    └──┬───┬──┬─┘
+       arcompt.com     │   │  │   auth.arcompt.com
+                       │   │  └────────────────► keycloak  (identité)
+                       │   └── api.arcompt.com ► api       (métier, webhooks)
+                       └───────────────────────► web       (PWA Next.js)
+                                                   │
+                              ┌────────────────────┼────────────┐
+                              ▼                    ▼            ▼
+                          postgres              redis        worker
+                        (comptabilité)     (file d'attente)  (tâches de fond)
 ```
 
 Points à retenir :
@@ -62,7 +75,7 @@ Points à retenir :
   confort du développement.
 - **Le navigateur n'appelle jamais l'API directement.** Il parle au serveur Next,
   qui relaie par `/api/proxy/…` en ajoutant le jeton côté serveur. Le nom
-  `api.…` n'existe que pour les webhooks entrants (WhatsApp, paiement).
+  `api.arcompt.com` n'existe que pour les webhooks entrants (WhatsApp, paiement).
 - **Les migrations tournent avant l'application**, dans une tâche à part qui doit
   réussir pour que l'API démarre.
 - **Deux comptes PostgreSQL distincts** : le propriétaire du schéma migre,
@@ -100,18 +113,18 @@ moins chers pour ce gabarit :
 | Hetzner | CX22 / CPX21 | Le meilleur rapport prix/puissance ; centres de données en Allemagne et en Finlande |
 | Scaleway | DEV1-M / PRO2-XXS | Paris et Amsterdam ; facturation en euros |
 | DigitalOcean | Basic 4 Go | Interface très simple ; Francfort ou Amsterdam |
-| OVHcloud | VPS Comfort | Présence à Paris, facturation en Afrique de l'Ouest facile |
+| OVHcloud | VPS Comfort | Présence à Paris, paiement depuis l'Afrique de l'Ouest facile |
 
 **Choisissez un centre de données européen** (Paris, Francfort, Amsterdam) : la
-latence depuis Abidjan, Dakar ou Douala y est de l'ordre de 100 à 150 ms, contre
-250 ms et plus depuis l'Amérique du Nord. Il n'existe pas encore d'offre grand
-public équivalente en Afrique de l'Ouest chez ces hébergeurs.
+latence depuis Abidjan, Dakar, Lomé ou Douala y est de l'ordre de 100 à 150 ms,
+contre 250 ms et plus depuis l'Amérique du Nord. Il n'existe pas encore d'offre
+grand public équivalente en Afrique de l'Ouest chez ces hébergeurs.
 
 **Système d'exploitation : Debian 12 ou Ubuntu 24.04 LTS.** Le reste de ce guide
 suppose l'un des deux.
 
 Demandez aussi une **adresse IPv4 fixe** (c'est le cas par défaut) et notez-la :
-elle vous servira au chapitre DNS. On l'écrira `203.0.113.10` dans les exemples.
+elle vous servira au chapitre DNS.
 
 ---
 
@@ -193,43 +206,59 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
 ## 4. Brancher le domaine GoDaddy
 
-À faire **avant** de démarrer la pile : Caddy demande les certificats dès son
-premier démarrage, et Let's Encrypt vérifie que les noms pointent bien sur ce
-serveur. Les enregistrements DNS mettent quelques minutes à se propager.
+**À faire avant de démarrer la pile.** Caddy demande les certificats dès son
+premier démarrage : si les noms ne résolvent pas encore, la demande échoue.
 
 ### 4.1 Les enregistrements à créer
 
-Trois noms, trois enregistrements de type **A**, tous vers la même adresse IP.
-
-**Cas A — le domaine entier est pour ARCOMPT** (`exemple.ci`,
-`api.exemple.ci`, `auth.exemple.ci`) :
+Quatre noms. Trois enregistrements **A** vers l'adresse IP du serveur, et un
+**CNAME** pour `www`.
 
 | Type | Nom (« Host ») | Valeur (« Points to ») | TTL |
 |---|---|---|---|
-| A | `@` | `203.0.113.10` | 600 secondes |
-| A | `api` | `203.0.113.10` | 600 secondes |
-| A | `auth` | `203.0.113.10` | 600 secondes |
-| CNAME | `www` | `@` | 1 heure |
+| **A** | `@` | `203.0.113.10` | 600 secondes |
+| **A** | `api` | `203.0.113.10` | 600 secondes |
+| **A** | `auth` | `203.0.113.10` | 600 secondes |
+| **CNAME** | `www` | `@` | 1 heure |
 
-**Cas B — ARCOMPT vit sur un sous-domaine** d'un domaine déjà utilisé
-(`arcompt.exemple.ci`, `api.arcompt.exemple.ci`, `auth.arcompt.exemple.ci`) :
+Lecture de ce tableau : chez GoDaddy, le champ *Nom* ne contient que la partie
+gauche. `@` désigne le domaine nu, `arcompt.com`. Écrire `api` produit
+`api.arcompt.com` — **n'écrivez pas `api.arcompt.com` dans ce champ**, vous
+obtiendriez `api.arcompt.com.arcompt.com`.
 
-| Type | Nom (« Host ») | Valeur | TTL |
-|---|---|---|---|
-| A | `arcompt` | `203.0.113.10` | 600 secondes |
-| A | `api.arcompt` | `203.0.113.10` | 600 secondes |
-| A | `auth.arcompt` | `203.0.113.10` | 600 secondes |
+### 4.2 `www` : CNAME ou A ?
 
-Le cas B est préférable si le domaine héberge déjà un site vitrine : rien
-d'existant n'est touché.
+**Un CNAME vers `@`**, c'est la bonne réponse ici.
 
-### 4.2 Où cliquer chez GoDaddy
+Le Caddyfile (`infra/caddy/Caddyfile`) déclare `www.arcompt.com` comme un site à
+part entière qui **redirige en 301 vers `https://arcompt.com`**. L'application
+n'est servie que sous un seul nom : les URI de redirection de Keycloak et le
+cookie de session Auth.js sont attachés à un hôte précis, et se connecter sur
+`www` pour naviguer ensuite sur le domaine nu déconnecterait l'utilisateur.
+
+Conséquences pratiques :
+
+- `www.arcompt.com` doit **résoudre vers le serveur** — Caddy demande un
+  certificat pour ce nom aussi, afin que la redirection se fasse en HTTPS et non
+  sur un avertissement de sécurité.
+- Un CNAME vers `@` suffit et se comporte exactement comme un A : la résolution
+  suit la chaîne jusqu'à l'adresse du serveur, ce que la validation Let's Encrypt
+  accepte sans réserve.
+- L'avantage du CNAME est qu'il n'y a **qu'un seul endroit à modifier** le jour
+  où le serveur change d'adresse : l'enregistrement `@`.
+- Un enregistrement A sur `www` marcherait tout aussi bien ; il faudrait
+  simplement penser à le changer lui aussi lors d'un déménagement.
+
+`@` ne peut en revanche **pas** être un CNAME : le protocole DNS l'interdit à
+l'apex d'un domaine, et GoDaddy refusera. D'où l'enregistrement A.
+
+### 4.3 Où cliquer chez GoDaddy
 
 1. Connectez-vous sur `godaddy.com`, puis **Mes produits**.
-2. À la ligne de votre domaine, bouton **DNS** (ou **Gérer le DNS**).
+2. À la ligne `arcompt.com`, bouton **DNS** (ou **Gérer le DNS**).
 3. Vous arrivez sur **Gestion des DNS** → section **Enregistrements**.
-4. Pour chaque ligne du tableau ci-dessus : **Ajouter un enregistrement**, type
-   `A`, remplir *Nom* et *Valeur*, TTL **Personnalisé → 600 secondes**,
+4. Pour chaque ligne du tableau : **Ajouter un enregistrement**, choisir le type,
+   remplir *Nom* et *Valeur*, TTL **Personnalisé → 600 secondes**,
    **Enregistrer**.
 
 Quatre pièges propres à GoDaddy :
@@ -238,32 +267,69 @@ Quatre pièges propres à GoDaddy :
   parking de GoDaddy. Il faut le **modifier** (icône crayon), pas en ajouter un
   second — deux enregistrements A sur le même nom enverraient la moitié des
   visiteurs chez GoDaddy.
+- **Un CNAME `www` existe probablement déjà**, lui aussi vers le parking.
+  Modifiez-le pour qu'il pointe sur `@`.
 - **Désactivez le « Transfert de domaine »** (*Forwarding*) s'il est actif. Il
   prend le pas sur vos enregistrements et renvoie les visiteurs ailleurs.
   Menu du domaine → **Transfert** → supprimer.
 - **Les serveurs de noms doivent rester ceux de GoDaddy.** Si vous les avez
   changés un jour (pour Cloudflare par exemple), les enregistrements saisis ici
-  ne servent à rien : il faut les créer chez l'autre fournisseur.
-- **Pas de CNAME sur `@`.** C'est interdit par le protocole DNS, et GoDaddy le
-  refusera. D'où l'enregistrement `A` sur l'apex.
+  ne servent à rien : il faut les créer chez l'autre fournisseur. Et si vous
+  passez un jour par Cloudflare, mettez les trois entrées en mode **DNS only**
+  (nuage gris) : le mode mandataire casserait la validation de Caddy.
 
-### 4.3 Vérifier avant d'aller plus loin
+### 4.4 Vérifier avant d'aller plus loin
 
 Depuis votre poste (pas depuis le serveur) :
 
 ```bash
-dig +short arcompt.exemple.ci
-dig +short api.arcompt.exemple.ci
-dig +short auth.arcompt.exemple.ci
+dig +short arcompt.com
+dig +short www.arcompt.com
+dig +short api.arcompt.com
+dig +short auth.arcompt.com
 ```
 
-Les trois doivent répondre `203.0.113.10`, et **rien d'autre**. Sous Windows :
-`nslookup arcompt.exemple.ci`.
+Les quatre doivent finir sur `203.0.113.10`, et **rien d'autre**
+(`www.arcompt.com` affichera d'abord `arcompt.com.`, puis l'adresse : c'est
+normal, c'est la chaîne du CNAME). Sous Windows : `nslookup arcompt.com`.
 
-Tant qu'une des trois commandes ne répond pas, attendez. Comptez 5 à 30 minutes ;
-si rien ne bouge au bout d'une heure, relisez les quatre pièges ci-dessus. Passer
-à la suite trop tôt fait consommer inutilement le quota de Let's Encrypt
-(5 échecs par heure et par domaine).
+Tant qu'une des quatre commandes ne répond pas, **attendez**. Comptez 5 à
+30 minutes ; si rien ne bouge au bout d'une heure, relisez les quatre pièges
+ci-dessus.
+
+### 4.5 Ce qu'il faut pour que les certificats soient délivrés
+
+Caddy demande un certificat par nom à Let's Encrypt, qui vérifie que vous
+contrôlez bien chacun d'eux en venant frapper à la porte du serveur. Cinq
+conditions, toutes nécessaires :
+
+1. **Les quatre noms résolvent vers l'IP publique du serveur**, et ce **avant**
+   le premier `up`. C'est la condition qu'on oublie : un nom qui ne résout pas
+   encore donne un échec de validation, pas une attente.
+2. **Les ports 80 et 443 sont joignables depuis Internet.** Le port 80 sert au
+   défi HTTP-01 ; le fermer « parce qu'on est en HTTPS » empêche toute émission.
+   Vérifiez le pare-feu du serveur (§ 3.2) **et** celui de l'hébergeur (groupe
+   de sécurité, *cloud firewall*), qui est un second filtre.
+3. **Rien d'autre n'occupe ces ports** : ni Apache, ni Nginx installés par
+   l'image système. `sudo ss -lntp | grep -E ':80|:443'` ne doit rien montrer
+   avant le démarrage de Caddy.
+4. **`ACME_EMAIL` est une adresse valide.** Let's Encrypt s'en sert pour vous
+   prévenir si un renouvellement échoue.
+5. **Le volume `caddy_data` est conservé.** C'est là que vivent les certificats
+   et la clé de compte ACME. Le détruire force une réémission.
+
+Sur les quotas : Let's Encrypt limite à **5 échecs de validation par heure** pour
+un même nom, et à **50 certificats par semaine** pour un même domaine
+enregistré. En pratique on ne les atteint qu'en relançant en boucle un
+démarrage dont le DNS n'est pas prêt — d'où le § 4.4 avant celui-ci. En cas de
+doute, essayez d'abord avec l'environnement de test de Let's Encrypt en
+ajoutant `acme_ca https://acme-staging-v02.api.letsencrypt.org/directory` dans
+le bloc global du Caddyfile : les certificats obtenus ne seront pas reconnus par
+les navigateurs, mais les quotas y sont bien plus larges. Retirez cette ligne
+une fois la chaîne validée.
+
+Le renouvellement, ensuite, est automatique : Caddy s'en occupe environ 30 jours
+avant l'expiration, sans intervention.
 
 ---
 
@@ -311,9 +377,9 @@ le même deux fois, jamais un mot choisi à la main.
 
 | Variable | Ce que c'est | Comment l'obtenir |
 |---|---|---|
-| `WEB_DOMAIN` | Nom public de l'application | Chapitre 4 |
-| `API_DOMAIN` | Nom public de l'API (webhooks) | Chapitre 4 |
-| `AUTH_DOMAIN` | Nom public de Keycloak | Chapitre 4 |
+| `WEB_DOMAIN` | `arcompt.com` — nom canonique de l'application | Chapitre 4 |
+| `API_DOMAIN` | `api.arcompt.com` | Chapitre 4 |
+| `AUTH_DOMAIN` | `auth.arcompt.com` | Chapitre 4 |
 | `ACME_EMAIL` | Adresse prévenue si un certificat ne se renouvelle pas | La vôtre |
 | `API_IMAGE`, `WEB_IMAGE` | Images à déployer, **avec une version précise** | Onglet *Packages* du dépôt GitHub |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Propriétaire du schéma — **migrations uniquement** | `openssl rand -base64 32` |
@@ -333,6 +399,16 @@ Deux avertissements sur ce tableau :
 - **`PAYROLL_ENCRYPTION_KEY` ne se change pas.** Elle déchiffre les données de
   paie déjà enregistrées ; la perdre les rend définitivement illisibles.
   Conservez-en une copie ailleurs que sur ce serveur, comme un code bancaire.
+
+#### Les variables facultatives qui comptent
+
+| Variable | Défaut | Effet |
+|---|---|---|
+| `SHUTDOWN_GRACE_MS` | `10000` | Délai, en millisecondes, laissé par l'API aux requêtes en cours après un SIGTERM. Pendant ce temps `/health/ready` répond 503 pour sortir de rotation, tandis que `/health` reste vert |
+| `STOP_GRACE_PERIOD` | `20s` | Patience de Docker avant SIGKILL. **Doit rester supérieure à `SHUTDOWN_GRACE_MS`**, sinon le processus est tué au milieu de son arrêt en douceur |
+| `MIGRATION_LOCK_TIMEOUT` | `300` | Attente maximale, en secondes, du verrou de migration |
+| `MAX_DOCUMENT_BYTES` | `15728640` | Taille maximale d'une pièce téléversée (15 Mio). La limite de Caddy, dans le Caddyfile, est à 20 Mo pour laisser de la marge à l'enveloppe multipart |
+| `SENTRY_DSN`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `SECURITY_ALERT_WEBHOOK_URL` | vides | Sans elles, il ne reste que les journaux structurés |
 
 #### Les dépendances externes : réelles, ou repli assumé
 
@@ -388,7 +464,7 @@ arc ps          # état des conteneurs
 ```
 
 Le premier démarrage prend **deux à trois minutes** : Keycloak crée son schéma,
-et Caddy demande trois certificats à Let's Encrypt.
+et Caddy demande quatre certificats à Let's Encrypt.
 
 Suivez l'obtention des certificats :
 
@@ -396,12 +472,13 @@ Suivez l'obtention des certificats :
 arc logs -f caddy
 ```
 
-Vous cherchez trois lignes `certificate obtained successfully`. Si vous voyez
-plutôt des erreurs ACME, c'est presque toujours le DNS : revenez au § 4.3.
+Vous cherchez quatre lignes `certificate obtained successfully`. Si vous voyez
+plutôt des erreurs ACME, relisez le § 4.5 — c'est presque toujours le DNS ou le
+port 80.
 
-Quand `arc ps` montre `api` et `web` en `healthy`, ouvrez
-`https://arcompt.exemple.ci` : la page de connexion doit s'afficher avec un
-cadenas valide.
+Quand `arc ps` montre `api` et `web` en `healthy`, ouvrez `https://arcompt.com` :
+la page de connexion doit s'afficher avec un cadenas valide. Testez aussi
+`http://www.arcompt.com` : vous devez atterrir sur `https://arcompt.com`.
 
 ---
 
@@ -414,17 +491,22 @@ rejoue cette tâche ; les migrations déjà appliquées sont ignorées.
 
 La tâche fait deux choses, dans cet ordre :
 
-1. **`node ops/migrate.mjs`** applique les fichiers manquants de
+1. **`node infra/docker/ops/migrate.mjs`** applique les fichiers manquants de
    `packages/db/migrations/`, chacun dans sa transaction, **sous un verrou
    consultatif PostgreSQL**. Deux déploiements lancés en même temps ne peuvent
    donc pas rejouer la même migration : le second attend, en le disant, jusqu'à
    `MIGRATION_LOCK_TIMEOUT` secondes (300 par défaut).
-2. **`node ops/provision-role.mjs`** crée — ou met à jour — le rôle de connexion
-   `arcompt_app_login`, membre du groupe `arcompt_app`, puis **vérifie le modèle
-   de droits obtenu** : que l'application peut bien faire ce dont elle a besoin,
-   et surtout qu'elle ne peut pas supprimer une clé de paie, réécrire la piste
-   d'audit ni toucher à l'historique des migrations. Si un seul contrôle échoue,
-   la tâche s'arrête en échec et l'API ne démarre pas.
+2. **`node infra/docker/ops/provision-role.mjs`** crée — ou met à jour — le rôle
+   de connexion `arcompt_app_login`, membre du groupe `arcompt_app`, puis
+   **vérifie le modèle de droits obtenu** : que l'application peut bien faire ce
+   dont elle a besoin, et surtout qu'elle ne peut pas supprimer une clé de paie,
+   réécrire la piste d'audit ni toucher à l'historique des migrations. Si un seul
+   contrôle échoue, la tâche s'arrête en échec et l'API ne démarre pas.
+
+Ce second script n'est qu'un point d'entrée sans logique propre : tout vit dans
+`packages/db/src/provision.ts`. Depuis un dépôt installé, l'équivalent exact est
+`pnpm exec tsx scripts/provision-app-role.mts` ; l'image de production n'embarque
+ni pnpm ni tsx, d'où la variante `.mjs`.
 
 Voir le déroulé :
 
@@ -432,7 +514,8 @@ Voir le déroulé :
 arc logs migrate
 ```
 
-La rejouer à la main (par exemple après avoir changé `APP_DB_PASSWORD`) :
+La rejouer à la main (par exemple après avoir changé `APP_DB_PASSWORD`, ce qui
+est aussi la procédure de rotation du mot de passe) :
 
 ```bash
 arc run --rm migrate
@@ -451,8 +534,8 @@ pas être importé en production. On crée le realm à la main, une fois.
 
 ### 8.1 Un administrateur nominatif
 
-Ouvrez `https://auth.arcompt.exemple.ci` et connectez-vous avec
-`KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD`.
+Ouvrez `https://auth.arcompt.com` et connectez-vous avec `KEYCLOAK_ADMIN` /
+`KEYCLOAK_ADMIN_PASSWORD`.
 
 Créez tout de suite un administrateur à votre nom (realm `master` → *Users* →
 *Add user*, puis onglet *Role mapping* → rôle `admin`). Reconnectez-vous avec
@@ -472,11 +555,15 @@ lui, supprimez le compte d'amorçage, et videz les deux lignes
    - *Client ID* : `arcompt-web` (la valeur de `KEYCLOAK_WEB_CLIENT_ID`)
    - *Client authentication* : **On**
    - *Standard flow* : **coché**
-   - *Valid redirect URIs* : `https://arcompt.exemple.ci/api/auth/callback/keycloak`
-   - *Valid post logout redirect URIs* : `https://arcompt.exemple.ci/*`
-   - *Web origins* : `https://arcompt.exemple.ci`
+   - *Valid redirect URIs* : `https://arcompt.com/api/auth/callback/keycloak`
+   - *Valid post logout redirect URIs* : `https://arcompt.com/*`
+   - *Web origins* : `https://arcompt.com`
    - Onglet **Credentials** → copiez le *Client secret* dans
      `KEYCLOAK_WEB_CLIENT_SECRET`.
+
+Ces trois URL sont en `https://arcompt.com`, **sans `www`** : c'est le nom
+canonique, et Caddy redirige `www` vers lui avant même que Keycloak n'entre en
+jeu.
 
 ### 8.3 Le correspondant d'audience — l'étape qu'on oublie
 
@@ -510,29 +597,33 @@ dossier (qui autorise). Les deux se rejoignent automatiquement à la première
 connexion, **si l'adresse de courriel est la même des deux côtés et qu'elle est
 vérifiée dans Keycloak**.
 
-### 9.1 Créer le cabinet de démonstration dans ARCOMPT
+### 9.1 Le compte côté ARCOMPT
 
-Le seed crée une organisation de type cabinet, trois dossiers avec leur plan de
-comptes SYSCOHADA, des écritures d'exemple, et trois utilisateurs
-(`OWNER`, `ACCOUNTANT`, `REVIEWER`) :
-
-```bash
-arc run --rm -e SEED_FIRM=1 migrate node packages/db/src/seed.js
-```
-
-Il crée notamment `dirigeant@cabinet-demo.local` (rôle `OWNER`). Remplacez cette
-adresse par celle, réelle, de l'expert-comptable qui va tester :
+Le dépôt fournit un script fait exactement pour ça. Il crée une organisation, un
+dossier avec son plan de comptes, un exercice, deux tiers, quatre écritures
+validées et un brouillon — de quoi remplir tous les écrans dès la première
+connexion :
 
 ```bash
-arc exec postgres psql -U arcompt -d arcompt -c \
-  "UPDATE app_user SET email = 'expert@cabinet-reel.ci' WHERE email = 'dirigeant@cabinet-demo.local'"
+arc run --rm migrate node scripts/create-test-account.mjs --email prenom.nom@cabinet.ci
 ```
 
-### 9.2 Créer l'utilisateur dans Keycloak
+Options utiles : `--name` (nom affiché), `--org` (nom de l'organisation),
+`--company` (nom du dossier), `--year` (exercice). Le script est **rejouable** :
+relancé avec la même adresse, il ne crée rien et réimprime les informations.
+
+Il affiche à la fin l'identifiant du dossier, celui de l'utilisateur, et la
+marche à suivre pour la connexion. Notez-les.
+
+> Depuis un dépôt installé (poste de développement), le même script s'appelle
+> `pnpm exec tsx scripts/create-test-account.mts`. Dans l'image de production, il
+> a été compilé en `.mjs` et s'exécute avec `node`, sans tsx.
+
+### 9.2 L'identité côté Keycloak
 
 Realm `arcompt` → **Users** → **Add user** :
 
-- *Email* : exactement `expert@cabinet-reel.ci`
+- *Email* : exactement l'adresse passée à `--email`.
 - *Email verified* : **On** — sans cela, le rattachement automatique est refusé,
   délibérément (sinon s'inscrire avec l'adresse d'autrui suffirait à prendre son
   dossier).
@@ -541,56 +632,56 @@ Realm `arcompt` → **Users** → **Add user** :
 Onglet **Credentials** → *Set password* → décochez *Temporary* si vous voulez
 éviter le changement forcé au premier accès.
 
-### 9.3 Le second facteur
+### 9.3 Se connecter
 
-Le seed crée l'organisation cabinet avec `mfa_required = true`, et **l'API
-applique ce drapeau** : elle refuse en 403 tout jeton qui ne prouve pas un second
-facteur (claim `amr` contenant `mfa`/`otp`/`hwk`/`swk`, ou `acr` ≥ 2).
-
-Deux chemins, au choix :
-
-- **Le faire correctement** : enrôler l'utilisateur en TOTP (action requise
-  *Configure OTP*) et déclarer la correspondance ACR dans le realm
-  (*Realm settings → Sessions → ACR to LoA mapping*, par exemple `{"otp": 2}`)
-  avec une condition *Level of Authentication* dans le flux navigateur.
-  Détails dans `infra/keycloak/README.md`.
-- **Le désactiver le temps du test** :
-
-  ```bash
-  arc exec postgres psql -U arcompt -d arcompt -c \
-    "UPDATE organization SET mfa_required = false WHERE kind = 'FIRM'"
-  ```
-
-  À remettre à `true` avant toute utilisation réelle.
-
-### 9.4 Se connecter
-
-`https://arcompt.exemple.ci` → *Se connecter* → redirection vers Keycloak →
-retour sur le tableau de bord. Le rattachement `app_user.keycloak_sub` s'est fait
-tout seul.
+`https://arcompt.com` → *Se connecter* → redirection vers Keycloak → retour sur
+le tableau de bord. Le rattachement `app_user.keycloak_sub` s'est fait tout seul.
 
 Si ce n'est pas le cas, le rattachement manuel est décrit dans
 `infra/keycloak/README.md`.
+
+### 9.4 Note sur le second facteur
+
+L'API applique `organization.mfa_required` : quand ce drapeau est vrai, elle
+refuse en 403 tout jeton qui ne prouve pas un second facteur (claim `amr`
+contenant `mfa`/`otp`/`hwk`/`swk`, ou `acr` ≥ 2).
+
+Le script du § 9.1 crée l'organisation avec `mfa_required = false` : rien ne vous
+bloquera pour ce premier test. En revanche, le jeu de démonstration du portail
+(`SEED_FIRM=1`) crée, lui, une organisation qui **exige** le second facteur —
+si vous l'utilisez, il faudra enrôler l'utilisateur en TOTP et déclarer la
+correspondance ACR dans Keycloak (voir `infra/keycloak/README.md`), ou passer le
+drapeau à `false` :
+
+```bash
+arc exec postgres psql -U arcompt -d arcompt -c \
+  "UPDATE organization SET mfa_required = false WHERE id = '<uuid>'"
+```
+
+Avant une utilisation réelle par un cabinet, c'est l'inverse qu'il faut faire :
+activer le second facteur et l'exiger.
 
 ---
 
 ## 10. Vérifier que tout marche
 
 ```bash
-arc ps                                          # tout en « running », api et web en « healthy »
-curl -sS https://api.arcompt.exemple.ci/health  # {"ok":true,"service":"arcompt-api"}
-curl -sSo /dev/null -w '%{http_code}\n' https://api.arcompt.exemple.ci/health/ready   # 200
-curl -sSo /dev/null -w '%{http_code}\n' https://arcompt.exemple.ci                    # 200 ou 307
+arc ps                                     # tout en « running », api et web en « healthy »
+curl -sS https://api.arcompt.com/health    # {"ok":true,"service":"arcompt-api"}
+curl -sSo /dev/null -w '%{http_code}\n' https://api.arcompt.com/health/ready   # 200
+curl -sSo /dev/null -w '%{http_code}\n' https://arcompt.com                     # 200 ou 307
+curl -sSo /dev/null -w '%{http_code} %{redirect_url}\n' http://www.arcompt.com  # 308 https://arcompt.com/
 ```
 
 Les deux sondes de l'API ne disent pas la même chose : `/health` répond tant que
 le processus vit (« faut-il redémarrer ce conteneur ? »), `/health/ready` fait un
-aller-retour réel vers PostgreSQL (« cette instance peut-elle servir ? »).
+aller-retour réel vers PostgreSQL et passe à 503 dès que l'arrêt en douceur
+commence (« cette instance peut-elle servir ? »).
 
 Puis, dans le navigateur, le parcours qui prouve que la chaîne complète tient :
 
 1. se connecter ;
-2. ouvrir un dossier, aller au grand livre ;
+2. ouvrir le dossier, aller au grand livre ;
 3. saisir une écriture équilibrée et la valider ;
 4. **essayer d'en saisir une déséquilibrée** : elle doit être refusée par la base,
    pas seulement par l'écran ;
@@ -659,6 +750,11 @@ nano infra/env/prod.env            # images précédentes
 arc up -d
 ```
 
+La restauration recrée le rôle de groupe `arcompt_app` mais **pas** le rôle de
+connexion `arcompt_app_login`, qui est propre au serveur. C'est
+`arc run --rm migrate` qui le remet en place — il est rejoué automatiquement par
+le `arc up -d` ci-dessus.
+
 **Tout ce qui a été saisi depuis la sauvegarde est perdu.** C'est la raison pour
 laquelle on sauvegarde juste avant de déployer, et pas la veille.
 
@@ -673,9 +769,9 @@ Trois choses à sauvegarder, par ordre d'importance :
 2. **`infra/env/prod.env`** — en particulier `PAYROLL_ENCRYPTION_KEY`, sans
    laquelle les données de paie déjà enregistrées sont définitivement illisibles.
    À conserver dans un gestionnaire de mots de passe, pas dans le dépôt.
-3. **Le volume `caddy_data`** — les certificats. Sans lui, Caddy les redemande,
-   ce qui est sans conséquence sauf si vous redémarrez souvent (Let's Encrypt
-   limite à 5 émissions par semaine et par nom).
+3. **Le volume `caddy_data`** — les certificats et la clé de compte ACME. Sans
+   lui, Caddy les redemande, ce qui est sans conséquence sauf si vous redémarrez
+   souvent (§ 4.5, quotas).
 
 Une sauvegarde quotidienne, gardée 14 jours :
 
@@ -712,12 +808,15 @@ arc logs --tail=100 api
 
 ```bash
 arc logs --tail=50 caddy
-dig +short arcompt.exemple.ci        # doit rendre l'IP du serveur, et elle seule
+dig +short arcompt.com               # doit rendre l'IP du serveur, et elle seule
+sudo ss -lntp | grep -E ':80|:443'   # seul Caddy doit y être
 sudo ufw status                      # 80 et 443 ouverts
 ```
 
-Presque toujours du DNS : enregistrement `A` de parking GoDaddy resté en place,
-*Forwarding* actif, ou serveurs de noms délégués ailleurs (§ 4.2).
+Presque toujours du DNS ou le port 80 : enregistrement `A` de parking GoDaddy
+resté en place, *Forwarding* actif, serveurs de noms délégués ailleurs (§ 4.3),
+ou pare-feu de l'hébergeur qui bloque le port 80 alors que celui du serveur
+l'autorise (§ 4.5).
 
 ### Le conteneur `api` redémarre en boucle
 
@@ -758,7 +857,8 @@ Dans l'ordre de probabilité :
 
 1. **Le correspondant d'audience manque** (§ 8.3). C'est la cause n° 1.
 2. `KEYCLOAK_ISSUER` ne correspond pas **exactement** à l'émetteur du jeton —
-   `https://auth.…/realms/arcompt`, sans barre oblique finale, en `https`.
+   `https://auth.arcompt.com/realms/arcompt`, sans barre oblique finale, en
+   `https`.
 3. L'horloge du serveur dérive : `timedatectl status` doit indiquer
    `System clock synchronized: yes`. Un décalage de quelques minutes suffit à
    faire rejeter tous les jetons.
@@ -768,8 +868,7 @@ navigateur et décodez son deuxième segment (`aud`, `iss`, `exp`).
 
 ### Connexion acceptée, mais 403 partout
 
-- **Second facteur manquant** alors que l'organisation l'exige (§ 9.3) : le jeton
-  doit porter `amr` ou `acr` ≥ 2.
+- **Second facteur manquant** alors que l'organisation l'exige (§ 9.4).
 - **Rattachement non fait** : l'adresse diffère entre Keycloak et `app_user`, ou
   n'est pas vérifiée dans Keycloak.
 
@@ -781,17 +880,32 @@ arc exec postgres psql -U arcompt -d arcompt -c \
 - **Aucune appartenance** : l'utilisateur existe mais n'est membre d'aucun
   dossier (`company_member`).
 
+### Déconnexion en naviguant, ou boucle de connexion
+
+Vérifiez que vous êtes bien sur `https://arcompt.com` et non sur
+`https://www.arcompt.com`. Le cookie de session est attaché au nom canonique ;
+la redirection du § 4.2 doit vous y amener avant toute connexion. Si elle ne se
+fait pas, c'est que l'enregistrement `www` manque ou que son certificat n'a pas
+pu être émis.
+
 ### Keycloak boucle sur `http://` ou refuse la redirection
 
 `KC_PROXY_HEADERS=xforwarded` et `KC_HOSTNAME` sont déjà posés par
-`docker-compose.prod.yml`. Vérifiez que `AUTH_DOMAIN` est bien le nom public et
-que l'URI de redirection du client `arcompt-web` est en `https`.
+`docker-compose.prod.yml`. Vérifiez que `AUTH_DOMAIN` vaut bien `auth.arcompt.com`
+et que l'URI de redirection du client `arcompt-web` est en `https`, sur le nom
+canonique (§ 8.2).
 
 ### Le téléchargement d'un PDF échoue
 
 Seul le rendu PDF utilise Chromium. Le message `Chromium introuvable` signifie
 que l'image a été modifiée ; une erreur de mémoire signifie que la machine est
 trop petite (§ 2) — ajoutez le fichier d'échange du § 3.4.
+
+### Requêtes coupées à chaque redéploiement
+
+`SHUTDOWN_GRACE_MS` doit rester **inférieure** à `STOP_GRACE_PERIOD` (§ 5.3),
+sinon Docker envoie SIGKILL pendant que l'API essaie encore de finir les
+requêtes en cours.
 
 ### Plus de place sur le disque
 
@@ -823,6 +937,7 @@ arc down -v         # DÉTRUIT AUSSI la base et les certificats — irréversibl
 | Extraction IA | Simulée sans `ANTHROPIC_API_KEY` | Fournisseur et montants inventés dans la file de validation |
 | Encaissement mobile money | Aucun opérateur réel implémenté | Fonction désactivée ; les liens de paiement ne sont pas montés |
 | Facture certifiée (FNE/MECeF) | Aucun connecteur réel | Pas de certification fiscale sur les factures |
+| Second facteur | Désactivé par défaut sur les organisations créées | À activer avant tout usage par un cabinet (§ 9.4) |
 | Haute disponibilité | Une seule machine, un seul exemplaire de chaque service | Toute mise à jour coupe le service quelques secondes ; une panne du serveur coupe tout |
 | Sauvegardes hors site | À mettre en place (§ 13) | Un disque perdu = la comptabilité perdue |
 | Surveillance | `SENTRY_DSN` et `SECURITY_ALERT_WEBHOOK_URL` vides | Les alertes de sécurité restent dans les journaux et ne réveillent personne |
