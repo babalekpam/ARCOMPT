@@ -29,6 +29,9 @@ export default async function AccessPendingPage({
           {content[1]}
         </p>
         {reason === "session" || reason === "mfa" ? <RetrySignIn /> : null}
+        {(reason === "mfa" || !reason) ? <Link href="/account" className="mt-5 block text-sm font-medium text-teal-700 underline dark:text-teal-300">
+          Open account settings to set up a second factor
+        </Link> : null}
         {reason === "unavailable" ? <Link href="/api/session/landing" className="mt-5 inline-block text-sm font-medium text-teal-700 underline dark:text-teal-300">Try again</Link> : null}
         <Link href="/" className="mt-5 inline-block text-sm font-medium text-teal-700 underline dark:text-teal-300">
           Return to home
