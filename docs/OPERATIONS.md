@@ -20,11 +20,20 @@ Ce guide décrit le déploiement et l'exploitation d'ARCOMPT conformément à `S
 cp .env.example .env            # renseigner les secrets depuis le gestionnaire de secrets
 docker compose up -d            # PostgreSQL + Redis
 pnpm install
-pnpm db:migrate                 # migrations 0001 → 0009, sous un compte distinct du rôle applicatif
+pnpm db:migrate                 # migrations 0001 → 0010, sous le compte propriétaire du schéma
+
+# Une fois par base : créer le rôle de connexion applicatif, puis basculer
+# DATABASE_URL de l'API et du worker dessus (voir « Rôles SQL »).
+APP_DB_PASSWORD='<mot de passe fort>' pnpm exec tsx scripts/provision-app-role.mts
+
 SEED_FIRM=1 pnpm db:seed        # dossier PME + cabinet de démonstration (développement uniquement)
 pnpm dev                        # web :3000, API :4000
 pnpm worker                     # dans un second terminal
 ```
+
+Ordre imposé : `db:migrate` crée le rôle de groupe `arcompt_app` et pose ses
+droits ; `provision-app-role` ne fait que lui rattacher un rôle de connexion.
+Lancé avant les migrations, il refuse avec un message explicite.
 
 ## Configuration de production : démarrage strict
 
@@ -32,13 +41,104 @@ Avec `NODE_ENV=production`, l'API refuse de démarrer tant que les secrets et le
 
 Quelques simulations peuvent être acceptées sciemment en production au moyen de variables d'opt-out explicites, une par sujet ; elles sont volontairement repérables par une simple recherche dans la configuration. Les secrets de signature et l'opérateur de paiement n'en ont pas : aucune exception n'y est possible. Le détail des variables, de leur effet et des opt-out disponibles vit dans `.env.example`, qui reste la référence à jour.
 
+## Sondes et arrêt en douceur
+
+| Point | Ce qu'il fait | Usage |
+| --- | --- | --- |
+| `GET /health` | Répond `{ok:true}` sans toucher à aucune dépendance | Vivacité : un échec veut dire « redémarrez ce conteneur » |
+| `GET /ready` (alias `GET /health/ready`) | Aller-retour `SELECT 1` vers PostgreSQL, délai borné à 2 s ; `200` si tout est debout, `503` sinon | Aptitude : c'est ce point que l'équilibreur de charge interroge |
+
+Le corps de `/ready` ne donne que l'état par dépendance
+(`{"ready":false,"dependencies":[{"name":"database","state":"down"}]}`) : ni
+message d'erreur, ni hôte, ni identifiant. Le détail part dans les journaux
+(`ready.dependency_down`). Ne branchez **pas** la sonde de vivacité sur `/ready` :
+une base momentanément injoignable ferait redémarrer en boucle des processus
+parfaitement sains.
+
+À l'arrêt (SIGTERM, SIGINT), l'API déroule, dans cet ordre : `/ready` bascule en
+`503` (l'équilibreur cesse d'envoyer du trafic), le serveur HTTP n'accepte plus
+de connexion et laisse finir les requêtes en cours, puis le pool PostgreSQL est
+fermé — une écriture comptable est une transaction multi-instructions, la couper
+en vol laisse un brouillon orphelin. Le délai de grâce vaut `SHUTDOWN_GRACE_MS`
+(10 s par défaut) et doit rester **inférieur** au
+`terminationGracePeriodSeconds` de l'orchestrateur, qui enverra SIGKILL. Le
+worker suit le même schéma (fermeture de la file, puis du pool).
+
 ## Rôles SQL
 
-**Procédure cible ; la séparation n'est pas encore appliquée par le dépôt.** Aucun script ni migration ne la met en place : c'est une opération manuelle à faire sur chaque environnement.
+Deux comptes, deux usages. La séparation est outillée : une migration pose le
+modèle de droits, un script crée le rôle de connexion.
 
-- Les migrations s'exécutent avec un compte propriétaire (`arcompt` en local, compte de migration dédié en production).
-- L'API et le worker devraient se connecter avec un rôle de connexion membre de `arcompt_app` : sans DDL, sans contournement de la Row-Level Security, sans écriture directe sur `account_balance`, `audit_log` ni `ai_call_log`. Ce rôle de connexion n'existe nulle part dans le dépôt : `0001_core.sql` crée `arcompt_app` en `NOLOGIN`, `docker-compose.yml` et `.env.example` connectent l'application avec le propriétaire du schéma, et seul le harnais de test crée `arcompt_app_login` (`packages/db/src/testing.ts`). Le créer et basculer `DATABASE_URL` dessus est à faire à la main ; tant que ce n'est pas fait, l'application tourne avec les droits du propriétaire (voir `docs/SECURITY.md` § 6).
-- Aucun administrateur n'a de droit SQL direct sur les tables comptables en production ; les interventions passent par les procédures du portail (`admin_access_log`, break-glass). Là encore, rien dans le dépôt ne l'impose : c'est une règle d'exploitation.
+| Compte | Qui l'utilise | Droits |
+| --- | --- | --- |
+| Propriétaire du schéma (`arcompt` en local, compte de migration dédié en production) | `pnpm db:migrate`, `pnpm db:seed`, `scripts/provision-app-role.mts`, `scripts/create-test-account.mts` | DDL, propriétaire des tables |
+| `arcompt_app_login` (membre de `arcompt_app`) | API et worker (`DATABASE_URL`) | DML seulement, soumis à la RLS, sans DDL, sans `BYPASSRLS` |
+
+```bash
+# une fois par base, avec DATABASE_URL pointant le compte propriétaire
+APP_DB_PASSWORD='<mot de passe fort, ≥ 16 caractères>' \
+  pnpm exec tsx scripts/provision-app-role.mts
+# puis, dans la configuration de l'API et du worker :
+DATABASE_URL=postgres://arcompt_app_login:<mot de passe>@<hôte>:5432/<base>
+```
+
+Le script crée le rôle de connexion, le rend membre de `arcompt_app`, lui donne
+`CONNECT` sur la base, vérifie qu'il n'est ni superutilisateur ni `BYPASSRLS`,
+puis **contrôle les 30 droits attendus** (`has_table_privilege`) et sort en
+erreur si la base a divergé du schéma. Il est idempotent : relancé avec un autre
+mot de passe, il sert de rotation. Variables : `APP_DB_PASSWORD` (obligatoire)
+et, pour un autre nom de rôle, `APP_DB_USER` — le nom qu'emploie la tâche de
+migration de l'image — ou son synonyme `APP_DB_ROLE`. Aucun mot de passe n'est
+écrit dans le dépôt : c'est précisément pourquoi ce rôle ne peut pas naître
+d'une migration.
+
+Ce que le rôle applicatif ne peut pas faire, et qui est prouvé par
+`packages/db/src/provision.test.ts` : supprimer une clé de paie
+(`payroll_tenant_key`), modifier ou supprimer la piste d'audit, écrire dans
+`account_balance`, supprimer une ligne de `admin_access_log`, réécrire un accusé
+anti-rejeu WhatsApp, lire ou modifier `schema_migration`. L'inaltérabilité d'une
+écriture **validée**, elle, reste tenue par les triggers : l'application garde
+`UPDATE`/`DELETE` sur `journal_entry` parce qu'elle doit pouvoir travailler ses
+brouillons.
+
+> Migration `0010_app_role.sql` : jusqu'à elle, l'`ALTER DEFAULT PRIVILEGES` de
+> fin de `0001_core.sql` réaccordait les quatre droits d'écriture sur **toute**
+> table créée ensuite, ce qui annulait silencieusement les restrictions des
+> migrations suivantes — le rôle applicatif pouvait notamment supprimer la clé
+> de chiffrement de la paie d'un dossier, donc rendre ses données de paie
+> définitivement illisibles. La migration retire ces privilèges par défaut :
+> **toute nouvelle table doit désormais accorder ses droits explicitement**,
+> sans quoi l'application recevra un « permission denied » franc au lieu d'un
+> excès de droits silencieux.
+
+- Aucun administrateur n'a de droit SQL direct sur les tables comptables en production ; les interventions passent par les procédures du portail (`admin_access_log`, break-glass). Rien dans le dépôt ne l'impose : c'est une règle d'exploitation.
+
+## Compte de test pour un expert-comptable
+
+```bash
+DATABASE_URL=<compte propriétaire> \
+  pnpm exec tsx scripts/create-test-account.mts --email prenom.nom@cabinet.tg
+```
+
+Crée, sur une base vivante : une organisation, un dossier sur le pack pays Togo
+(`tg@2025.1`, XOF), l'utilisateur avec une appartenance `OWNER`, deux tiers,
+quatre écritures validées (à-nouveaux, vente, achat, règlement) et un brouillon,
+pour que les écrans ne soient pas vides. Il imprime les identifiants à
+transmettre : identifiant du dossier (`X-Tenant-Id`), identifiant utilisateur
+(`X-User-Id`), et la marche à suivre selon `AUTH_MODE`.
+
+- `AUTH_MODE=oidc` : créez dans Keycloak un utilisateur portant **exactement**
+  la même adresse, courriel vérifié. Le rattachement au compte ARCOMPT se fait
+  tout seul au premier appel (`auth_link_subject`, migration 0009) : aucun SQL à
+  la main.
+- `AUTH_MODE=dev` (poste local uniquement) : les deux identifiants imprimés
+  suffisent, en en-têtes HTTP.
+
+Options : `--name`, `--org`, `--company`, `--year`. Réexécuté à l'identique, le
+script ne crée rien et réimprime les informations ; si l'adresse existe dans une
+autre configuration, il refuse en disant ce qu'il a trouvé plutôt que d'écraser
+un compte. Le pack `tg` est en statut `DRAFT` : taux et barèmes restent
+indicatifs tant que l'expert-comptable référent ne les a pas validés.
 
 ## Secrets et clés
 
@@ -79,7 +179,7 @@ Mettre l'ancrage en service suppose trois chantiers, aucun commencé : une table
 
 Aucune de ces étapes n'est automatisée : la revue est une liste à dérouler à la main.
 
-1. Tests de fuite entre dossiers (`pnpm test:tenancy`) sur la version déployée.
+1. Tests de fuite entre dossiers et contrôle du modèle de droits (`pnpm test:tenancy`, qui couvre `db.test.ts` et `provision.test.ts`) sur la version déployée. Sur la base de production, le même contrôle s'obtient en relançant `scripts/provision-app-role.mts` : il revérifie les 30 droits attendus sans rien changer d'autre que le mot de passe fourni.
 2. Revue des droits (`GET /v1/portal/org/entitlement-review`) et suspension des comptes inactifs. Les rôles se lisent et se modifient dans `company_member` depuis le portail, avec effet à la requête suivante.
 3. Audit du journal des accès administrateur et des demandes break-glass.
 4. Vérification des chaînes de hash (`Ledger.verifyChain`) ; la vérification des ancres attendra leur mise en service.

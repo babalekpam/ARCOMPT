@@ -4,6 +4,7 @@ import { createDb } from "@arcompt/db";
 import { Ledger, PostgresStore } from "@arcompt/ledger";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { beginDraining } from "./health.js";
 import { initTelemetry, log } from "./telemetry.js";
 
 /**
@@ -28,7 +29,7 @@ const app = createApp({
     }),
 });
 
-serve({ fetch: app.fetch, port: cfg.port }, () => {
+const server = serve({ fetch: app.fetch, port: cfg.port }, () => {
   log("info", "api.started", {
     port: cfg.port,
     auth: cfg.auth.mode,
@@ -38,3 +39,58 @@ serve({ fetch: app.fetch, port: cfg.port }, () => {
     degraded: cfg.degraded.length,
   });
 });
+
+/**
+ * Arrêt en douceur (même schéma que `worker.ts`). Une écriture comptable est
+ * une transaction multi-instructions : la couper en plein vol laisse un
+ * brouillon orphelin ou une numérotation en attente. L'ordre compte :
+ *
+ *   1. `/ready` répond 503 : l'équilibreur cesse d'envoyer du trafic neuf ;
+ *   2. le serveur HTTP n'accepte plus de connexion, les requêtes en cours
+ *      finissent, dans la limite du délai de grâce ;
+ *   3. le pool PostgreSQL est fermé, transactions terminées.
+ *
+ * Délai de grâce : `SHUTDOWN_GRACE_MS` (10 s par défaut), à tenir sous le
+ * `terminationGracePeriodSeconds` de l'orchestrateur, qui enverra SIGKILL.
+ */
+const DEFAULT_GRACE_MS = 10_000;
+const configuredGrace = Number(process.env.SHUTDOWN_GRACE_MS);
+// Une valeur illisible ne doit pas se traduire par un délai nul, c'est-à-dire
+// par la coupure immédiate des requêtes en cours.
+const GRACE_MS = Number.isFinite(configuredGrace) && configuredGrace > 0 ? configuredGrace : DEFAULT_GRACE_MS;
+const POOL_CLOSE_TIMEOUT_S = 5;
+let stopping = false;
+
+const shutdown = async (signal: string): Promise<void> => {
+  if (stopping) return; // un second signal ne relance pas la séquence
+  stopping = true;
+  beginDraining();
+  log("info", "api.shutdown.start", { signal, graceMs: GRACE_MS });
+
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      log("warn", "api.shutdown.grace_exceeded", { graceMs: GRACE_MS });
+      resolve();
+    }, GRACE_MS);
+    timer.unref?.();
+    server.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+    // Les connexions persistantes inactives retiendraient le serveur ouvert
+    // jusqu'au délai de grâce sans rien servir.
+    const idle = (server as { closeIdleConnections?: () => void }).closeIdleConnections;
+    if (typeof idle === "function") idle.call(server);
+  });
+
+  try {
+    await db.end({ timeout: POOL_CLOSE_TIMEOUT_S });
+  } catch (e) {
+    log("error", "api.shutdown.pool_close_failed", { detail: e instanceof Error ? e.message : String(e) });
+  }
+  log("info", "api.shutdown.done", { signal });
+  process.exit(0);
+};
+
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));

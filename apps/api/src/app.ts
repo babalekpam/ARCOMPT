@@ -4,9 +4,10 @@ import { logger } from "hono/logger";
 import type { Sql } from "postgres";
 import { LedgerError, type Ledger } from "@arcompt/ledger";
 import { authMiddleware, type AuthOptions } from "./auth.js";
+import { readinessHandler } from "./health.js";
 import { resolveIdentity, touchLastActive, type TokenIdentityHints } from "./identity.js";
 import { rateLimit, securityHeaders } from "./security.js";
-import { BurstDetector, raiseSecurityAlert } from "./telemetry.js";
+import { BurstDetector, log, raiseSecurityAlert } from "./telemetry.js";
 import { accountsRoutes } from "./routes/accounts.js";
 import { assetsRoutes } from "./routes/assets.js";
 import { closingRoutes } from "./routes/closing.js";
@@ -44,7 +45,19 @@ export function createApp(deps: AppDeps) {
   app.use("/v1/documents/*", rateLimit({ name: "ai", limit: 60, windowMs: 60_000, onLimited: (key) => void raiseSecurityAlert({ signal: "ai.call_spike", detail: key }) }));
   app.use("/v1/render/*", rateLimit({ name: "render", limit: 30, windowMs: 60_000 }));
 
+  // Vivacité : aucune dépendance touchée. Un échec ici veut dire « redémarrez
+  // le conteneur », pas « la base est tombée » — d'où l'absence de requête SQL.
   app.get("/health", (c) => c.json({ ok: true, service: "arcompt-api" }));
+
+  // Aptitude : aller-retour réel vers PostgreSQL, 503 si une dépendance requise
+  // manque ou si l'arrêt en douceur a commencé. Le corps ne dit que l'état par
+  // dépendance ; le détail des pannes part dans les journaux.
+  const readiness = readinessHandler({
+    ...(deps.db ? { db: deps.db } : {}),
+    ...(deps.quiet ? {} : { onFailure: (name: string, error: unknown) => log("warn", "ready.dependency_down", { dependency: name, detail: error instanceof Error ? error.message : String(error) }) }),
+  });
+  app.get("/ready", readiness);
+  app.get("/health/ready", readiness); // alias : certaines sondes d'infrastructure préfèrent ce chemin
 
   const api = new Hono();
   // Autorisation depuis la base : rôles et dossiers viennent de company_member,
