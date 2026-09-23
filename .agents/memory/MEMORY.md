@@ -6,3 +6,4 @@
 - [Managed Publish schema round trips](publish-schema-roundtrip.md) — inspect generated SQL, not just the dev schema; bare boolean checks and custom security objects may not survive the diff.
 - [R2 placement for African documents](r2-placement.md) — prefer Western Europe hint over Automatic; proxy-origin creation placed Automatic in North America.
 - [R2 credential scope checks](r2-credential-scope.md) — test object operations and cross-bucket access; a working token may still cover unintended buckets.
+- [Clerk JWT header type](clerk-jwt-header-type.md) — `verifyToken` headerType is the JWT `typ`, not the HTTP Bearer scheme; keep session and origin checks intact.

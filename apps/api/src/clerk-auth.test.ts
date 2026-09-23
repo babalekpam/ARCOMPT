@@ -66,6 +66,14 @@ describe("Clerk API authentication", () => {
     expect((await request(app(async () => identity()))).status).toBe(401);
   });
 
+  it("verifies the JWT without confusing its header type with the Bearer transport", async () => {
+    expect((await request(app(async () => identity()))).status).toBe(200);
+    expect(verifyToken).toHaveBeenCalledWith("session-token", expect.objectContaining({
+      authorizedParties: ["https://app.example"],
+    }));
+    expect(verifyToken.mock.calls.at(-1)?.[1]).not.toHaveProperty("headerType");
+  });
+
   it("discovers only database memberships without a selected tenant", async () => {
     const hono = app(async () => identity({
       memberships: [{ companyId: TENANT, role: "OWNER" }, { companyId: OTHER, role: "REVIEWER" }],

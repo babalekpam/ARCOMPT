@@ -271,21 +271,8 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
         payload = await verifyToken(token, {
           secretKey: opts.clerkSecretKey!,
           authorizedParties: opts.authorizedParties,
-          headerType: "Bearer",
         }) as JWTPayload & { fva?: unknown; azp?: unknown };
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          const detail = error && typeof error === "object"
-            ? error as { name?: unknown; code?: unknown; reason?: unknown }
-            : {};
-          const safe = (value: unknown) =>
-            typeof value === "string" && /^[a-zA-Z0-9_ -]{1,64}$/.test(value) ? value : "unknown";
-          console.warn("Clerk session token rejected", {
-            name: safe(detail.name),
-            code: safe(detail.code),
-            reason: safe(detail.reason),
-          });
-        }
+      } catch {
         return unauthorized(c, "Jeton Clerk invalide");
       }
       const sub = typeof payload.sub === "string" ? payload.sub : "";
