@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { createDocumentsInfraFromEnv, createDocumentsServiceFromEnv } from "@arcompt/documents";
 import { MockProvider, PgConversationStore, WhatsAppBot, createProviderFromEnv, verifyMetaSignature, type WhatsAppProvider } from "@arcompt/whatsapp";
 import type { AppDeps } from "../app.js";
-import { INSECURE_OPT_OUT, guardSimulatedDependency } from "../config.js";
+import { ConfigError } from "../config.js";
 
 /**
  * Webhook WhatsApp. À monter SANS le middleware d'authentification tenant
@@ -26,19 +26,18 @@ export function resetWhatsAppProvider(): void {
   cachedProvider = null;
 }
 
-function providerFor(deps: WhatsAppRouteDeps): WhatsAppProvider {
+function providerFor(deps: WhatsAppRouteDeps): WhatsAppProvider | null {
   if (deps.whatsapp?.provider) return deps.whatsapp.provider;
   if (!cachedProvider) {
     const real = createProviderFromEnv();
     if (!real) {
-      // Le mock avale tous les messages sortants : interdit en production.
-      guardSimulatedDependency({
-        simulated: "le canal WhatsApp sortant (tous les messages seraient avalés sans être envoyés)",
-        missing: "WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID est absent",
-        optOut: INSECURE_OPT_OUT.whatsapp,
-      });
+      if (process.env.NODE_ENV === "production") return null;
+      // Development keeps the local mock, but production never does.
+      console.warn("[arcompt] SIMULATION : canal WhatsApp sortant (développement uniquement).");
+      cachedProvider = new MockProvider(process.env.WHATSAPP_VERIFY_TOKEN ?? "dev-verify");
+    } else {
+      cachedProvider = real;
     }
-    cachedProvider = real ?? new MockProvider(process.env.WHATSAPP_VERIFY_TOKEN ?? "dev-verify");
   }
   return cachedProvider;
 }
@@ -46,18 +45,33 @@ function providerFor(deps: WhatsAppRouteDeps): WhatsAppProvider {
 export function whatsappRoutes(deps: WhatsAppRouteDeps) {
   const r = new Hono();
   const appSecret = deps.whatsapp?.appSecret ?? process.env.WHATSAPP_APP_SECRET;
-  if (!appSecret && process.env.NODE_ENV === "production") throw new Error("WHATSAPP_APP_SECRET est obligatoire en production");
-  // Le fournisseur est résolu au montage : une production sans WHATSAPP_TOKEN/
-  // WHATSAPP_PHONE_ID refuse de démarrer au lieu d'avaler les messages.
+  const token = Boolean(process.env.WHATSAPP_TOKEN?.trim());
+  const phoneId = Boolean(process.env.WHATSAPP_PHONE_ID?.trim());
+  if (process.env.NODE_ENV === "production" && token !== phoneId) {
+    throw new ConfigError(["WHATSAPP_TOKEN et WHATSAPP_PHONE_ID : configuration partielle — les deux variables sont nécessaires pour activer le canal WhatsApp."]);
+  }
+  if (token && phoneId && !appSecret && process.env.NODE_ENV === "production") {
+    throw new Error("WHATSAPP_APP_SECRET est obligatoire en production");
+  }
+  const unavailable = () => new Response(JSON.stringify({ error: { code: "UNAVAILABLE", message: "Canal WhatsApp désactivé : fournisseur non configuré" } }), {
+    status: 503,
+    headers: { "content-type": "application/json" },
+  });
+  // Resolve once at mount time so development announces its mock explicitly;
+  // production resolves to null and remains a disabled 503 route.
   providerFor(deps);
 
   r.get("/webhook", (c) => {
-    const challenge = providerFor(deps).verifyWebhook(c.req.query());
+    const provider = providerFor(deps);
+    if (!provider) return unavailable();
+    const challenge = provider.verifyWebhook(c.req.query());
     if (challenge === null) return c.text("Forbidden", 403);
     return c.text(challenge);
   });
 
   r.post("/webhook", async (c) => {
+    const provider = providerFor(deps);
+    if (!provider) return unavailable();
     const raw = await c.req.text();
     if (appSecret && !verifyMetaSignature(raw, c.req.header("x-hub-signature-256"), appSecret)) {
       return c.json({ error: { code: "BAD_SIGNATURE", message: "Signature du webhook invalide" } }, 401);
@@ -70,7 +84,6 @@ export function whatsappRoutes(deps: WhatsAppRouteDeps) {
       return c.json({ error: { code: "VALIDATION", message: "Corps JSON attendu" } }, 400);
     }
     const db = deps.db;
-    const provider = providerFor(deps);
     const infra = createDocumentsInfraFromEnv(db);
     const bot = new WhatsAppBot({
       provider,

@@ -60,8 +60,7 @@ queue.process("document.extract", async (payload) => {
 
 queue.process("whatsapp.reply", async (payload) => {
   if (!whatsapp) {
-    log("warn", "job.whatsapp.reply.skipped", { reason: "fournisseur WhatsApp non configuré" });
-    return;
+    throw new Error("Canal WhatsApp non configuré : le message n'a pas été envoyé.");
   }
   await whatsapp.sendText(payload.to, payload.text);
 });

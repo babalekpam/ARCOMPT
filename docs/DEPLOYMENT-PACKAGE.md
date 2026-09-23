@@ -79,7 +79,7 @@ pour un volume soutenu.
 | **Extraction IA** | `ANTHROPIC_API_KEY`, `AI_MODEL` | fournisseur et montants **inventés** dans la file de validation |
 | **Antivirus** (clamd) | `CLAMAV_HOST` | tout fichier téléversé est accepté sans analyse |
 | **Rendu PDF** (Chromium) | `CHROMIUM_PATH` | aucun état financier, aucune facture, aucun bulletin ne se télécharge |
-| **Canal WhatsApp** | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_APP_SECRET` | les messages sortants sont avalés |
+| **Canal WhatsApp** | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_APP_SECRET` | absent : canal désactivé (503 à l'API, échec des tâches worker) ; partiel : configuration invalide |
 | **Ancrage externe** | voir `OPERATIONS.md` § Ancrage | la chaîne de hachage reste vérifiable, mais sans témoin extérieur |
 
 Deux dépendances restent **volontairement vides** : l'encaissement mobile money
@@ -229,7 +229,7 @@ Chaque ligne se remplit, ou s'assume par l'opt-out.
 | Extraction IA | `ANTHROPIC_API_KEY`, `AI_MODEL` | `ALLOW_INSECURE_AI` | fournisseur et montants inventés, validés en un tap |
 | Stockage | `R2_*` (4) | `ALLOW_INSECURE_STORAGE` | pièces sur disque éphémère, conservation décennale perdue |
 | Antivirus | `CLAMAV_HOST` | `ALLOW_INSECURE_ANTIVIRUS` | tout fichier accepté |
-| WhatsApp | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | `ALLOW_INSECURE_WHATSAPP` | messages sortants avalés |
+| WhatsApp | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_APP_SECRET` | aucun | paire absente : canal désactivé (503 et échec des tâches worker) ; paire partielle : configuration invalide ; paire complète : signature HMAC requise |
 | Messagerie | `SMTP_HOST`, `MAIL_FROM_ADDRESS` | `ALLOW_INSECURE_MAIL` | **aucune invitation ne part** |
 | Pack pays non publié | — | `ALLOW_INSECURE_DRAFT_PACK_FILINGS` | documents produits marqués « DOCUMENT NON OFFICIEL » |
 

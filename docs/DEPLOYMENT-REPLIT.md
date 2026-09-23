@@ -326,7 +326,7 @@ dernière ligne.
 | `ANTHROPIC_API_KEY` **ou** `ALLOW_INSECURE_AI=1` | Clé Anthropic, ou renoncement explicite | Extraction IA **inventée** dans la file de validation |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` **ou** `ALLOW_INSECURE_STORAGE=1` | Cloudflare R2, ou renoncement explicite | Pièces sur le disque local — **effacé à chaque publication sur Replit** (§ 11) |
 | `CLAMAV_HOST` **ou** `ALLOW_INSECURE_ANTIVIRUS=1` | Un clamd joignable, ou renoncement | Tout fichier accepté sans analyse |
-| `WHATSAPP_TOKEN` + `WHATSAPP_PHONE_ID` **ou** `ALLOW_INSECURE_WHATSAPP=1` | Meta Cloud API, ou renoncement | Messages sortants avalés |
+| `WHATSAPP_TOKEN` + `WHATSAPP_PHONE_ID` + `WHATSAPP_APP_SECRET` | Meta Cloud API, ou canal désactivé | Sans la paire token/téléphone : routes WhatsApp en 503 et tâches worker en échec ; une paire partielle est invalide |
 | `SMTP_HOST` + `MAIL_FROM_ADDRESS` **ou** `ALLOW_INSECURE_MAIL=1` | Zoho pour ce déploiement — voir § 5.5 | Invitations au portail jamais remises, **avec leur code à usage unique** |
 
 `AUTH_MODE`, `NODE_ENV`, `API_PORT` et `API_URL` sont posés par `.replit` : ne
@@ -336,9 +336,10 @@ Deux variables ont changé de statut par rapport à `docs/DEPLOYMENT.md` § 5.3,
 et c'est `config.ts` qui fait foi :
 
 - **`WHATSAPP_APP_SECRET` n'est exigée que si le canal WhatsApp est réellement
-  configuré.** Le guide serveur la présente comme toujours obligatoire ; le
-  code ne l'exige plus que lorsque `WHATSAPP_TOKEN` et `WHATSAPP_PHONE_ID` sont
-  renseignés. N'inventez pas de valeur aléatoire pour elle.
+  configuré.** Lorsque `WHATSAPP_TOKEN` et `WHATSAPP_PHONE_ID` sont tous deux
+  absents, le canal reste désactivé ; les routes renvoient 503 et les tâches
+  worker échouent sans signaler d'envoi. Une seule des deux variables est une
+  configuration invalide. N'inventez pas de valeur aléatoire pour le secret.
 - **`PAYMENT_WEBHOOK_SECRET` n'est exigée que si `PAYMENT_PROVIDER` est
   renseigné**, ce qui ne doit pas être le cas (voir ci-dessous).
 

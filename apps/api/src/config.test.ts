@@ -107,7 +107,7 @@ describe("loadConfig — production conforme", () => {
     expect(problems.join("\n")).not.toContain("ANTHROPIC_API_KEY");
   });
 
-  it("accepte les simulations seulement si l'opt-out ALLOW_INSECURE_* est posé", () => {
+  it("refuse les simulations dangereuses, mais désactive WhatsApp sans credentials", () => {
     const env = productionEnv({
       ANTHROPIC_API_KEY: "",
       R2_ACCOUNT_ID: "",
@@ -126,13 +126,12 @@ describe("loadConfig — production conforme", () => {
         [INSECURE_OPT_OUT.ai]: "1",
         [INSECURE_OPT_OUT.storage]: "true",
         [INSECURE_OPT_OUT.antivirus]: "yes",
-        [INSECURE_OPT_OUT.whatsapp]: "1",
       },
       { warn: () => {} },
     );
     expect(cfg.problems).toEqual([]);
     // L'opt-out des packs non publiés reste fermé : il n'est pas posé ici.
-    expect(cfg.insecure).toEqual({ ai: true, storage: true, antivirus: true, whatsapp: true, draftPackFilings: false });
+    expect(cfg.insecure).toEqual({ ai: true, storage: true, antivirus: true, whatsapp: false, draftPackFilings: false });
     expect(cfg.ai.simulated).toBe(true);
     expect(cfg.storage.driver).toBe("local");
     expect(cfg.antivirus.driver).toBe("none");
@@ -144,7 +143,6 @@ describe("loadConfig — production conforme", () => {
       [INSECURE_OPT_OUT.ai]: "1",
       [INSECURE_OPT_OUT.storage]: "1",
       [INSECURE_OPT_OUT.antivirus]: "1",
-      [INSECURE_OPT_OUT.whatsapp]: "1",
     });
     const off = loadConfig(base, { warn: () => {} });
     expect(off.insecure.draftPackFilings).toBe(false);
@@ -183,7 +181,6 @@ describe("loadConfig — production incomplète", () => {
       "ANTHROPIC_API_KEY",
       "R2_ACCOUNT_ID",
       "CLAMAV_HOST",
-      "WHATSAPP_TOKEN",
     ];
     for (const variable of expected) {
       expect(problems.some((p) => p.includes(variable)), `${variable} devrait être signalé`).toBe(true);
@@ -224,11 +221,18 @@ describe("loadConfig — production incomplète", () => {
   it("n'exige le secret WhatsApp que si le canal est réellement configuré", () => {
     // Exiger ce secret d'un déploiement sans WhatsApp empêchait de démarrer
     // sans bénéfice, et poussait à inventer une valeur.
-    const sansCanal = loadConfig(productionEnv({ WHATSAPP_TOKEN: "", WHATSAPP_PHONE_ID: "", WHATSAPP_APP_SECRET: "", ALLOW_INSECURE_WHATSAPP: "1" }), { warn: () => {} });
+     const sansCanal = loadConfig(productionEnv({ WHATSAPP_TOKEN: "", WHATSAPP_PHONE_ID: "", WHATSAPP_APP_SECRET: "", ALLOW_INSECURE_WHATSAPP: "1" }), { warn: () => {} });
     expect(sansCanal.degraded.join("\n")).toContain("WhatsApp");
+     expect(sansCanal.insecure.whatsapp).toBe(false);
+    expect(sansCanal.whatsapp.simulated).toBe(false);
+    expect(loadConfig({ WHATSAPP_TOKEN: "", WHATSAPP_PHONE_ID: "" }, { warn: () => {} }).whatsapp.simulated).toBe(true);
 
     const avecCanal = problemsOf(productionEnv({ WHATSAPP_TOKEN: "t", WHATSAPP_PHONE_ID: "p", WHATSAPP_APP_SECRET: "" }));
     expect(avecCanal.join("\n")).toContain("WHATSAPP_APP_SECRET");
+  });
+
+  it("refuse une configuration WhatsApp partielle en production", () => {
+    expect(problemsOf(productionEnv({ WHATSAPP_TOKEN: "t", WHATSAPP_PHONE_ID: "" })).join("\n")).toContain("configuration partielle");
   });
 
   it("sans opérateur de paiement, démarre en mode dégradé plutôt que d'échouer", () => {

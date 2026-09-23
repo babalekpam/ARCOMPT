@@ -133,16 +133,17 @@ describe("connecteur de certification fiscale", () => {
 });
 
 describe("canal WhatsApp", () => {
-  it("refuse le fournisseur mock en production, en nommant les variables manquantes", () => {
+  it("désactive le canal sans fournisseur en production", async () => {
     process.env.NODE_ENV = "production";
     process.env.WHATSAPP_APP_SECRET = "meta-app-secret";
     delete process.env.WHATSAPP_TOKEN;
     delete process.env.WHATSAPP_PHONE_ID;
     resetWhatsAppProvider();
-    expect(() => whatsappRoutes(deps)).toThrow(/WHATSAPP_TOKEN/);
+    const response = await whatsappRoutes(deps).request("/webhook");
+    expect(response.status).toBe(503);
   });
 
-  it("accepte le mock en production si ALLOW_INSECURE_WHATSAPP=1", () => {
+  it("ignore ALLOW_INSECURE_WHATSAPP en production", async () => {
     process.env.NODE_ENV = "production";
     process.env.WHATSAPP_APP_SECRET = "meta-app-secret";
     process.env.ALLOW_INSECURE_WHATSAPP = "1";
@@ -150,15 +151,23 @@ describe("canal WhatsApp", () => {
     delete process.env.WHATSAPP_PHONE_ID;
     resetWhatsAppProvider();
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    expect(() => whatsappRoutes(deps)).not.toThrow();
+    const response = await whatsappRoutes(deps).request("/webhook");
+    expect(response.status).toBe(503);
   });
 
-  it("hors production, le mock reste en place", () => {
+  it("hors production, le mock reste en place et s'annonce", () => {
     delete process.env.WHATSAPP_TOKEN;
     delete process.env.WHATSAPP_PHONE_ID;
     resetWhatsAppProvider();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(() => whatsappRoutes(deps)).not.toThrow();
-    expect(warn.mock.calls.flat().join("\n")).toContain("WHATSAPP_TOKEN");
+    expect(warn.mock.calls.flat().join("\n")).toContain("WhatsApp");
+  });
+
+  it("refuse des credentials WhatsApp partiels en production", () => {
+    process.env.NODE_ENV = "production";
+    process.env.WHATSAPP_TOKEN = "token";
+    delete process.env.WHATSAPP_PHONE_ID;
+    expect(() => whatsappRoutes(deps)).toThrow(/configuration partielle/);
   });
 });

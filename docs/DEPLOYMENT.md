@@ -411,9 +411,10 @@ le même deux fois, jamais un mot choisi à la main.
 
 Deux avertissements sur ce tableau :
 
-- **`WHATSAPP_APP_SECRET` est exigée même si vous n'utilisez pas WhatsApp.**
-  Il n'existe aucun `ALLOW_INSECURE_*` pour elle. Sans elle, l'API ne démarre
-  pas. Si le canal n'est pas branché, une valeur aléatoire fait l'affaire.
+- **`WHATSAPP_APP_SECRET` est exigée si WhatsApp est configuré.** Laissez
+  `WHATSAPP_TOKEN` et `WHATSAPP_PHONE_ID` tous deux absents pour désactiver le
+  canal proprement ; dans ce cas l'API répond 503 sur ses routes WhatsApp et
+  les tâches worker WhatsApp échouent sans être déclarées comme envoyées.
 - **`PAYROLL_ENCRYPTION_KEY` ne se change pas.** Elle déchiffre les données de
   paie déjà enregistrées ; la perdre les rend définitivement illisibles.
   Conservez-en une copie ailleurs que sur ce serveur, comme un code bancaire.
@@ -439,7 +440,7 @@ les vraies coordonnées, soit vous **acceptez explicitement** le repli avec un
 | Extraction IA des pièces | `ANTHROPIC_API_KEY` | `ALLOW_INSECURE_AI=1` | Fournisseur et montants **inventés** entrent dans la file de validation |
 | Stockage des pièces | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | `ALLOW_INSECURE_STORAGE=1` | Les pièces vont sur un volume Docker local, non sauvegardé |
 | Antivirus | `CLAMAV_HOST` | `ALLOW_INSECURE_ANTIVIRUS=1` | Tout fichier téléversé est accepté sans analyse |
-| WhatsApp sortant | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | `ALLOW_INSECURE_WHATSAPP=1` | Les messages sortants sont avalés sans être envoyés |
+| WhatsApp sortant | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_APP_SECRET` | **aucun** | Paire absente : canal désactivé (503 et échec des tâches worker) ; paire partielle : configuration invalide ; paire complète : signature HMAC requise |
 | Encaissement mobile money | *(aucun opérateur réel implémenté)* | **aucun** | Laissez `PAYMENT_PROVIDER` **vide** : la fonction est proprement désactivée. La valeur `mock` est refusée en production, sans échappatoire |
 
 Une sixième variable de la même famille ne concerne pas un service extérieur
@@ -855,7 +856,7 @@ fréquents :
 
 | Message | Cause |
 |---|---|
-| `WHATSAPP_APP_SECRET : absent` | Exigée même sans WhatsApp, sans opt-out |
+| `WHATSAPP_APP_SECRET : absent` | Exigée lorsque `WHATSAPP_TOKEN` et `WHATSAPP_PHONE_ID` configurent WhatsApp |
 | `PAYROLL_ENCRYPTION_KEY : base64 de 32 octets attendu` | Une clé tronquée, ou autre chose que `openssl rand -base64 32` |
 | `AUTH_MODE : doit valoir « oidc »` | Variable écrasée quelque part ; `docker-compose.prod.yml` la fixe |
 | `PAYMENT_PROVIDER : vaut « mock »` | Laissez la variable vide |

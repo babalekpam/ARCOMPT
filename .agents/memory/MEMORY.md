@@ -8,3 +8,4 @@
 - [R2 credential scope checks](r2-credential-scope.md) — test object operations and cross-bucket access; a working token may still cover unintended buckets.
 - [Clerk JWT header type](clerk-jwt-header-type.md) — `verifyToken` headerType is the JWT `typ`, not the HTTP Bearer scheme; keep session and origin checks intact.
 - [Accounting AI provider routing](accounting-ai-routing.md) — model routes are explicit and fail closed; never silently switch financial operations to another provider.
+- [Optional delivery channels](optional-delivery-channels.md) — absent WhatsApp must disable sending and fail queued replies, not acknowledge undelivered messages.
