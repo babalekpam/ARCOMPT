@@ -37,12 +37,26 @@ export interface NoteRowDefinition {
   code?: string;
 }
 
+/** Poste d'un état, et colonne de ce poste, entrant dans le rapprochement d'une note. */
+export interface NoteReconciliation {
+  statement: StatementCode;
+  code: string;
+  column?: "brut" | "amort_prov" | "net";
+}
+
 export interface NoteDefinition {
   number: number | string;
   title: string;
   kind: "LEDGER" | "MODULE" | "NARRATIVE";
-  /** Poste de l'état auquel le total de la note doit être égal. */
-  reconciles?: { statement: StatementCode; code: string; column?: "brut" | "amort_prov" | "net" };
+  /**
+   * Poste (ou postes) de l'état auquel le total de la note doit être égal.
+   * Plusieurs postes lorsqu'une note détaille une famille répartie sur
+   * plusieurs lignes de l'état (par exemple les charges et les revenus
+   * financiers, ou l'écart de conversion à l'actif et au passif) : le total
+   * attendu est alors la somme des postes visés. Chaque rapprochement est
+   * repris par un contrôle bloquant (voir controls.ts).
+   */
+  reconciles?: NoteReconciliation | NoteReconciliation[];
   rows?: NoteRowDefinition[];
   /** Pour les notes narratives : trame proposée à l'IA, marquée « à valider ». */
   outline?: string[];
@@ -90,6 +104,7 @@ export interface ComputedNote {
   rows: ComputedNoteRow[];
   total: Money;
   previousTotal: Money;
+  /** `code` reprend le ou les postes visés (« TK + RM ») ; `expected` leur somme. */
   reconciles?: { statement: StatementCode; code: string; expected: Money; ok: boolean };
   /** Notes narratives : brouillon à produire par l'IA puis à valider. */
   outline?: string[];

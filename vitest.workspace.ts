@@ -22,5 +22,8 @@ export default defineWorkspace([
   { test: { name: "portal", root: "packages/portal", include: ["src/**/*.test.ts"], testTimeout: 60000 } },
   { test: { name: "whatsapp", root: "packages/whatsapp", include: ["src/**/*.test.ts"], testTimeout: 60000 } },
   { test: { name: "api", root: "apps/api", include: ["src/**/*.test.ts"] } },
+  // Scripts d'exploitation (sauvegarde chiffrée, garde-fou de restauration) :
+  // du code que l'on n'exécute qu'un jour de panne, donc à couvrir en continu.
+  { test: { name: "scripts", root: "scripts", include: ["**/*.test.mts"] } },
   "apps/web/vitest.config.ts",
 ]);

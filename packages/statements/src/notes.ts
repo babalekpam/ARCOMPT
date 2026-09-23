@@ -1,6 +1,13 @@
 import { Money, type AccountingSystem } from "@arcompt/ledger";
 import { evalFormula, type BalanceIndex } from "./formula.js";
-import type { ComputedNote, ComputedStatement, NoteDefinition, StatementCode } from "./types.js";
+import type { ComputedLine, ComputedNote, ComputedStatement, NoteDefinition, NoteReconciliation, StatementCode } from "./types.js";
+
+/** Colonne d'un poste visée par le rapprochement d'une note. */
+function columnOf(line: ComputedLine, column: NoteReconciliation["column"]): Money {
+  if (column === "brut") return line.brut ?? line.net;
+  if (column === "amort_prov") return line.amortProv ?? Money.zero();
+  return line.net;
+}
 
 export function computeNotes(
   defs: NoteDefinition[],
@@ -36,12 +43,15 @@ export function computeNotes(
     const previousTotal = rows.reduce((acc, r) => acc.add(r.previous), Money.zero());
     let reconciles: ComputedNote["reconciles"];
     if (def.reconciles) {
-      const st = statements[def.reconciles.statement];
-      const line = st?.byCode[def.reconciles.code];
-      if (line) {
-        const col = def.reconciles.column ?? "net";
-        const expected = col === "brut" ? (line.brut ?? line.net) : col === "amort_prov" ? (line.amortProv ?? Money.zero()) : line.net;
-        reconciles = { statement: def.reconciles.statement, code: def.reconciles.code, expected, ok: expected.eq(total) };
+      // Une note peut viser un poste unique ou la somme de plusieurs postes,
+      // éventuellement dans deux états (écart de conversion actif et passif).
+      const targets = Array.isArray(def.reconciles) ? def.reconciles : [def.reconciles];
+      const lines = targets.map((t) => statements[t.statement]?.byCode[t.code]);
+      const first = targets[0];
+      // Un poste absent (TFT non produit en SMT) : pas de rapprochement, donc pas de contrôle faussement en échec.
+      if (first && lines.every((l) => l !== undefined)) {
+        const expected = lines.reduce((acc, line, i) => acc.add(columnOf(line!, targets[i]!.column)), Money.zero());
+        reconciles = { statement: first.statement, code: targets.map((t) => t.code).join(" + "), expected, ok: expected.eq(total) };
       }
     }
     out.push({
