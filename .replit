@@ -89,9 +89,11 @@ MAIL_FROM_NAME = "ARCOMPT"
 SMTP_PORT = "465"
 SMTP_SECURE = "1"
 SMTP_USER = "info@arcompt.com"
-ARCOMPT-R2-Replit = "cfut_aZtdsoiDlowI1ukY2tDhcc60xvEuomhY6CeVnC10a858053a"
 
 [userenv.development]
 APP_URL = "https://caf6d426-fdba-4a8a-bc42-8c5c67b804e2-00-abi9d4vbbqmh.picard.replit.dev"
 AUTH_MODE = "clerk"
 CLERK_AUTHORIZED_PARTIES = "https://caf6d426-fdba-4a8a-bc42-8c5c67b804e2-00-abi9d4vbbqmh.picard.replit.dev"
+
+[userenv.production]
+R2_ACCOUNT_ID = "fbe4af447846ae5501d8bb722f557aa6"
