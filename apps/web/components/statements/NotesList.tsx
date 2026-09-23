@@ -6,14 +6,17 @@ import { Badge } from "@/components/ui/Badge";
 import { Money } from "@/components/ui/Money";
 
 export async function NotesList({ notes, currency }: { notes: ComputedNote[]; currency: string }) {
-  const { t } = await getT();
+  const { t, locale } = await getT();
   return (
     <div className="space-y-3">
       {notes.map((n) => (
         <details key={String(n.number)} className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
           <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-3 text-sm">
             <span className="font-mono text-xs text-slate-500">Note {n.number}</span>
-            <span className="flex-1 font-medium">{n.title}</span>
+            <span className="flex-1 font-medium">
+              {n.title}
+              {locale === "en" && n.titleEn ? <span className="ml-2 text-xs font-normal italic text-slate-500 dark:text-slate-400">{n.titleEn}</span> : null}
+            </span>
             <Badge tone="neutral">{t(`statements.noteKind.${n.kind}`)}</Badge>
             <Badge tone={n.status === "COMPUTED" ? "success" : "warning"}>{t(`statements.noteStatus.${n.status}`)}</Badge>
             {n.reconciles ? <Badge tone={n.reconciles.ok ? "success" : "danger"}>{n.reconciles.ok ? t("statements.reconciles", { code: n.reconciles.code }) : t("statements.reconcileKo", { code: n.reconciles.code })}</Badge> : null}
@@ -32,7 +35,7 @@ export async function NotesList({ notes, currency }: { notes: ComputedNote[]; cu
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {n.rows.map((r, i) => (
                     <tr key={`${r.code ?? ""}-${i}`}>
-                      <td className="py-1">{r.label}</td>
+                      <td className="py-1">{(locale === "en" ? r.labelEn : undefined) ?? r.label}</td>
                       <td className="py-1 text-right"><Money value={r.amount} currency={currency} dashForZero /></td>
                       <td className="py-1 text-right text-slate-500"><Money value={r.previous} currency={currency} dashForZero /></td>
                     </tr>

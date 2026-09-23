@@ -13,7 +13,7 @@ const rowStyle: Record<string, string> = {
 
 /** Tableau d'état financier à l'allure officielle : Brut / Amort / Net / N-1 (actif) ou Net / N-1. */
 export async function StatementTable({ statement, currency }: { statement: ComputedStatement; currency: string }) {
-  const { t } = await getT();
+  const { t, locale } = await getT();
   const hasBrut = statement.lines.some((l) => l.brut !== undefined);
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
@@ -38,7 +38,10 @@ export async function StatementTable({ statement, currency }: { statement: Compu
           {statement.lines.map((l) => (
             <tr key={l.code} className={rowStyle[l.style] ?? ""}>
               <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{l.code}</td>
-              <td className={`px-3 py-1.5 ${l.style === "line" ? "pl-6" : ""}`}>{l.label}</td>
+              <td className={`px-3 py-1.5 ${l.style === "line" ? "pl-6" : ""}`}>
+                {l.label}
+                {locale === "en" && l.labelEn ? <span className="ml-2 text-xs italic text-slate-500 dark:text-slate-400">{l.labelEn}</span> : null}
+              </td>
               <td className="px-2 py-1.5 text-center text-xs text-slate-500">{l.note ?? ""}</td>
               {hasBrut ? (
                 <>

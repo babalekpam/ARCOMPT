@@ -3,6 +3,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { computeStatements } from "@arcompt/statements";
+import { noteRowEn, noteTitleGloss, statementLineGloss } from "@arcompt/render";
 import type { AppDeps } from "../app.js";
 
 export function statementsRoutes(deps: AppDeps) {
@@ -40,7 +41,26 @@ export function statementsRoutes(deps: AppDeps) {
       ...(previous ? { previousBalance: previous.rows } : {}),
       ...(q.data.templateVersion ? { templateVersion: q.data.templateVersion } : {}),
     });
-    return c.json(out);
+    // L'anglais voyage AVEC les états, plutôt que d'être recalculé côté
+    // navigateur. Les intitulés réglementaires restent en français — le
+    // formulaire officiel ne se traduit pas — et l'anglais les accompagne en
+    // glose, exactement comme dans le PDF. Sans cela l'écran anglais affichait
+    // un cadre anglais autour d'un tableau entièrement français : la traduction
+    // s'arrêtait à la porte du tableau.
+    return c.json({
+      ...out,
+      statements: Object.fromEntries(
+        Object.entries(out.statements).map(([code, st]) => [
+          code,
+          st && { ...st, lines: st.lines.map((l) => ({ ...l, ...(statementLineGloss(l.code) ? { labelEn: statementLineGloss(l.code) } : {}) })) },
+        ]),
+      ),
+      notes: out.notes.map((n) => ({
+        ...n,
+        ...(noteTitleGloss(n.number) ? { titleEn: noteTitleGloss(n.number) } : {}),
+        rows: n.rows.map((row) => ({ ...row, ...(noteRowEn(row.label) ? { labelEn: noteRowEn(row.label) } : {}) })),
+      })),
+    });
   });
 
   return r;

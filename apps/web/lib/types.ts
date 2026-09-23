@@ -80,6 +80,12 @@ export type StatementCode = "BILAN_ACTIF" | "BILAN_PASSIF" | "COMPTE_RESULTAT" |
 export interface ComputedLine {
   code: string;
   label: string;
+  /**
+   * Glose anglaise de l'intitulé, fournie par l'API. L'intitulé français reste
+   * celui du formulaire officiel — il ne se traduit pas — et l'anglais
+   * l'accompagne, comme dans le PDF.
+   */
+  labelEn?: string;
   note?: number | string;
   style: "total" | "subtotal" | "header" | "line";
   brut?: string;
@@ -98,8 +104,11 @@ export interface ComputedStatement {
 export interface ComputedNote {
   number: number | string;
   title: string;
+  /** Glose anglaise du titre de la note. */
+  titleEn?: string;
   kind: "LEDGER" | "MODULE" | "NARRATIVE";
-  rows: Array<{ label: string; code?: string; amount: string; previous: string }>;
+  /** `labelEn` : les lignes de notes ne sont pas réglementaires, elles sont traduites. */
+  rows: Array<{ label: string; labelEn?: string; code?: string; amount: string; previous: string }>;
   total: string;
   previousTotal: string;
   reconciles?: { statement: StatementCode; code: string; expected: string; ok: boolean };
@@ -115,6 +124,9 @@ export interface Control {
   detail: string;
   expected?: string;
   actual?: string;
+  /** Libellé et détail anglais, rédigés avec le contrôle (il porte des montants interpolés). */
+  labelEn?: string;
+  detailEn?: string;
 }
 
 export interface StatementsOutput {
