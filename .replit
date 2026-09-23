@@ -14,11 +14,7 @@ run = [
 
 [nix]
 channel = "stable-24_05"
-# chromium : rendu des PDF (états financiers, factures, bulletins de paie).
-# pnpm     : gestionnaire de paquets du dépôt (packageManager: pnpm@10.33.0).
-#            Si le canal Nix ne le fournit pas, `corepack enable` ci-dessus
-#            prend le relais, Node 20 l'embarquant.
-packages = ["chromium", "pnpm"]
+packages = ["chromium", "pnpm", "clamav"]
 
 [gitHubImport]
 requiredFiles = [".replit"]
