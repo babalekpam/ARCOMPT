@@ -12,7 +12,11 @@ export type PostingEventKind =
   | "EXPENSE_CLAIM"
   | "PAYROLL_RUN"
   | "VAT_SETTLEMENT"
-  | "DEPRECIATION";
+  | "DEPRECIATION"
+  // Inventaire intermittent : à la clôture, annulation du stock initial puis
+  // constatation du stock final, par les comptes de variation 603x / 73x.
+  | "STOCK_OPENING_REVERSAL"
+  | "STOCK_CLOSING";
 
 /**
  * Rôle comptable d'une ligne de modèle. Le rôle est résolu en numéro de
@@ -35,7 +39,9 @@ export type AccountRole =
   | "social_body" // 431
   | "withholding_tax" // 447 (ITS retenu)
   | "depreciation_expense" // 681
-  | "depreciation"; // 28xx : compte de la ligne
+  | "depreciation" // 28xx : compte de la ligne
+  | "stock" // 31x–38x : compte de stock de la ligne
+  | "stock_variation"; // 603x (biens achetés) ou 73x (biens produits) : contrepartie de la ligne
 
 export type Side = "debit" | "credit";
 
@@ -97,6 +103,12 @@ export interface EventLine {
   amount: Money | string;
   /** Compte de produit / charge / amortissement propre à la ligne. */
   accountNumber?: string;
+  /**
+   * Contrepartie propre à la ligne, lorsqu'un événement impute deux comptes
+   * dépendant tous deux de la ligne : compte de variation 603x / 73x en face du
+   * compte de stock 3xx (rôle `stock_variation`).
+   */
+  counterAccountNumber?: string;
   vatCode?: string;
   /** Tiers propre à la ligne (net à payer par salarié…). */
   partnerId?: string;
@@ -144,6 +156,7 @@ export interface ComputedLine {
   vat: Money;
   gross: Money;
   accountNumber: string | null;
+  counterAccountNumber: string | null;
   partnerId: string | null;
   analyticCode: string | null;
 }

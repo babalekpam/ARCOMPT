@@ -34,19 +34,25 @@ export const DEFAULT_ROLE_ACCOUNTS: Record<AccountRole, string | null> = {
   withholding_tax: "447",
   depreciation_expense: "681",
   depreciation: null, // ligne (28xx)
+  stock: null, // ligne (31x–38x)
+  stock_variation: null, // ligne, contrepartie (603x / 73x)
 };
 
-const LINE_ROLES: ReadonlySet<AccountRole> = new Set(["revenue", "expense", "depreciation"]);
+const LINE_ROLES: ReadonlySet<AccountRole> = new Set(["revenue", "expense", "depreciation", "stock"]);
+/** Rôles dont le compte est la contrepartie de la ligne (`counterAccountNumber`). */
+const COUNTER_LINE_ROLES: ReadonlySet<AccountRole> = new Set(["stock_variation"]);
 const PARTNER_ROLES: ReadonlySet<AccountRole> = new Set(["customer", "supplier", "employee"]);
 
 /**
  * Résout le numéro de compte d'un rôle pour un événement et, le cas échéant,
  * une ligne de document. Ordre : compte de la ligne (produit / charge /
- * amortissement) → compte collectif du tiers → compte TVA du pack → compte de
- * trésorerie de l'événement → surcharge du dossier → défaut SYSCOHADA.
+ * amortissement / stock) → contrepartie de la ligne (variation de stock) →
+ * compte collectif du tiers → compte TVA du pack → compte de trésorerie de
+ * l'événement → surcharge du dossier → défaut SYSCOHADA.
  */
 export function resolveAccount(role: AccountRole, ctx: PostingContext, event: PostingEvent, line?: ComputedLine): string {
   if (LINE_ROLES.has(role) && line?.accountNumber) return line.accountNumber;
+  if (COUNTER_LINE_ROLES.has(role) && line?.counterAccountNumber) return line.counterAccountNumber;
   if (PARTNER_ROLES.has(role) && event.partnerAccountNumber) return event.partnerAccountNumber;
   if (role === "vat_collected" || role === "vat_deductible") {
     const pickAccount = (r: { collected_account: string; deductible_account: string }) => (role === "vat_collected" ? r.collected_account : r.deductible_account);

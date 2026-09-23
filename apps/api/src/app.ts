@@ -21,6 +21,7 @@ import { portalRoutes } from "./routes/portal.js";
 import { publicWebhookRoutes } from "./routes/public-webhooks.js";
 import { renderRoutes } from "./routes/render.js";
 import { statementsRoutes } from "./routes/statements.js";
+import { stockRoutes } from "./routes/stock.js";
 import { taxRoutes } from "./routes/tax.js";
 import { treasuryRoutes } from "./routes/treasury.js";
 import { whatsappRoutes } from "./routes/whatsapp.js";
@@ -96,6 +97,7 @@ export function createApp(deps: AppDeps) {
   api.route("/payroll", payrollRoutes(deps));
   api.route("/tax", taxRoutes(deps));
   api.route("/assets", assetsRoutes(deps));
+  api.route("/stock", stockRoutes(deps)); // /articles, /movements, /positions, /counts, /closings
   api.route("/closing", closingRoutes(deps));
   api.route("/", documentsRoutes(deps)); // /documents, /proposals, /assistant, /anomalies
   api.route("/portal", portalRoutes(deps));

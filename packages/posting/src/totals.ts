@@ -39,6 +39,7 @@ export function computeDocumentTotals(lines: EventLine[], opts: TotalsOptions): 
       vat,
       gross: net.add(vat),
       accountNumber: l.accountNumber ?? null,
+      counterAccountNumber: l.counterAccountNumber ?? null,
       partnerId: l.partnerId ?? null,
       analyticCode: l.analyticCode ?? null,
     };

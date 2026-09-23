@@ -121,4 +121,29 @@ export const DEFAULT_TEMPLATES: Record<PostingEventKind, PostingTemplate> = {
       { role: "depreciation", side: "credit", amount: "line_net", group: "line", label: "Amortissement {line}" },
     ],
   },
+  // Inventaire intermittent, premier temps de la clôture : annulation du stock
+  // initial. 603x (ou 73x pour les biens produits) D à 3xx C — le compte de
+  // stock est soldé, la consommation de l'exercice est majorée d'autant.
+  STOCK_OPENING_REVERSAL: {
+    kind: "STOCK_OPENING_REVERSAL",
+    journalCode: "OD",
+    source: "CLOSING",
+    lines: [
+      { role: "stock_variation", side: "debit", amount: "line_net", group: "line", label: "Annulation stock initial {line}" },
+      { role: "stock", side: "credit", amount: "line_net", group: "line", label: "Stock initial {line}" },
+    ],
+  },
+  // Second temps : constatation du stock final inventorié. 3xx D à 603x (ou
+  // 73x) C — le bilan porte le stock de clôture, la consommation est réduite
+  // d'autant. Le solde des 603x vaut alors SI − SF, et le poste RB du compte de
+  // résultat (« -6031 », soit C − D) vaut SF − SI, la variation de stock.
+  STOCK_CLOSING: {
+    kind: "STOCK_CLOSING",
+    journalCode: "OD",
+    source: "CLOSING",
+    lines: [
+      { role: "stock", side: "debit", amount: "line_net", group: "line", label: "Stock final {line}" },
+      { role: "stock_variation", side: "credit", amount: "line_net", group: "line", label: "Constatation stock final {line}" },
+    ],
+  },
 };

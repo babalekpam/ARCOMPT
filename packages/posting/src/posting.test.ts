@@ -267,6 +267,7 @@ describe("modèles par défaut", () => {
   });
 
   it("chaque modèle par défaut produit une écriture équilibrée sur un jeu d'essai", () => {
+    const stockLines = [{ label: "Marchandises", amount: "1000", accountNumber: "311", counterAccountNumber: "6031" }];
     const events: PostingEvent[] = [
       { kind: "SALES_INVOICE", date: "2025-03-15", label: "v", currency: "XOF", partnerId: CUSTOMER, lines: saleLines },
       { kind: "SALES_CREDIT_NOTE", date: "2025-03-15", label: "a", currency: "XOF", partnerId: CUSTOMER, lines: saleLines },
@@ -278,9 +279,50 @@ describe("modèles par défaut", () => {
       { kind: "PAYROLL_RUN", date: "2025-03-15", label: "p", currency: "XOF", amounts: { gross: "100", employer_contributions: "10", social_contributions: "16", income_tax: "4" }, lines: [{ amount: "90", partnerId: EMPLOYEE }] },
       { kind: "VAT_SETTLEMENT", date: "2025-03-15", label: "t", currency: "XOF", amounts: { vat_collected: "10", vat_deductible: "3" } },
       { kind: "DEPRECIATION", date: "2025-03-15", label: "d", currency: "XOF", lines: [{ amount: "5", accountNumber: "2844" }] },
+      { kind: "STOCK_OPENING_REVERSAL", date: "2025-12-31", label: "si", currency: "XOF", lines: stockLines },
+      { kind: "STOCK_CLOSING", date: "2025-12-31", label: "sf", currency: "XOF", lines: stockLines },
     ];
     for (const e of events) expectBalanced(buildEntry(e, DEFAULT_TEMPLATES[e.kind], ctx));
-    expect(Object.keys(DEFAULT_TEMPLATES)).toHaveLength(10);
+    expect(Object.keys(DEFAULT_TEMPLATES)).toHaveLength(12);
+  });
+
+  // Inventaire intermittent : la ligne porte son compte de stock ET sa
+  // contrepartie de variation ; le sens s'inverse d'un modèle à l'autre.
+  it("annule le stock initial puis constate le stock final par les comptes 603x et 73x", () => {
+    const event = (kind: "STOCK_OPENING_REVERSAL" | "STOCK_CLOSING"): PostingEvent => ({
+      kind,
+      date: "2025-12-31",
+      label: "Clôture 2025",
+      currency: "XOF",
+      lines: [
+        { label: "Marchandises", amount: "1000000", accountNumber: "311", counterAccountNumber: "6031" },
+        { label: "Produits finis", amount: "200000", accountNumber: "361", counterAccountNumber: "736" },
+      ],
+    });
+    const opening = buildEntry(event("STOCK_OPENING_REVERSAL"), DEFAULT_TEMPLATES.STOCK_OPENING_REVERSAL, ctx);
+    expectBalanced(opening);
+    expect(opening.journalCode).toBe("OD");
+    expect(opening.source).toBe("CLOSING");
+    expect(opening.lines.map((l) => [l.accountNumber, l.debit?.toString() ?? null, l.credit?.toString() ?? null])).toEqual([
+      ["6031", "1000000.0000", null],
+      ["736", "200000.0000", null],
+      ["311", null, "1000000.0000"],
+      ["361", null, "200000.0000"],
+    ]);
+
+    const closing = buildEntry(event("STOCK_CLOSING"), DEFAULT_TEMPLATES.STOCK_CLOSING, ctx);
+    expectBalanced(closing);
+    expect(closing.lines.map((l) => [l.accountNumber, l.debit?.toString() ?? null, l.credit?.toString() ?? null])).toEqual([
+      ["311", "1000000.0000", null],
+      ["361", "200000.0000", null],
+      ["6031", null, "1000000.0000"],
+      ["736", null, "200000.0000"],
+    ]);
+  });
+
+  it("refuse une ligne de stock sans contrepartie de variation", () => {
+    const event: PostingEvent = { kind: "STOCK_CLOSING", date: "2025-12-31", label: "c", currency: "XOF", lines: [{ amount: "10", accountNumber: "311" }] };
+    expect(() => buildEntry(event, DEFAULT_TEMPLATES.STOCK_CLOSING, ctx)).toThrow(/stock_variation/);
   });
 
   it("refuse un modèle appliqué au mauvais événement", () => {
