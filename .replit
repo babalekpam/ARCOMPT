@@ -1,20 +1,71 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-20", "postgresql-16", "python-base-3.13"]
 
+hidden = [".git", "node_modules", "dist", ".next", ".pnpm-store"]
+
+# --- Atelier (bouton « Run ») : les deux applications en mode développement ---
+# `pnpm dev` lance en parallèle l'API (tsx watch, port 4000) et Next (port 3000).
+# CHROMIUM_PATH pointe le Chromium fourni par Nix : sans lui, tout téléchargement
+# de PDF échoue avec « Chromium introuvable » (packages/render/src/pdf.ts).
+run = [
+  "bash",
+  "-c",
+  "set -uo pipefail; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; corepack pnpm install --frozen-lockfile || exit 1; trap 'kill 0' EXIT; KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_API_AUDIENCE:-arcompt-api}\" corepack pnpm --filter @arcompt/api dev & KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_WEB_CLIENT_ID:-arcompt-web}\" corepack pnpm --filter @arcompt/web dev & wait -n; exit 1",
+]
+
+[nix]
+channel = "stable-24_05"
+# chromium : rendu des PDF (états financiers, factures, bulletins de paie).
+# pnpm     : gestionnaire de paquets du dépôt (packageManager: pnpm@10.33.0).
+#            Si le canal Nix ne le fournit pas, `corepack enable` ci-dessus
+#            prend le relais, Node 20 l'embarquant.
+packages = ["chromium", "pnpm"]
+
+[gitHubImport]
+requiredFiles = [".replit"]
+
+# --- Publication -------------------------------------------------------------
+# deploymentTarget = "gce"      → Reserved VM (machine dédiée, jamais en veille)
+# deploymentTarget = "cloudrun" → Autoscale (mise à l'échelle, veille à zéro)
+#
+# « gce » est le choix retenu, et docs/DEPLOYMENT-REPLIT.md § 3 dit pourquoi :
+# l'API garde un navigateur Chromium et une file de tâches EN MÉMOIRE (aucun
+# Redis n'existe sur Replit), deux choses qu'une instance mise en veille ou
+# dupliquée perd. Le panneau « Publishing » reste la source de vérité : il
+# réécrit cette clé si vous y changez le type de déploiement.
 [deployment]
-router = "application"
-deploymentTarget = "autoscale"
+deploymentTarget = "gce"
+build = ["bash", "-c", "corepack pnpm install --frozen-lockfile && corepack pnpm --filter @arcompt/web build"]
+run = [
+  "bash",
+  "-c",
+  "set -uo pipefail; export NODE_ENV=production AUTH_MODE=oidc API_PORT=4000 API_URL=http://127.0.0.1:4000; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; trap 'kill 0' EXIT; KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_API_AUDIENCE:?KEYCLOAK_API_AUDIENCE manquant}\" corepack pnpm --filter @arcompt/api start & KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_WEB_CLIENT_ID:?KEYCLOAK_WEB_CLIENT_ID manquant}\" corepack pnpm --filter @arcompt/web start & wait -n; echo 'ARCOMPT : un des deux processus s est arrete, le deploiement redemarre' >&2; exit 1",
+]
 
-[deployment.postBuild]
-args = ["pnpm", "store", "prune"]
-env = { "CI" = "true" }
+[[ports]]
+localPort = 3000
+externalPort = 80
+
 
 [workflows]
 runButton = "Project"
 
-[agent]
-stack = "PNPM_WORKSPACE"
-expertMode = true
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
 
-[postMerge]
-path = "scripts/post-merge.sh"
-timeoutMs = 20000
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "ARCOMPT development"
+
+[[workflows.workflow]]
+name = "ARCOMPT development"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash -c 'set -uo pipefail; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; trap \"kill 0\" EXIT; KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_API_AUDIENCE:-arcompt-api}\" corepack pnpm --filter @arcompt/api dev & KEYCLOAK_CLIENT_ID=\"${KEYCLOAK_WEB_CLIENT_ID:-arcompt-web}\" corepack pnpm --filter @arcompt/web dev & wait -n; exit 1'"
+waitForPort = 3000
+
+[workflows.workflow.metadata]
+outputType = "webview"

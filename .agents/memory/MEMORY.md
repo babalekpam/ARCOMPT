@@ -1,0 +1,1 @@
+- [Replit package and test toolchain](replit-toolchain.md) — use Corepack for the pinned pnpm; keep database-backed Vitest files serial in this environment.
