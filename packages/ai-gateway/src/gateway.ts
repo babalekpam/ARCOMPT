@@ -72,6 +72,8 @@ export interface AiGatewayOptions {
   logger: CallLogger;
   quota?: QuotaPolicy;
   now?: () => Date;
+  /** Allowlisted route name for failure audit; never an API key or user input. */
+  providerLabel?: (req: ModelRequest) => string;
 }
 
 export class AiGateway {
@@ -86,8 +88,30 @@ export class AiGateway {
     let raw: ModelResponse;
     try {
       raw = await this.opts.provider.complete(req);
-    } catch (e) {
-      throw new AiGatewayError("PROVIDER_ERROR", (e as Error).message, e);
+    } catch (error) {
+      // A failed model call must be auditable without storing provider error
+      // bodies, credentials, images, or unvalidated financial document input.
+      try {
+        await this.opts.logger.append({
+          tenantId: ctx.tenantId,
+          ...(ctx.userId ? { userId: ctx.userId } : {}),
+          capability: req.capability,
+          model: this.opts.providerLabel?.(req) ?? "unknown",
+          promptVersion: req.promptVersion,
+          input: {},
+          output: { outcome: "PROVIDER_ERROR", category: failureCategory(error) },
+          schemaValid: false,
+          inputTokens: 0,
+          outputTokens: 0,
+          latencyMs: Date.now() - started,
+          at: (this.opts.now ?? (() => new Date()))().toISOString(),
+        });
+      } catch {
+        // The operation has already failed; surface the audit outage without
+        // leaking either the provider response or the database error.
+        console.error("[arcompt] ai.provider_failure_audit_unavailable");
+      }
+      throw new AiGatewayError("PROVIDER_ERROR", "Le fournisseur IA n'a pas pu traiter la demande");
     }
     const latencyMs = Date.now() - started;
     const parsed = safeJson(raw.text);
@@ -113,6 +137,16 @@ export class AiGateway {
     }
     return { data: result.data, raw };
   }
+}
+
+/** Coarse, allowlisted operational category; never persist raw provider errors. */
+function failureCategory(error: unknown): "http_4xx" | "http_5xx" | "timeout" | "other" {
+  const message = error instanceof Error ? error.message : "";
+  const status = message.match(/^(?:Anthropic API error|OpenAI API error|Gemini API)\s*\(?([45])\d{2}\b/i);
+  if (status?.[1] === "4") return "http_4xx";
+  if (status?.[1] === "5") return "http_5xx";
+  if (/timed out/i.test(message)) return "timeout";
+  return "other";
 }
 
 function safeJson(text: string): unknown {

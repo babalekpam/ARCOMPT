@@ -36,6 +36,18 @@ describe("passerelle IA", () => {
   it("hors production, le fournisseur hors ligne reste disponible", () => {
     expect(() => createDocumentsInfraFromEnv(db, {})).not.toThrow();
   });
+
+  it("n'active jamais un fournisseur explicitement sélectionné sans sa propre clé", () => {
+    expect(() => createDocumentsInfraFromEnv(db, { AI_PROVIDER: "openai" })).toThrow(/OPENAI_API_KEY/);
+    expect(() => createDocumentsInfraFromEnv(db, { AI_PROVIDER: "gemini" })).toThrow(/GEMINI_API_KEY/);
+    expect(() => createDocumentsInfraFromEnv(db, { AI_PROVIDER: "autre", ANTHROPIC_API_KEY: "key" })).toThrow(/AI_PROVIDER/);
+  });
+
+  it("accepte OpenAI et Gemini sans exiger de clé Anthropic inutilisée", () => {
+    expect(() => createDocumentsInfraFromEnv(db, { AI_PROVIDER: "openai", OPENAI_API_KEY: "test-key" })).not.toThrow();
+    resetDocumentsInfra();
+    expect(() => createDocumentsInfraFromEnv(db, { AI_PROVIDER: "gemini", GEMINI_API_KEY: "test-key" })).not.toThrow();
+  });
 });
 
 describe("antivirus", () => {

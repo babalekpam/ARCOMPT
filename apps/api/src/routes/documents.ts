@@ -69,7 +69,7 @@ export function documentsRoutes(deps: AppDeps) {
     if (err instanceof DocumentsError) return c.json({ error: { code: err.code, message: err.message, details: err.details ?? null } }, documentsErrorStatus(err.code));
     if (err instanceof AiGatewayError) {
       const status = err.code === "QUOTA_EXCEEDED" ? 429 : err.code === "PROVIDER_ERROR" ? 502 : 422;
-      return c.json({ error: { code: err.code, message: err.message } }, status);
+      return c.json({ error: { code: err.code, message: err.code === "PROVIDER_ERROR" ? "Le fournisseur IA est momentanément indisponible" : err.message } }, status);
     }
     throw err; // LedgerError et le reste : gestionnaire global de l'application
   });

@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
-import { AiGateway, AnthropicProvider, type ModelProvider, type ModelRequest, type ModelResponse } from "@arcompt/ai-gateway";
+import {
+  AiGateway, AnthropicProvider, GeminiProvider, OpenAIProvider, createRoutedProvider, resolveAiProviderSelection,
+  type AiProviderName, type ModelProvider, type ModelRequest, type ModelResponse,
+} from "@arcompt/ai-gateway";
 import { Ledger, PostgresStore } from "@arcompt/ledger";
 import { createStorageFromEnv, type Storage } from "@arcompt/storage";
 import type { Sql } from "postgres";
@@ -12,7 +15,7 @@ import type { TenantContext } from "./types.js";
 /**
  * Fournisseur hors ligne : renvoie une extraction et une catégorisation
  * plausibles pour que le développement local fonctionne sans clé API.
- * Jamais utilisé en production (ANTHROPIC_API_KEY requis).
+ * Jamais utilisé en production sans opt-out explicite.
  */
 export class OfflineProvider implements ModelProvider {
   readonly calls: ModelRequest[] = [];
@@ -78,16 +81,37 @@ function offlineProvider(env: NodeJS.ProcessEnv): ModelProvider {
 }
 
 /**
- * Passerelle IA (Claude si ANTHROPIC_API_KEY, sinon simulation), stockage,
+ * Passerelle IA (routage explicite Claude/OpenAI/Gemini), stockage,
  * antivirus : construits une fois par processus. En production, la simulation
  * est refusée (sauf ALLOW_INSECURE_AI=1) : l'extraction hors ligne inventerait
  * fournisseur et montants, qui finiraient au grand livre après une validation.
  */
 export function createDocumentsInfraFromEnv(db: Sql, env: NodeJS.ProcessEnv = process.env): DocumentsInfra {
   if (cached) return cached;
-  const provider: ModelProvider = env.ANTHROPIC_API_KEY ? new AnthropicProvider({ apiKey: env.ANTHROPIC_API_KEY, ...(env.AI_MODEL ? { model: env.AI_MODEL } : {}) }) : offlineProvider(env);
+  const selection = resolveAiProviderSelection(env);
+  if (selection.issues.length) throw new Error(`Configuration IA invalide : ${selection.issues.join(" ")}`);
+  const providers: Partial<Record<AiProviderName, ModelProvider>> = {};
+  for (const name of selection.simulated ? [] : selection.selected) {
+    const anthropicModel = env.AI_ANTHROPIC_MODEL || env.AI_MODEL;
+    if (name === "anthropic") providers.anthropic = new AnthropicProvider({
+      apiKey: env.ANTHROPIC_API_KEY!,
+      ...(anthropicModel ? { model: anthropicModel } : {}),
+    });
+    if (name === "openai") providers.openai = new OpenAIProvider({
+      apiKey: env.OPENAI_API_KEY!,
+      ...(env.AI_OPENAI_MODEL ? { model: env.AI_OPENAI_MODEL } : {}),
+    });
+    if (name === "gemini") providers.gemini = new GeminiProvider({
+      apiKey: env.GEMINI_API_KEY!,
+      ...(env.AI_GEMINI_MODEL ? { model: env.AI_GEMINI_MODEL } : {}),
+    });
+  }
+  const provider: ModelProvider = selection.simulated ? offlineProvider(env) : createRoutedProvider(selection, providers);
   cached = {
-    gateway: new AiGateway({ provider, logger: new PgCallLogger(db) }),
+    gateway: new AiGateway({
+      provider, logger: new PgCallLogger(db),
+      providerLabel: (req) => selection.simulated ? "offline" : selection.routes[req.capability],
+    }),
     storage: createStorageFromEnv(env),
     scanner: createScannerFromEnv(env),
     supportsPdf: env.AI_PDF_SUPPORT === "1" || env.AI_PDF_SUPPORT === "true",

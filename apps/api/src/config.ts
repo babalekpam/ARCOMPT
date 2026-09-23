@@ -19,6 +19,7 @@
  */
 
 import { DRAFT_PACK_FILINGS_OPT_OUT } from "@arcompt/country-packs";
+import { resolveAiProviderSelection } from "@arcompt/documents";
 import {
   MockFneConnector,
   MockPaymentProvider,
@@ -77,7 +78,7 @@ export interface AppConfig {
   baseCurrency: string;
   databaseUrl?: string;
   auth: { mode: AuthMode; issuer?: string; audience?: string; secretKey?: string; authorizedParties?: string[] };
-  ai: { apiKey?: string; model?: string; simulated: boolean };
+  ai: { provider: string; captureProvider: string; categorizeProvider: string; simulated: boolean };
   storage: { driver: "r2" | "local" };
   antivirus: { driver: "clamav" | "none" };
   whatsapp: { simulated: boolean; appSecret?: string };
@@ -229,7 +230,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
   }
 
   // --- Passerelle IA --------------------------------------------------------
-  const aiSimulated = !present(env.ANTHROPIC_API_KEY);
+  const aiSelection = resolveAiProviderSelection(env);
+  const aiSimulated = aiSelection.simulated;
+  problems.push(...aiSelection.issues);
   if (aiSimulated && !insecure.ai) {
     problems.push(
       `ANTHROPIC_API_KEY : absente — l'extraction des pièces serait simulée (fournisseur « Fournisseur démo », montants inventés) et alimenterait la file de validation. Posez ${INSECURE_OPT_OUT.ai}=1 pour l'accepter explicitement.`,
@@ -288,8 +291,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
       ...(mode === "clerk" ? { authorizedParties: (env.CLERK_AUTHORIZED_PARTIES ?? env.APP_URL ?? "").split(",").map((v) => v.trim()).filter(Boolean) } : {}),
     },
     ai: {
-      ...(present(env.ANTHROPIC_API_KEY) ? { apiKey: env.ANTHROPIC_API_KEY } : {}),
-      ...(present(env.AI_MODEL) ? { model: env.AI_MODEL } : {}),
+      provider: aiSelection.defaultProvider,
+      captureProvider: aiSelection.routes.capture,
+      categorizeProvider: aiSelection.routes.categorize,
       simulated: aiSimulated,
     },
     storage: { driver: storageDriver },

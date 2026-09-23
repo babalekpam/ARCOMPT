@@ -46,6 +46,60 @@ describe("passerelle IA", () => {
     const gw = new AiGateway({ provider: new MockProvider(), logger: new MemoryCallLogger(), quota: { allow: async () => false } });
     await expect(gw.callJson({ tenantId: "t1" }, { capability: "assistant", promptVersion: "a@1", system: "", input: "" }, DocumentExtractionSchema)).rejects.toMatchObject({ code: "QUOTA_EXCEEDED" });
   });
+
+  it("journalise un échec sans contenu comptable, erreur fournisseur ni clé", async () => {
+    const logger = new MemoryCallLogger();
+    const gateway = new AiGateway({
+      provider: { complete: async () => { throw new Error("private provider response with key"); } },
+      logger,
+      providerLabel: () => "gemini",
+    });
+    await expect(gateway.callJson({ tenantId: "t1" }, {
+      capability: "capture", promptVersion: "capture@1", system: "private system",
+      input: { amount: "sensitive document" }, images: [{ mediaType: "image/png", data: "private image" }],
+    }, DocumentExtractionSchema)).rejects.toMatchObject({ code: "PROVIDER_ERROR", message: "Le fournisseur IA n'a pas pu traiter la demande" });
+    expect(logger.entries).toHaveLength(1);
+    expect(logger.entries[0]).toMatchObject({
+      tenantId: "t1", capability: "capture", model: "gemini", schemaValid: false,
+      input: {}, output: { outcome: "PROVIDER_ERROR" },
+    });
+    expect(JSON.stringify(logger.entries[0])).not.toMatch(/private|sensitive|key/);
+  });
+
+  it("returns a safe provider error even if the failure audit itself is unavailable", async () => {
+    const previous = console.error;
+    const notices: unknown[] = [];
+    console.error = (message: unknown) => { notices.push(message); };
+    try {
+      const gateway = new AiGateway({
+        provider: { complete: async () => { throw new Error("secret provider response"); } },
+        logger: { append: async () => { throw new Error("private database error"); } },
+      });
+      await expect(gateway.callJson({ tenantId: "t1" }, {
+        capability: "capture", promptVersion: "capture@1", system: "", input: {},
+      }, DocumentExtractionSchema)).rejects.toMatchObject({ code: "PROVIDER_ERROR" });
+      expect(notices).toEqual(["[arcompt] ai.provider_failure_audit_unavailable"]);
+    } finally {
+      console.error = previous;
+    }
+  });
+
+  it.each([
+    ["Anthropic API error (503): private response", "http_5xx"],
+    ["OpenAI API error (429): private response", "http_4xx"],
+    ["Gemini request timed out", "timeout"],
+  ])("records only the safe failure category for %s", async (message, category) => {
+    const logger = new MemoryCallLogger();
+    const gateway = new AiGateway({
+      provider: { complete: async () => { throw new Error(message); } },
+      logger, providerLabel: () => "selected-route",
+    });
+    await expect(gateway.callJson({ tenantId: "t1" }, {
+      capability: "capture", promptVersion: "capture@1", system: "", input: {},
+    }, DocumentExtractionSchema)).rejects.toMatchObject({ code: "PROVIDER_ERROR" });
+    expect(logger.entries[0]?.output).toEqual({ outcome: "PROVIDER_ERROR", category });
+    expect(JSON.stringify(logger.entries[0])).not.toContain("private response");
+  });
 });
 
 describe("garde-fous", () => {

@@ -90,6 +90,23 @@ describe("loadConfig — production conforme", () => {
     expect(cfg.certification.simulated).toBe(false);
   });
 
+  it("accepte OpenAI ou Gemini quand le fournisseur sélectionné a sa clé", () => {
+    const openai = loadConfig(productionEnv({ AI_PROVIDER: "openai", ANTHROPIC_API_KEY: "", OPENAI_API_KEY: "test-key" }), { warn: () => {} });
+    expect(openai.ai).toMatchObject({ provider: "openai", captureProvider: "openai", simulated: false });
+    const gemini = loadConfig(productionEnv({ AI_PROVIDER: "gemini", ANTHROPIC_API_KEY: "", GEMINI_API_KEY: "test-key" }), { warn: () => {} });
+    expect(gemini.ai).toMatchObject({ provider: "gemini", categorizeProvider: "gemini", simulated: false });
+  });
+
+  it("refuse une clé manquante pour chaque fournisseur réellement sélectionné", () => {
+    const problems = problemsOf(productionEnv({
+      AI_PROVIDER: "openai", ANTHROPIC_API_KEY: "unused-key", OPENAI_API_KEY: "",
+      AI_CAPTURE_PROVIDER: "gemini", GEMINI_API_KEY: "",
+    }));
+    expect(problems.join("\n")).toContain("OPENAI_API_KEY");
+    expect(problems.join("\n")).toContain("GEMINI_API_KEY");
+    expect(problems.join("\n")).not.toContain("ANTHROPIC_API_KEY");
+  });
+
   it("accepte les simulations seulement si l'opt-out ALLOW_INSECURE_* est posé", () => {
     const env = productionEnv({
       ANTHROPIC_API_KEY: "",
