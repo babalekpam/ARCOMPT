@@ -147,11 +147,11 @@ describe("Replit durable background queue", () => {
     expect(await count(otherTenantId)).toBe(0);
     const list = await api.request("/v1/jobs?status=FAILED", { headers: headers(tenantId) });
     expect(list.status).toBe(200);
-    const jobs = await list.json() as { id: string; resource_id: string; payload?: unknown }[];
+    const { jobs } = await list.json() as { jobs: { id: string; resource_id: string; payload?: unknown }[]; hasMore: boolean };
     expect(jobs.find((j) => j.id === id)).toMatchObject({ resource_id: tenantId });
     expect(jobs.find((j) => j.id === id)?.payload).toBeUndefined();
     const otherResponse = await api.request("/v1/jobs?status=FAILED", { headers: headers(otherTenantId) });
-    const otherJobs = await otherResponse.json() as { id: string }[];
+    const { jobs: otherJobs } = await otherResponse.json() as { jobs: { id: string }[] };
     expect(otherJobs).not.toContainEqual(expect.objectContaining({ id }));
     const post = (path: string, body: object, tenant = tenantId) =>
       api.request(path, { method: "POST", headers: headers(tenant), body: JSON.stringify(body) });
@@ -164,5 +164,53 @@ describe("Replit durable background queue", () => {
     expect((await post(`/v1/jobs/${id}/review`, { outcome: "DELIVERED", confirmed: true })).status).toBe(200);
     expect(await count(tenantId)).toBe(before - 1);
     expect((await post(`/v1/jobs/${id}/review`, { outcome: "NOT_DELIVERED", confirmed: true })).status).toBe(409);
+  });
+
+  it("pages past 100 failed jobs to review an older reminder without exposing another tenant", async () => {
+    if (!fixture) return;
+    const api = createApp({ quiet: true, auth: { mode: "dev" }, db: app,
+      jobs: queue, jobStatusSupported: true,
+      ledgerFor: () => new Ledger(new MemoryStore(), { baseCurrency: "XOF" }) });
+    const headers = (tenant: string) => ({ "content-type": "application/json", "x-user-id": tenantId, "x-tenant-id": tenant });
+    const inserted = await admin`
+      INSERT INTO background_job (tenant_id, name, payload, status, attempts, created_at)
+      SELECT ${tenantId}, 'dunning.send',
+        jsonb_build_object('tenantId', ${tenantId}::text, 'userId', ${tenantId}::text, 'invoiceId', ${tenantId}::text, 'channel', 'EMAIL'),
+        'FAILED', 1, now() - interval '1 day' - n * interval '1 minute'
+      FROM generate_series(1, 105) n
+      RETURNING id, created_at`;
+    const oldest = inserted.reduce((a, b) => a.created_at < b.created_at ? a : b);
+    const [foreign] = await admin`
+      INSERT INTO background_job (tenant_id, name, payload, status, attempts, created_at)
+      VALUES (${otherTenantId}, 'dunning.send', '{}'::jsonb, 'FAILED', 1, now() + interval '1 day')
+      RETURNING id`;
+    const getPage = async (offset: string, tenant = tenantId) =>
+      api.request(`/v1/jobs?status=FAILED&offset=${offset}`, { headers: headers(tenant) });
+    expect((await getPage("-1")).status).toBe(400);
+    expect((await getPage("1.5")).status).toBe(400);
+    const firstResponse = await getPage("0");
+    expect(firstResponse.status).toBe(200);
+    const first = await firstResponse.json() as { jobs: { id: string; name: string; review_outcome: string | null }[]; hasMore: boolean };
+    expect(first.jobs).toHaveLength(100);
+    expect(first.hasMore).toBe(true);
+    expect(first.jobs.every((j) => j.name === "dunning.send" && j.review_outcome === null)).toBe(true);
+    expect(first.jobs.some((j) => j.id === oldest.id || j.id === foreign?.id)).toBe(false);
+    const secondResponse = await getPage("100");
+    expect(secondResponse.status).toBe(200);
+    const second = await secondResponse.json() as typeof first;
+    expect(second.jobs.some((j) => j.id === oldest.id)).toBe(true);
+    expect(second.jobs.some((j) => j.id === foreign?.id)).toBe(false);
+    expect((await getPage("100", otherTenantId).then((r) => r.json()) as typeof first).jobs).toEqual([]);
+    const reviewPath = `/v1/jobs/${oldest.id}/review`;
+    const review = (confirmed: boolean, tenant = tenantId) =>
+      api.request(reviewPath, { method: "POST", headers: headers(tenant), body: JSON.stringify({ outcome: "DELIVERED", confirmed }) });
+    expect((await review(false)).status).toBe(400);
+    expect((await review(true, otherTenantId)).status).toBe(409);
+    expect((await review(true)).status).toBe(200);
+    expect((await review(true)).status).toBe(409);
+    const [record] = await admin`SELECT outcome, reviewer_id FROM background_job_review WHERE source_job_id = ${oldest.id}`;
+    expect(record).toMatchObject({ outcome: "DELIVERED", reviewer_id: tenantId });
+    const after = await getPage("0").then((r) => r.json()) as typeof first;
+    expect(after.jobs.some((j) => j.id === oldest.id)).toBe(false);
   });
 });

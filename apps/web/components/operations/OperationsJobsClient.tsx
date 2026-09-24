@@ -23,6 +23,13 @@ interface FailedJob {
   reviewed_at?: string | null;
 }
 
+interface JobsPage {
+  jobs: FailedJob[];
+  hasMore: boolean;
+}
+
+const PAGE_SIZE = 100;
+
 interface ReviewDraft {
   outcome: ReviewOutcome | "";
   confirmed: boolean;
@@ -120,6 +127,8 @@ function ReviewPanel({ job, onDone }: { job: FailedJob; onDone: () => void }) {
 
 export function OperationsJobsClient() {
   const [jobs, setJobs] = useState<FailedJob[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -128,12 +137,15 @@ export function OperationsJobsClient() {
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [remindersToReview, setRemindersToReview] = useState<number | null>(null);
 
-  const loadJobs = useCallback(async (background = false) => {
+  const loadJobs = useCallback(async (nextOffset = 0, background = false) => {
     if (background) setRefreshing(true); else setLoading(true);
     setError("");
     try {
-      const data = await apiClient<FailedJob[]>("/jobs", { query: { status: "FAILED" } });
-      setJobs(Array.isArray(data) ? data : []);
+      const data = await apiClient<JobsPage>("/jobs", { query: { status: "FAILED", offset: nextOffset }, cache: "no-store" });
+      setJobs(data.jobs);
+      setOffset(nextOffset);
+      setHasMore(data.hasMore);
+      setReviewingId(null);
       try {
         const reminderCount = await apiClient<{ count: number }>("/jobs/review-count", { cache: "no-store" });
         setRemindersToReview(reminderCount.count);
@@ -158,7 +170,7 @@ export function OperationsJobsClient() {
     try {
       await apiClient(`/jobs/${job.id}/retry`, { method: "POST", body: {} });
       setNotice("Le travail a été remis en file d’attente.");
-      await loadJobs(true);
+      await loadJobs(0, true);
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
@@ -176,22 +188,22 @@ export function OperationsJobsClient() {
           <h1 id="operations-jobs-title" className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Travaux en échec</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-300">Examinez les traitements interrompus avant de les relancer. Les rappels clients exigent une vérification de livraison.</p>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => void loadJobs(true)} disabled={loading || refreshing}>{refreshing ? "Actualisation…" : "Actualiser"}</Button>
+        <Button variant="secondary" size="sm" onClick={() => void loadJobs(offset, true)} disabled={loading || refreshing}>{refreshing ? "Actualisation…" : "Actualiser"}</Button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60"><p className="text-xs uppercase tracking-wide text-slate-500">À examiner</p><p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">{loading ? "—" : jobs.filter((job) => !job.review_outcome).length}</p></div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60"><p className="text-xs uppercase tracking-wide text-slate-500">Relançables</p><p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">{loading ? "—" : retryableCount}</p></div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60"><p className="text-xs uppercase tracking-wide text-slate-500">À examiner sur cette page</p><p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">{loading ? "—" : jobs.filter((job) => !job.review_outcome).length}</p></div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60"><p className="text-xs uppercase tracking-wide text-slate-500">Relançables sur cette page</p><p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">{loading ? "—" : retryableCount}</p></div>
         <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 dark:border-amber-900/60 dark:bg-amber-950/20"><p className="text-xs uppercase tracking-wide text-amber-800 dark:text-amber-200">Rappels à vérifier</p><p className="mt-1 text-2xl font-semibold text-amber-950 dark:text-amber-100">{loading ? "—" : remindersToReview ?? "—"}</p></div>
       </div>
 
       {notice ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200" role="status">{notice}</p> : null}
-      {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200" role="alert"><p>{error}</p><Button variant="secondary" size="sm" className="mt-3" onClick={() => void loadJobs()}>Réessayer</Button></div> : null}
+      {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200" role="alert"><p>{error}</p><Button variant="secondary" size="sm" className="mt-3" onClick={() => void loadJobs(offset)}>Réessayer</Button></div> : null}
 
       {loading ? (
         <Card><div className="space-y-3" aria-label="Chargement"><div className="h-5 w-48 animate-pulse rounded bg-slate-200 dark:bg-slate-800" /><div className="h-16 animate-pulse rounded bg-slate-100 dark:bg-slate-900" /><div className="h-16 animate-pulse rounded bg-slate-100 dark:bg-slate-900" /></div></Card>
       ) : jobs.length === 0 && !error ? (
-        <Card><div className="py-10 text-center"><div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"><span className="h-2.5 w-2.5 rounded-full bg-current" /></div><h2 className="mt-3 text-base font-semibold text-slate-900 dark:text-white">Aucun échec en attente</h2><p className="mt-1 text-sm text-slate-500">Les traitements récents ne nécessitent aucune intervention.</p></div></Card>
+        <Card><div className="py-10 text-center"><div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"><span className="h-2.5 w-2.5 rounded-full bg-current" /></div><h2 className="mt-3 text-base font-semibold text-slate-900 dark:text-white">{offset ? "Aucun échec sur cette page" : "Aucun échec en attente"}</h2><p className="mt-1 text-sm text-slate-500">{offset ? "Revenez à la page précédente pour consulter les autres travaux." : "Les traitements récents ne nécessitent aucune intervention."}</p></div></Card>
       ) : (
         <div className="space-y-3">
           {jobs.map((job) => (
@@ -212,11 +224,18 @@ export function OperationsJobsClient() {
                        : null}
                 </div>
               </div>
-               {job.name === "dunning.send" && !job.review_outcome && reviewingId === job.id ? <ReviewPanel job={job} onDone={() => { setReviewingId(null); void loadJobs(true); }} /> : null}
+                {job.name === "dunning.send" && !job.review_outcome && reviewingId === job.id ? <ReviewPanel job={job} onDone={() => { void loadJobs(0, true); }} /> : null}
             </Card>
           ))}
         </div>
       )}
+      {!loading && (offset > 0 || hasMore) ? (
+        <nav className="flex items-center justify-between gap-3 pt-2" aria-label="Pages des travaux en échec">
+          <Button variant="secondary" size="sm" onClick={() => void loadJobs(Math.max(0, offset - PAGE_SIZE))} disabled={offset === 0 || refreshing}>Page précédente</Button>
+          <span className="text-sm text-slate-600 dark:text-slate-300">Page {Math.floor(offset / PAGE_SIZE) + 1}</span>
+          <Button variant="secondary" size="sm" onClick={() => void loadJobs(offset + PAGE_SIZE)} disabled={!hasMore || refreshing}>Page suivante</Button>
+        </nav>
+      ) : null}
     </section>
   );
 }

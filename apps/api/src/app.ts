@@ -150,7 +150,11 @@ export function createApp(deps: AppDeps) {
     if (!db || !deps.jobStatusSupported) return c.json({ error: { code: "UNAVAILABLE", message: "Statut de la file indisponible" } }, 503);
     const status = c.req.query("status") ?? "FAILED";
     if (!["PENDING", "RUNNING", "DONE", "FAILED"].includes(status)) return c.json({ error: { code: "VALIDATION" } }, 400);
+    const rawOffset = c.req.query("offset") ?? "0";
+    const offset = Number(rawOffset);
+    if (!/^\d+$/.test(rawOffset) || !Number.isSafeInteger(offset)) return c.json({ error: { code: "VALIDATION" } }, 400);
     const auth = c.get("auth");
+    const pageSize = 100;
     const jobs = await withTenant(db, auth, (tx) => tx`
       SELECT j.id, j.name, j.status, j.attempts, j.last_error, j.created_at,
         CASE j.name WHEN 'document.extract' THEN j.payload->>'documentId'
@@ -160,9 +164,11 @@ export function createApp(deps: AppDeps) {
         r.outcome AS review_outcome, r.reviewed_at
       FROM background_job j LEFT JOIN background_job_review r ON r.source_job_id = j.id AND r.tenant_id = j.tenant_id
       WHERE j.tenant_id = ${auth.tenantId} AND j.status = ${status}
-      ORDER BY CASE WHEN j.status = 'FAILED' AND r.source_job_id IS NOT NULL THEN 1 ELSE 0 END,
-        j.created_at DESC LIMIT 100`);
-    return c.json(jobs);
+      ORDER BY CASE WHEN j.status = 'FAILED' AND j.name = 'dunning.send' AND r.source_job_id IS NULL THEN 0
+          WHEN j.status = 'FAILED' AND r.source_job_id IS NULL THEN 1 ELSE 2 END,
+        j.created_at DESC, j.id DESC
+      LIMIT ${pageSize + 1} OFFSET ${offset}`);
+    return c.json({ jobs: jobs.slice(0, pageSize), hasMore: jobs.length > pageSize });
   });
   api.get("/jobs/:id", async (c) => {
     if (!db || !deps.jobStatusSupported) return c.json({ error: { code: "UNAVAILABLE", message: "Statut de la file indisponible" } }, 503);
