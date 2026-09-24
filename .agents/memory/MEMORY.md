@@ -15,4 +15,4 @@
 - [Zoho SMTP endpoint](zoho-smtp-endpoint.md) — trust the account-tested SMTP host over generic Zoho guidance; a test message was confirmed received.
 - [Queue privilege boundary](queue-privilege-boundary.md) — test queue startup with the actual restricted login; cross-tenant claim capability must not be granted to the HTTP data role.
 - [Development workflow cleanup](workflow-process-groups.md) — a failed restart can leave Next.js listening; stop the old process group before retrying, and isolate child groups for cleanup.
-- [VPS hosting boundary](vps-hosting-boundary.md) — user declined both a separate Clerk tenant for VPS hosting and a Replit-app/VPS-database split; do not assume either is approved.
+- [VPS hosting boundary](vps-hosting-boundary.md) — user approved a separate production Clerk tenant for the VPS; keep Replit development identity and shared VPS apps separate.

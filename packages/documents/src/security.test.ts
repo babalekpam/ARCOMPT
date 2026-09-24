@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { assertRecentClamAvDatabase, ClamAvScanner } from "./security.js";
+import { assertRecentClamAvDatabase, ClamAvScanner, createScannerFromEnv } from "./security.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
 const directories: string[] = [];
@@ -43,6 +43,20 @@ describe("ClamAvScanner", () => {
     const scan = await scanner("stream: OK\0");
     await new Promise<void>((resolve) => servers.pop()!.close(() => resolve()));
     await expect(scan.scan(Buffer.from("test file"))).rejects.toThrow();
+  });
+
+  it("scans through a Unix socket and rejects infected files", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "clamav-socket-"));
+    directories.push(directory);
+    const path = join(directory, "clamd.sock");
+    const server = createServer((socket) => socket.on("data", () => socket.end("stream: Eicar-Test-Signature FOUND\0")));
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(path, resolve));
+    const scan = createScannerFromEnv({ NODE_ENV: "production", CLAMAV_SOCKET: path });
+    await expect(scan.scan(Buffer.from("test file"))).resolves.toEqual({
+      clean: false, signature: "Eicar-Test-Signature",
+    });
+    expect(() => createScannerFromEnv({ CLAMAV_SOCKET: path, CLAMAV_HOST: "localhost" })).toThrow("ensemble");
   });
 });
 

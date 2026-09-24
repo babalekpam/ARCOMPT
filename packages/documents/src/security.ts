@@ -76,19 +76,22 @@ export class NoopScanner implements AntivirusScanner {
   }
 }
 
-/** Client clamd minimal (commande INSTREAM). Hôte `CLAMAV_HOST`, port `CLAMAV_PORT` (3310). */
+/** Client clamd minimal (commande INSTREAM), via TCP ou socket Unix local. */
 export class ClamAvScanner implements AntivirusScanner {
   constructor(
     private readonly host: string,
     private readonly port = 3310,
     private readonly timeoutMs = 30000,
     private readonly databaseDirectory?: string,
+    private readonly socketPath?: string,
   ) {}
 
   async scan(bytes: Uint8Array): Promise<ScanResult> {
     if (this.databaseDirectory) await assertRecentClamAvDatabase(this.databaseDirectory);
     return new Promise((resolve, reject) => {
-      const socket = connect({ host: this.host, port: this.port });
+      const socket = this.socketPath
+        ? connect({ path: this.socketPath })
+        : connect({ host: this.host, port: this.port });
       let reply = "";
       socket.setTimeout(this.timeoutMs, () => socket.destroy(new Error("clamd : délai dépassé")));
       socket.on("error", reject);
@@ -136,13 +139,17 @@ export function guardSimulatedDependency(opts: {
   warn(`[arcompt] SIMULATION : ${opts.simulated} (${opts.missing}). Jamais en production.`);
 }
 
-/** Antivirus réel si `CLAMAV_HOST` ; sinon scanner neutre, interdit en production sans `ALLOW_INSECURE_ANTIVIRUS=1`. */
+/** Antivirus réel via CLAMAV_SOCKET ou CLAMAV_HOST, sinon repli explicite. */
 export function createScannerFromEnv(env: NodeJS.ProcessEnv = process.env): AntivirusScanner {
+  if (env.CLAMAV_SOCKET?.trim() && env.CLAMAV_HOST?.trim())
+    throw new Error("CLAMAV_SOCKET et CLAMAV_HOST ne peuvent pas être configurés ensemble");
+  if (env.CLAMAV_SOCKET?.trim())
+    return new ClamAvScanner("", 3310, 30000, env.CLAMAV_DATABASE_DIR, env.CLAMAV_SOCKET.trim());
   if (env.CLAMAV_HOST) return new ClamAvScanner(env.CLAMAV_HOST, env.CLAMAV_PORT ? Number(env.CLAMAV_PORT) : 3310, 30000, env.CLAMAV_DATABASE_DIR);
   guardSimulatedDependency({
     env,
     simulated: "l'analyse antivirus des pièces téléversées (tous les fichiers seraient acceptés)",
-    missing: "CLAMAV_HOST est absent",
+    missing: "CLAMAV_HOST et CLAMAV_SOCKET sont absents",
     optOut: "ALLOW_INSECURE_ANTIVIRUS",
   });
   return new NoopScanner();

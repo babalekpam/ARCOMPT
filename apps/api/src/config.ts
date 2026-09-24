@@ -257,10 +257,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
   }
 
   // --- Antivirus ------------------------------------------------------------
-  const antivirusDriver: "clamav" | "none" = present(env.CLAMAV_HOST) ? "clamav" : "none";
+  const antivirusDriver: "clamav" | "none" = present(env.CLAMAV_HOST) || present(env.CLAMAV_SOCKET) ? "clamav" : "none";
+  if (present(env.CLAMAV_HOST) && present(env.CLAMAV_SOCKET)) {
+    problems.push("CLAMAV_HOST et CLAMAV_SOCKET : configurez un seul transport antivirus.");
+  }
+  if (present(env.CLAMAV_SOCKET) && !env.CLAMAV_SOCKET!.trim().startsWith("/")) {
+    problems.push("CLAMAV_SOCKET : le chemin doit être absolu.");
+  }
   if (antivirusDriver === "none" && !insecure.antivirus) {
     problems.push(
-      `CLAMAV_HOST : absent — l'antivirus serait neutre et accepterait tous les fichiers téléversés. Posez ${INSECURE_OPT_OUT.antivirus}=1 pour l'accepter explicitement.`,
+      `CLAMAV_HOST / CLAMAV_SOCKET : absents — l'antivirus serait neutre et accepterait tous les fichiers téléversés. Posez ${INSECURE_OPT_OUT.antivirus}=1 pour l'accepter explicitement.`,
     );
   }
 
