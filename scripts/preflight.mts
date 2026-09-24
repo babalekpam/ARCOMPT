@@ -34,16 +34,14 @@
  * est forcé pour la lecture, jamais écrit) : contrôler autre chose que ce qui
  * sera servi ne contrôlerait rien.
  */
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { ConfigError, loadConfig } from "../apps/api/src/config.js";
+import { assertProductionDatabaseSecurity } from "../apps/api/src/database-readiness.js";
+import { assertDistinctDatabaseUrls, assertProductionQueueDatabaseSecurity } from "../apps/api/src/queue-database.js";
 import { MailError, SmtpMailer, smtpOptionsFromEnv } from "../packages/mailer/src/index.js";
 import { createDb } from "../packages/db/src/client.js";
-import { APP_GROUP_ROLE, describeViolation, verifyAppPrivileges } from "../packages/db/src/provision.js";
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 type Level = "ok" | "warn" | "fail" | "skip";
 
@@ -159,7 +157,11 @@ if (cfg) {
     ["Canal WhatsApp", cfg.whatsapp.simulated, "Les messages sortants sont avalés : le client ne reçoit rien."],
   ];
   for (const [name, isSimulated, consequence] of simulated) {
-    if (isSimulated) warn(name, `simulé ou neutre. ${consequence}`, "Renseignez le service réel ; l'opt-out ALLOW_INSECURE_* ne fait que rendre la décision explicite.");
+    if (isSimulated && (name === "Stockage des pièces" || name === "Antivirus")) {
+      fail(name, `simulé ou neutre. ${consequence}`, "Renseignez le service réel ; les dérogations ALLOW_INSECURE_STORAGE et ALLOW_INSECURE_ANTIVIRUS ne sont pas publiables.");
+    } else if (isSimulated) {
+      warn(name, `simulé ou neutre. ${consequence}`, "Renseignez le service réel ; l'opt-out ALLOW_INSECURE_* ne fait que rendre la décision explicite.");
+    }
     else ok(name, "service réel configuré");
   }
   if (!cfg.payments.enabled) ok("Encaissement mobile money", "désactivé proprement (PAYMENT_PROVIDER vide) — fonction coupée, jamais simulée");
@@ -265,97 +267,46 @@ skip(
 // ---------------------------------------------------------------------------
 open("Base de données");
 
-const dbUrl = env.DATABASE_URL?.trim();
-if (!dbUrl) {
-  fail("Connexion", "DATABASE_URL absent", "Le compte de l'APPLICATION (membre de arcompt_app), jamais le propriétaire du schéma : scripts/provision-app-role.mts.");
+const appDbUrl = env.APP_DATABASE_URL?.trim();
+const queueDbUrl = env.QUEUE_DATABASE_URL?.trim();
+if (!appDbUrl) {
+  fail("Connexion applicative", "APP_DATABASE_URL absent ; DATABASE_URL n'est jamais utilisé comme repli", "Fournissez une connexion dédiée au rôle applicatif restreint, distincte du compte propriétaire géré.");
 } else {
-  const db = createDb({ url: dbUrl, max: 1 });
+  const db = createDb({ url: appDbUrl, max: 1 });
   try {
-    const [srv] = await db`SELECT version() AS v, current_user AS who, current_database() AS db`;
-    ok("Connexion", `${String(srv!.who)}@${String(srv!.db)} — ${String(srv!.v).split(",")[0]}`);
-
-    // --- Le compte utilisé ne doit rien pouvoir contourner ------------------
-    const [role] = await db`
-      SELECT rolsuper, rolbypassrls, rolcreaterole, rolcreatedb
-        FROM pg_roles WHERE rolname = current_user`;
-    const dangerous: string[] = [];
-    if (role?.rolsuper) dangerous.push("superuser");
-    if (role?.rolbypassrls) dangerous.push("bypassrls");
-    if (role?.rolcreaterole) dangerous.push("createrole");
-    if (role?.rolcreatedb) dangerous.push("createdb");
-    if (dangerous.length === 0) {
-      ok("Compte applicatif", "ni superuser ni bypassrls : la RLS s'applique vraiment à ce compte");
-    } else if (dangerous.includes("superuser") || dangerous.includes("bypassrls")) {
-      fail(
-        "Compte applicatif",
-        `le compte porte ${dangerous.join(", ")} : la Row-Level Security NE S'APPLIQUE PAS. Un dossier verrait les écritures d'un autre`,
-        "Créez le rôle restreint puis basculez DATABASE_URL dessus : APP_DB_PASSWORD=… pnpm exec tsx scripts/provision-app-role.mts",
-      );
-    } else {
-      warn("Compte applicatif", `le compte porte ${dangerous.join(", ")} : plus de pouvoir que nécessaire`, "Retirez ces attributs, ou utilisez le rôle produit par scripts/provision-app-role.mts.");
-    }
-
-    // --- L'isolation multi-dossiers, table par table ------------------------
-    // Le contrôle le plus important du script : une table qui porte tenant_id
-    // sans RLS FORCÉE est une fuite entre clients, et elle ne se voit pas.
-    const rls = await db`
-      SELECT c.relname AS table, c.relrowsecurity AS enabled, c.relforcerowsecurity AS forced
-        FROM pg_class c
-        JOIN pg_namespace n ON n.oid = c.relnamespace
-       WHERE n.nspname = 'public' AND c.relkind = 'r'
-         AND EXISTS (
-           SELECT 1 FROM information_schema.columns col
-            WHERE col.table_schema = 'public' AND col.table_name = c.relname AND col.column_name = 'tenant_id')
-       ORDER BY c.relname`;
-    if (rls.length === 0) {
-      fail("Isolation par dossier", "aucune table portant tenant_id : le schéma n'est pas celui d'ARCOMPT, ou les migrations n'ont jamais été jouées", "pnpm db:migrate avec DATABASE_URL pointant le compte PROPRIÉTAIRE du schéma.");
-    } else {
-      const leaky = rls.filter((r) => !r.enabled || !r.forced).map((r) => String(r.table));
-      if (leaky.length === 0) {
-        ok("Isolation par dossier", `RLS activée ET forcée sur les ${rls.length} tables portant tenant_id`);
-      } else {
-        fail(
-          "Isolation par dossier",
-          `${leaky.length} table(s) sans RLS forcée : ${leaky.join(", ")} — un dossier peut lire les données d'un autre`,
-          "Rejouez les migrations sur une base propre. Une RLS désactivée à la main ne se rattrape pas en production : les données ont déjà pu fuir.",
-        );
-      }
-    }
-
-    // --- Le modèle de droits, celui que provision-app-role.mts installe -----
-    try {
-      const verification = await verifyAppPrivileges(db, APP_GROUP_ROLE);
-      if (verification.ok) ok("Droits SQL", `les ${verification.observations.length} contrôles du modèle de droits passent`);
-      else {
-        for (const v of verification.violations) {
-          fail("Droits SQL", describeViolation(v), "APP_DB_PASSWORD=… pnpm exec tsx scripts/provision-app-role.mts, avec DATABASE_URL sur le compte propriétaire.");
-        }
-      }
-    } catch (e) {
-      fail("Droits SQL", `modèle de droits non vérifiable : ${e instanceof Error ? e.message : String(e)}`, `Le rôle de groupe ${APP_GROUP_ROLE} doit exister et le compte courant en être membre.`);
-    }
-
-    // --- Les migrations ----------------------------------------------------
-    const files = readdirSync(path.join(ROOT, "packages/db/migrations")).filter((f) => f.endsWith(".sql")).sort();
-    try {
-      const applied = new Set((await db`SELECT name FROM schema_migration`).map((r) => String(r.name)));
-      const missing = files.filter((f) => !applied.has(f));
-      if (missing.length === 0) ok("Migrations", `les ${files.length} migrations du dépôt sont appliquées`);
-      else fail("Migrations", `${missing.length} migration(s) non appliquée(s) : ${missing.join(", ")}`, "pnpm db:migrate, avec DATABASE_URL pointant le compte PROPRIÉTAIRE du schéma — jamais le compte applicatif.");
-    } catch {
-      // Attendu, et c'est une bonne nouvelle : le compte applicatif n'a pas le
-      // droit de lire l'historique des migrations (EXPECTED_APP_PRIVILEGES).
-      skip(
-        "Migrations",
-        "historique illisible depuis ce compte — ce qui est le comportement voulu du rôle restreint",
-        `Depuis le compte propriétaire : DATABASE_URL=… pnpm exec tsx scripts/preflight.mts. Le dépôt compte ${files.length} migrations, la dernière étant ${files.at(-1)}.`,
-      );
-    }
-  } catch (e) {
-    fail("Connexion", `PostgreSQL injoignable : ${e instanceof Error ? e.message : String(e)}`, "Vérifiez l'hôte, le port, le mot de passe, et que la base accepte les connexions depuis le serveur (pas seulement depuis votre poste).");
+    await assertProductionDatabaseSecurity(db);
+    ok("Connexion applicative", "APP_DATABASE_URL répond avec un rôle restreint ; RLS, politiques, fonctions sécurisées et droits SQL sont conformes");
+    skip("Historique des migrations", "schema_migration n'est volontairement jamais interrogée avec le rôle applicatif", "Vérifiez l'étape de migration dans le journal de livraison contrôlé, séparément du runtime de production.");
+  } catch {
+    fail("Connexion applicative", "connexion impossible ou contrôle de sécurité refusé (aucun détail de connexion n'est affiché)", "Corrigez APP_DATABASE_URL ou le modèle de droits avant publication ; ne remplacez pas cette URL par la connexion propriétaire.");
   } finally {
     await db.end({ timeout: 5 });
   }
+}
+
+if (!env.REDIS_URL?.trim()) {
+  if (!queueDbUrl) {
+    fail("Connexion de file", "QUEUE_DATABASE_URL absent sans REDIS_URL", "Fournissez une connexion dédiée au rôle arcompt_queue, distincte des connexions propriétaire et applicative.");
+  } else if (!appDbUrl) {
+    fail("Connexion de file", "le rôle de file ne peut pas être comparé au rôle applicatif sans APP_DATABASE_URL", "Fournissez d'abord les deux connexions runtime restreintes.");
+  } else {
+    try {
+      assertDistinctDatabaseUrls(appDbUrl, queueDbUrl);
+      const appDb = createDb({ url: appDbUrl, max: 1 });
+      const queueDb = createDb({ url: queueDbUrl, max: 1 });
+      try {
+        await assertProductionQueueDatabaseSecurity(queueDb, appDb);
+        ok("Connexion de file", "QUEUE_DATABASE_URL répond avec un rôle dédié, distinct du rôle applicatif et limité aux fonctions de file");
+      } finally {
+        await queueDb.end({ timeout: 5 });
+        await appDb.end({ timeout: 5 });
+      }
+    } catch {
+      fail("Connexion de file", "connexion impossible ou contrôle de sécurité refusé (aucun détail de connexion n'est affiché)", "Corrigez QUEUE_DATABASE_URL ou les droits du rôle de file ; aucune connexion propriétaire ou applicative ne doit la remplacer.");
+    }
+  }
+} else {
+  ok("Connexion de file", "REDIS_URL est configurée ; aucune connexion PostgreSQL de file n'est utilisée");
 }
 
 // ---------------------------------------------------------------------------

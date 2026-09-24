@@ -190,15 +190,22 @@ GRANT arcompt_app TO arcompt_app_login;
 GRANT arcompt_queue TO arcompt_queue_login;
 SQL
   app_url="postgres://arcompt_app_login@127.0.0.1:$PORT/arcompt_rehearsal"
-  LOCAL_APP_URL="$app_url" corepack pnpm exec tsx -e '
+  LOCAL_APP_URL="$app_url" LOCAL_QUEUE_URL="postgres://arcompt_queue_login@127.0.0.1:$PORT/arcompt_rehearsal" corepack pnpm exec tsx -e '
     import { createDb } from "./packages/db/src/client.ts";
     import { assertProductionDatabaseSecurity } from "./apps/api/src/database-readiness.ts";
+    import { assertProductionQueueDatabaseSecurity } from "./apps/api/src/queue-database.ts";
     (async () => {
       const db = createDb({ url: process.env.LOCAL_APP_URL, max: 2 });
+      const queue = createDb({ url: process.env.LOCAL_QUEUE_URL, max: 1 });
       try {
         await assertProductionDatabaseSecurity(db);
+        await assertProductionQueueDatabaseSecurity(queue, db);
+        let rejected = false;
+        try { await assertProductionQueueDatabaseSecurity(db, db); } catch { rejected = true; }
+        if (!rejected) throw new Error("queue guard accepted the app connection");
+        console.log("actual restricted queue-login startup guard and wrong-role rejection: PASS");
         console.log("actual restricted app-login startup guard: PASS");
-      } finally { await db.end(); }
+      } finally { await queue.end(); await db.end(); }
     })().catch((e) => { console.error(e); process.exitCode = 1; });
   '
   if PGUSER=arcompt_queue_login psql_local -Atqc 'SELECT count(*) FROM public.background_job' >/dev/null 2>&1; then

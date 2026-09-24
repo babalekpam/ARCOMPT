@@ -23,9 +23,10 @@ docker compose up -d            # PostgreSQL + Redis
 pnpm install
 pnpm db:migrate                 # toutes les migrations, sous le compte propriétaire du schéma
 
-# Une fois par base : créer le rôle de connexion applicatif, puis basculer
-# DATABASE_URL de l'API et du worker dessus (voir « Rôles SQL »).
+# Une fois par base : créer les connexions runtime restreintes. DATABASE_URL
+# reste propriétaire et n'est jamais la connexion de l'API (voir « Rôles SQL »).
 APP_DB_PASSWORD='<mot de passe fort>' pnpm exec tsx scripts/provision-app-role.mts
+QUEUE_DB_PASSWORD='<autre mot de passe fort>' pnpm exec tsx scripts/provision-queue-role.mts
 
 SEED_FIRM=1 pnpm db:seed        # dossier PME + cabinet de démonstration (développement uniquement)
 pnpm preflight                  # contrôle complet : base, RLS, droits, identité, messagerie
@@ -41,7 +42,7 @@ Lancé avant les migrations, il refuse avec un message explicite.
 
 Avec `NODE_ENV=production`, l'API refuse de démarrer tant que les secrets et les connecteurs obligatoires ne sont pas réels : mode d'authentification, secrets de signature, clé de chiffrement de la paie, stockage objet, passerelle IA, antivirus, envoi des e-mails, opérateur de paiement et connecteur de certification. WhatsApp est une dépendance optionnelle : sans `WHATSAPP_TOKEN` et `WHATSAPP_PHONE_ID`, le canal est explicitement désactivé (routes en 503, tâches worker en échec, aucun envoi déclaré). Une configuration WhatsApp partielle est invalide ; lorsqu'il est configuré, `WHATSAPP_APP_SECRET` est obligatoire pour vérifier les signatures. La validation de démarrage **rassemble tous les problèmes et échoue avec la liste complète**, plutôt que d'échouer au premier : un déploiement se corrige en une passe.
 
-Quelques simulations peuvent être acceptées sciemment en production au moyen de variables d'opt-out explicites, une par sujet ; elles sont volontairement repérables par une simple recherche dans la configuration. Les secrets de signature et l'opérateur de paiement n'en ont pas : aucune exception n'y est possible. Le détail des variables, de leur effet et des opt-out disponibles vit dans `.env.example`, qui reste la référence à jour.
+Quelques simulations peuvent être acceptées sciemment en production au moyen de variables d'opt-out explicites, une par sujet ; elles sont volontairement repérables par une simple recherche dans la configuration. Elles ne constituent toutefois pas une configuration publiable : `preflight` refuse notamment `ALLOW_INSECURE_STORAGE` et `ALLOW_INSECURE_ANTIVIRUS`. Les secrets de signature et l'opérateur de paiement n'ont aucune exception. Le détail des variables et de leur effet vit dans `.env.example`, qui reste la référence à jour.
 
 ## Sondes et arrêt en douceur
 
@@ -68,21 +69,31 @@ worker suit le même schéma (fermeture de la file, puis du pool).
 
 ## Rôles SQL
 
-Deux comptes, deux usages. La séparation est outillée : une migration pose le
-modèle de droits, un script crée le rôle de connexion.
+Trois comptes, trois usages. La séparation est outillée : une migration pose le
+modèle de droits, puis les scripts de provisionnement créent les connexions
+runtime. Les URL et les rôles de l'application et de la file sont distincts.
 
 | Compte | Qui l'utilise | Droits |
 | --- | --- | --- |
-| Propriétaire du schéma (`arcompt` en local, compte de migration dédié en production) | `pnpm db:migrate`, `pnpm db:seed`, `scripts/provision-app-role.mts`, `scripts/create-test-account.mts` | DDL, propriétaire des tables |
-| `arcompt_app_login` (membre de `arcompt_app`) | API et worker (`DATABASE_URL`) | DML seulement, soumis à la RLS, sans DDL, sans `BYPASSRLS` |
+| Propriétaire du schéma (`arcompt` en local, connexion gérée `DATABASE_URL` en production) | Pipeline de migration contrôlé et scripts administratifs hors runtime | DDL, propriétaire des tables |
+| `arcompt_app_login` (membre de `arcompt_app`) | API (`APP_DATABASE_URL`) | DML seulement, soumis à la RLS, sans DDL, sans `BYPASSRLS` |
+| `arcompt_queue_login` (membre de `arcompt_queue`) | Consommateur PostgreSQL embarqué, seulement sans Redis (`QUEUE_DATABASE_URL`) | Exécution des seules fonctions `background_job_*`, sans accès direct aux tables |
 
 ```bash
-# une fois par base, avec DATABASE_URL pointant le compte propriétaire
+# une fois par base, depuis l'étape administrative contrôlée
 APP_DB_PASSWORD='<mot de passe fort, ≥ 16 caractères>' \
   pnpm exec tsx scripts/provision-app-role.mts
-# puis, dans la configuration de l'API et du worker :
-DATABASE_URL=postgres://arcompt_app_login:<mot de passe>@<hôte>:5432/<base>
+QUEUE_DB_PASSWORD='<autre mot de passe fort, ≥ 16 caractères>' \
+  pnpm exec tsx scripts/provision-queue-role.mts
+# puis, dans la configuration runtime (valeurs distinctes, jamais affichées) :
+APP_DATABASE_URL=postgres://arcompt_app_login:<mot de passe>@<hôte>:5432/<base>
+QUEUE_DATABASE_URL=postgres://arcompt_queue_login:<autre mot de passe>@<hôte>:5432/<base>
 ```
+
+La connexion gérée `DATABASE_URL` reste propriétaire : ne la « basculez » pas
+vers un rôle runtime et ne laissez pas l'API s'y replier. En production, les
+migrations sont une étape de livraison séparée et auditée, jamais une commande
+de démarrage, de build ou une correction manuelle suggérée par `preflight`.
 
 Le script crée le rôle de connexion, le rend membre de `arcompt_app`, lui donne
 `CONNECT` sur la base, vérifie qu'il n'est ni superutilisateur ni `BYPASSRLS`,

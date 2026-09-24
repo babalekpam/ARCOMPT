@@ -28,9 +28,21 @@ Dans l'environnement de production, vérifier sans afficher les valeurs :
   effectivement, et que les cookies de session fonctionnent ;
 - `CLERK_AUTHORIZED_PARTIES` contenant l'origine HTTPS canonique, ou `APP_URL`
   correctement configurée ;
-- `DATABASE_URL`, migrations, rôle SQL restreint, RLS forcée et toutes les
-  autres variables de production. `pnpm preflight` doit être relancé contre la
-  base et l'environnement de production ; ses `⚠` et `·` restent à traiter.
+- `DATABASE_URL` est la connexion propriétaire gérée, réservée à l'étape de
+  migration contrôlée et jamais utilisée par un processus runtime ;
+- `APP_DATABASE_URL` est la connexion restreinte de l'API, soumise à la RLS ;
+- sans `REDIS_URL`, `QUEUE_DATABASE_URL` est une troisième connexion, dédiée
+  aux seules fonctions de file PostgreSQL. Les deux URL runtime doivent être
+  distinctes et leurs rôles PostgreSQL également ;
+- RLS forcée et toutes les autres variables de production. `pnpm preflight`
+  contrôle uniquement les connexions runtime restreintes : il ne se replie pas
+  sur `DATABASE_URL`, n'en affiche aucune valeur et ne lit pas
+  `schema_migration`. Ses `⚠` et `·` restent à traiter.
+
+Ne remplacez jamais la connexion gérée `DATABASE_URL` par un rôle runtime et ne
+l'injectez pas dans l'API. Les migrations appartiennent au pipeline de livraison
+contrôlé ; ne lancez pas manuellement une migration contre la production pour
+faire passer `preflight`.
 
 Ne remplacez pas ces contrôles par une vérification de clé seule. Une session
 Clerk prouve l'identité, tandis que la base ARCOMPT décide des dossiers, rôles,

@@ -172,7 +172,8 @@ describe("loadConfig — production incomplète", () => {
   it("rassemble TOUS les problèmes en une seule erreur, pas seulement le premier", () => {
     const problems = problemsOf({ NODE_ENV: "production", AUTH_MODE: "dev", CERTIFICATION_CONNECTOR: "mock", PAYMENT_PROVIDER: "mock" });
     const expected = [
-      "DATABASE_URL",
+      "APP_DATABASE_URL",
+      "QUEUE_DATABASE_URL",
       "AUTH_MODE",
       "KEYCLOAK_ISSUER",
       "KEYCLOAK_CLIENT_ID",
@@ -188,6 +189,16 @@ describe("loadConfig — production incomplète", () => {
       expect(problems.some((p) => p.includes(variable)), `${variable} devrait être signalé`).toBe(true);
     }
     expect(problems.length).toBeGreaterThanOrEqual(expected.length);
+  });
+
+  it("refuse la connexion propriétaire seule comme repli de production", () => {
+    const problems = problemsOf(productionEnv({
+      APP_DATABASE_URL: "",
+      QUEUE_DATABASE_URL: "",
+      DATABASE_URL: "postgres://owner:pass@db.internal:5432/arcompt",
+    }));
+    expect(problems.join("\n")).toContain("APP_DATABASE_URL");
+    expect(problems.join("\n")).toContain("QUEUE_DATABASE_URL");
   });
 
   it("le message de l'erreur cite chaque variable manquante", () => {
