@@ -165,7 +165,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
   }
 
   // --- Base de données ------------------------------------------------------
-  if (!present(env.DATABASE_URL)) problems.push("DATABASE_URL : absent — aucune base de données à laquelle se connecter.");
+  if (isProduction) {
+    if (!present(env.APP_DATABASE_URL)) problems.push("APP_DATABASE_URL : absent — le rôle applicatif restreint est obligatoire.");
+    if (!present(env.REDIS_URL) && !present(env.QUEUE_DATABASE_URL))
+      problems.push("QUEUE_DATABASE_URL : absent — le rôle de file dédié est obligatoire sans Redis.");
+  } else if (!present(env.DATABASE_URL)) {
+    problems.push("DATABASE_URL : absent — aucune base de données à laquelle se connecter.");
+  }
 
   // --- Authentification -----------------------------------------------------
   const mode: AuthMode = env.AUTH_MODE === "oidc" ? "oidc" : env.AUTH_MODE === "clerk" ? "clerk" : "dev";
@@ -287,7 +293,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
     port: Number.isFinite(port) && port > 0 ? port : 4000,
     appUrl: env.APP_URL ?? "http://localhost:3000",
     baseCurrency: env.DEFAULT_CURRENCY ?? "XOF",
-    ...(present(env.DATABASE_URL) ? { databaseUrl: env.DATABASE_URL } : {}),
+    ...(present(env.APP_DATABASE_URL) ? { databaseUrl: env.APP_DATABASE_URL } : present(env.DATABASE_URL) ? { databaseUrl: env.DATABASE_URL } : {}),
     auth: {
       mode,
       ...(mode === "oidc" && present(env.KEYCLOAK_ISSUER) ? { issuer: env.KEYCLOAK_ISSUER } : {}),

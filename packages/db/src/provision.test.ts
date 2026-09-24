@@ -10,6 +10,7 @@ import {
   EXPECTED_APP_PRIVILEGES,
   ProvisionError,
   describeViolation,
+  provisionQueueRole,
   provisionAppRole,
   verifyAppPrivileges,
 } from "./provision.js";
@@ -219,6 +220,75 @@ run("provisionnement du rôle de connexion", () => {
     // qu'utilise le reste de la suite.
     const restored = await provisionAppRole(db, { login: LOGIN, password: PASSWORD });
     expect(restored.created).toBe(false);
+  });
+
+  it("provisionne un login de file réellement sans DML de table", async () => {
+    const queueLogin = `arcompt_q_${randomUUID().replace(/-/g, "").slice(0, 10)}`;
+    const queuePassword = `pw-${randomUUID()}`;
+    const result = await provisionQueueRole(db, { login: queueLogin, password: queuePassword });
+    expect(result.privileges.ok).toBe(true);
+    const url = new URL(env!.url);
+    url.username = queueLogin;
+    url.password = queuePassword;
+    const queueDb = createDb({ url: url.toString(), max: 1 });
+    try {
+      const [check] = await queueDb`
+        SELECT has_function_privilege(current_user, 'background_job_claim(text[])', 'EXECUTE') AS claim,
+          has_table_privilege(current_user, 'public.background_job', 'SELECT') AS can_select,
+          has_table_privilege(current_user, 'public.background_job', 'INSERT') AS can_insert,
+          has_table_privilege(current_user, 'public.background_job', 'UPDATE') AS can_update,
+          has_table_privilege(current_user, 'public.background_job', 'DELETE') AS can_delete,
+          has_table_privilege(current_user, 'public.background_job', 'TRUNCATE') AS can_truncate,
+          has_schema_privilege(current_user, 'public', 'USAGE') AS schema_usage,
+          (SELECT count(*) = 4 AND count(DISTINCT owner.rolname) = 1
+             AND bool_and(p.prosecdef)
+             AND bool_and(p.proconfig = ARRAY['search_path=pg_catalog, public, pg_temp']::text[])
+           FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+           JOIN pg_roles owner ON owner.oid = p.proowner
+           WHERE n.nspname = 'public' AND p.oid IN (
+             to_regprocedure('public.background_job_claim(text[])'),
+             to_regprocedure('public.background_job_renew(uuid,uuid)'),
+             to_regprocedure('public.background_job_finish(uuid,uuid,text)'),
+             to_regprocedure('public.background_job_expire_reminders()'))) AS functions_hardened,
+          NOT EXISTS (SELECT 1 FROM pg_auth_members m
+            JOIN pg_roles member ON member.oid = m.member
+            JOIN pg_roles granted_role ON granted_role.oid = m.roleid
+            WHERE member.rolname = current_user AND granted_role.rolname = 'arcompt_app') AS no_app_membership`;
+      expect(check).toMatchObject({
+        claim: true, can_select: false, can_insert: false, can_update: false,
+        can_delete: false, can_truncate: false, no_app_membership: true,
+        schema_usage: true, functions_hardened: true,
+      });
+      // Exercise every SECURITY DEFINER entry point through the restricted
+      // login, not merely its ACL metadata.
+      await queueDb`SELECT * FROM background_job_claim(ARRAY['document.extract']::text[])`;
+      await queueDb`SELECT background_job_renew(gen_random_uuid(), gen_random_uuid())`;
+      await queueDb`SELECT background_job_finish(gen_random_uuid(), gen_random_uuid(), NULL)`;
+      await queueDb`SELECT background_job_expire_reminders()`;
+    } finally {
+      await queueDb.end();
+    }
+  });
+
+  it("refuse de faire tourner le mot de passe d'un login existant non dédié", async () => {
+    const unrelated = `arcompt_unrelated_${randomUUID().replace(/-/g, "").slice(0, 8)}`;
+    const original = `pw-original-${randomUUID()}`;
+    await db.unsafe(`CREATE ROLE "${unrelated}" LOGIN PASSWORD '${original}'`);
+    try {
+      await expect(provisionQueueRole(db, { login: unrelated, password: `pw-new-${randomUUID()}` }))
+        .rejects.toThrow("n'est pas déjà membre");
+      const url = new URL(env!.url);
+      url.username = unrelated;
+      url.password = original;
+      const unchanged = createDb({ url: url.toString(), max: 1 });
+      try {
+        await unchanged`SELECT 1`;
+      } finally {
+        await unchanged.end();
+      }
+    } finally {
+      await db.unsafe(`DROP ROLE "${unrelated}"`);
+    }
   });
 
   it("refuse un nom de rôle douteux, un mot de passe faible et le rôle de groupe lui-même", async () => {

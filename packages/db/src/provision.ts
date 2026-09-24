@@ -24,9 +24,11 @@ import type { Db } from "./client.js";
 
 /** Rôle de groupe créé par la migration 0001 et affiné par 0010. */
 export const APP_GROUP_ROLE = "arcompt_app";
+export const QUEUE_GROUP_ROLE = "arcompt_queue";
 
 /** Rôle de connexion par défaut ; même nom que celui du harnais de test. */
 export const DEFAULT_APP_LOGIN = "arcompt_app_login";
+export const DEFAULT_QUEUE_LOGIN = "arcompt_queue_login";
 
 /** Un mot de passe de service n'est jamais tapé à la main : autant l'exiger long. */
 export const MIN_PASSWORD_LENGTH = 16;
@@ -69,7 +71,7 @@ export interface ProvisionAppRoleResult {
 /** Un droit attendu (ou refusé) sur une table, tel que le décrit le schéma. */
 export interface ExpectedPrivilege {
   table: string;
-  privilege: "SELECT" | "INSERT" | "UPDATE" | "DELETE";
+  privilege: "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "TRUNCATE";
   /** Vrai : le rôle applicatif doit l'avoir. Faux : il ne doit pas l'avoir. */
   granted: boolean;
   why: string;
@@ -234,6 +236,77 @@ export async function provisionAppRole(db: Db, input: ProvisionAppRoleInput): Pr
     attributes,
     privileges: await verifyAppPrivileges(db, login),
   };
+}
+
+/** Provision only the login which may invoke cross-tenant queue functions. */
+export async function provisionQueueRole(db: Db, input: ProvisionAppRoleInput): Promise<ProvisionAppRoleResult> {
+  const login = assertValidRoleName(input.login ?? DEFAULT_QUEUE_LOGIN);
+  const password = assertUsablePassword(input.password);
+  const reserved = new Set([QUEUE_GROUP_ROLE, APP_GROUP_ROLE, DEFAULT_APP_LOGIN, "neondb_owner", "postgres", "current_user"]);
+  if (reserved.has(login)) throw new ProvisionError(`Nom de rôle réservé : ${login}`);
+  const group = await db`SELECT rolsuper, rolbypassrls, rolcreaterole, rolcreatedb
+    FROM pg_roles WHERE rolname = ${QUEUE_GROUP_ROLE}`;
+  if (!group.length) throw new ProvisionError(`Rôle ${QUEUE_GROUP_ROLE} absent : appliquez les migrations avant de provisionner`);
+  if (group[0]!.rolsuper || group[0]!.rolbypassrls || group[0]!.rolcreaterole || group[0]!.rolcreatedb)
+    throw new ProvisionError(`Le groupe ${QUEUE_GROUP_ROLE} possède des attributs privilégiés`);
+  const existing = await db`SELECT 1 FROM pg_roles WHERE rolname = ${login}`;
+  const created = existing.length === 0;
+  if (!created) {
+    const [safety] = await db`
+      SELECT
+        EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles member ON member.oid = m.member
+          JOIN pg_roles granted_role ON granted_role.oid = m.roleid
+          WHERE member.rolname = ${login} AND granted_role.rolname = ${QUEUE_GROUP_ROLE}) AS queue_member,
+        EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles member ON member.oid = m.member
+          JOIN pg_roles granted_role ON granted_role.oid = m.roleid
+          WHERE member.rolname = ${login} AND granted_role.rolname <> ${QUEUE_GROUP_ROLE}) AS other_membership,
+        EXISTS (SELECT 1 FROM pg_class c JOIN pg_roles owner ON owner.oid = c.relowner
+          WHERE owner.rolname = ${login}) AS owns_objects`;
+    if (!safety?.queue_member)
+      throw new ProvisionError(`Le rôle existant ${login} n'est pas déjà membre de ${QUEUE_GROUP_ROLE} : aucune rotation effectuée`);
+    if (safety.other_membership)
+      throw new ProvisionError(`Le rôle existant ${login} possède d'autres appartenances : aucune rotation effectuée`);
+    if (safety.owns_objects)
+      throw new ProvisionError(`Le rôle existant ${login} possède des objets : aucune rotation effectuée`);
+  }
+  const verb = created ? "CREATE ROLE %I " : "ALTER ROLE %I WITH ";
+  try {
+    await ddl(db, `${verb}${ROLE_ATTRIBUTES} PASSWORD %L`, [login, password]);
+  } catch (e) {
+    if (!isInsufficientPrivilege(e)) throw e;
+    await ddl(db, `${verb}LOGIN INHERIT PASSWORD %L`, [login, password]);
+  }
+  // A rotated/reused login must never retain the tenant-data role.
+  await ddl(db, "REVOKE %I FROM %I", [APP_GROUP_ROLE, login]);
+  await ddl(db, "GRANT %I TO %I", [QUEUE_GROUP_ROLE, login]);
+  const [dbName] = await db`SELECT current_database() AS name`;
+  await ddl(db, "GRANT CONNECT ON DATABASE %I TO %I", [dbName!.name as string, login]);
+  const attributes = await readAttributes(db, login);
+  if (attributes.superuser || attributes.bypassRls || attributes.createRole || attributes.createDb || !attributes.inherit)
+    throw new ProvisionError(`Le rôle ${login} possède des attributs privilégiés ou NOINHERIT`);
+  const rows = await db`
+    SELECT has_table_privilege(${login}, 'public.background_job', p.privilege) AS granted,
+           p.privilege
+    FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE']::text[]) AS p(privilege)`;
+  const observations = rows.map((row) => ({
+    table: "background_job", privilege: row.privilege as ExpectedPrivilege["privilege"],
+    granted: false, actual: row.granted as boolean,
+    ok: !(row.granted as boolean), why: "le rôle de file ne lit ni ne modifie les lignes directement",
+  }));
+  const [membership] = await db`
+    SELECT EXISTS (
+      SELECT 1 FROM pg_auth_members m
+      JOIN pg_roles member ON member.oid = m.member
+      JOIN pg_roles granted_role ON granted_role.oid = m.roleid
+      WHERE member.rolname = ${login}
+        AND (granted_role.rolname = 'arcompt_app'
+          OR granted_role.rolsuper OR granted_role.rolbypassrls
+          OR granted_role.rolcreaterole OR granted_role.rolcreatedb)
+    ) AS privileged_membership`;
+  if (membership?.privileged_membership) throw new ProvisionError(`Le rôle ${login} hérite d'un groupe privilégié`);
+  const violations = observations.filter((o) => !o.ok);
+  return { login, database: dbName!.name as string, created, memberOf: QUEUE_GROUP_ROLE, attributes,
+    privileges: { ok: violations.length === 0, observations, violations } };
 }
 
 /**

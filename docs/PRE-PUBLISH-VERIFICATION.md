@@ -102,3 +102,35 @@ deployment can run:** completing this requires an approved path to deliver
 the missing PostgreSQL security objects and restricted login through the
 supported production workflow, followed by a private-runtime smoke test.
 Neither production data nor production schema was changed during this recheck.
+
+## Private-test preparation after the security review
+
+The API and worker now require a restricted `APP_DATABASE_URL` in production.
+The PostgreSQL queue additionally requires a different restricted
+`QUEUE_DATABASE_URL` and a dedicated queue role: ordinary API connections may
+enqueue tenant jobs but may not execute cross-tenant claim/lease functions.
+The startup checks reject privileged or incorrectly granted connections and
+unhardened security-definer functions. Forward development migrations add the
+queue role/grant split and qualify protected function references against
+temporary-object shadowing. Disposable database tests exercise actual
+restricted app and queue logins. These changes have **not** been applied to
+production by Publish.
+
+`docs/PRIVATE-PUBLISH-SQL-GAPS.md` inventories the read-only production
+differences. `docs/PRIVATE-PUBLISH-SQL-REVIEW.md` contains **review candidates,
+not an approved executable repair**: the current Publish preview omits roles,
+functions, grants and conditioned policies; the production-shaped disposable
+reconciliation, secure login provisioning and independent SQL sign-off are
+still outstanding. Do not run the candidate fragments in production or
+approve the current schema preview as equivalent to development.
+
+An attempted executable repair was withdrawn after review found it omitted
+eight hardened functions and the historical table/sequence grants needed by
+the absent application role. No production-shaped disposable rehearsal has
+passed. Do not reconstruct that draft from fragments or treat the current
+startup guards as a substitute for the missing repair.
+
+No private Publish runtime, production Clerk session, disposable production
+R2 round trip, production payroll-key round trip, production backup/restore,
+or private-runtime scanner packaging check has succeeded yet. The public
+deployment stays offline.

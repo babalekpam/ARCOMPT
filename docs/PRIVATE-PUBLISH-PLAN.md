@@ -9,12 +9,20 @@ production database security changes. Only the user can initiate Publish.
 - The launcher refuses to start without a separate `APP_DATABASE_URL`.
   Replit's managed `DATABASE_URL` currently connects as `neondb_owner` with
   `BYPASSRLS`; it must **not** be used by the API or worker.
+- Without Redis, the PostgreSQL queue requires its own `QUEUE_DATABASE_URL`.
+  The app login may enqueue tenant jobs but cannot claim jobs across tenants;
+  the separate queue login may call the claim/lease functions but cannot read
+  the job tables directly. Both URLs must resolve to different restricted
+  PostgreSQL roles.
 - Before listening, both production API and worker check the actual connected
   role, forced tenant RLS, required policy expressions, secure functions and
   table privileges. Missing or permissive security objects stop startup.
 - The scanner binary, signatures, clean/EICAR behavior and local production
   build were checked in development. Runtime packaging has not been tested in
   an actual Replit Publish environment.
+- A forward migration hardens app-callable security-definer functions against
+  temporary-table shadowing. The private Publish SQL review must use those
+  latest definitions, not older function bodies from the initial migrations.
 
 ## Stop gate: the current Publish preview is insufficient
 
@@ -63,8 +71,9 @@ independent security review and disposable-copy rehearsal.
    domain or open public visibility. The user must start Publish in the UI;
    the agent cannot do it. Review the schema diff before confirming. Do not
    overwrite production data.
-4. Configure a production-only `APP_DATABASE_URL` secret for the restricted
-   login, never the owner URL. Once the security objects have been applied
+4. Configure production-only `APP_DATABASE_URL` and `QUEUE_DATABASE_URL`
+   secrets for two separately provisioned restricted logins, never the owner
+   URL. Once the security objects have been applied
    through an approved path, check actual connected-role privileges and
    `/ready` while private. Do not put credentials in code, logs or chat.
 5. In the private runtime, confirm that the built ClamAV tree exists, signature

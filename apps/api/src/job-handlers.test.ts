@@ -39,7 +39,7 @@ describe("actual background handlers", () => {
       ledger: new Ledger(new PostgresStore(db, { userId, organizationId: orgId }), { baseCurrency: "XOF" }),
     });
     bankId = (await treasury.createAccount({ kind: "BANK", label: "Test bank", accountNumber: "521", currency: "XOF" })).id;
-    queue = new PostgresQueue(db);
+    queue = new PostgresQueue(db, 1000, fixture.db);
     registerJobHandlers(queue, db);
   });
   afterAll(async () => { await queue?.close(); await fixture?.drop(); });

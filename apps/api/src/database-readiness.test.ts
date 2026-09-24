@@ -29,7 +29,30 @@ function safeSnapshot(): DatabaseSecuritySnapshot {
       "public.platform_admin_record_access(text,uuid,text,text)",
       "public.background_job_retry_internal(uuid)",
       "public.background_job_review_reminder(uuid,uuid,text)",
-    ].map((signature) => ({ signature, exists: true, security_definer: true, executable: true })),
+      "public.background_job_claim(text[])",
+      "public.background_job_renew(uuid,uuid)",
+      "public.background_job_finish(uuid,uuid,text)",
+      "public.background_job_expire_reminders()",
+      "public.auth_resolve_identity(text)",
+      "public.auth_link_subject(text,text)",
+      "public.auth_touch_last_active(uuid)",
+      "public.organization_of_company(uuid)",
+      "public.portal_dashboard(uuid)",
+      "public.invitation_by_token_hash(text)",
+      "public.whatsapp_resolve_phone(text)",
+      "public.payment_link_resolve(text,text)",
+    ].map((signature) => ({
+      signature, exists: true, security_definer: true,
+      executable: !["background_job_claim", "background_job_renew", "background_job_finish", "background_job_expire_reminders"]
+        .some((name) => signature.includes(name)),
+      owner: "neondb_owner", managed_owner: "neondb_owner",
+      proconfig: ["search_path=pg_catalog, public, pg_temp"],
+      public_execute: false, app_execute: !signature.includes("background_job_claim") &&
+        !signature.includes("background_job_renew") && !signature.includes("background_job_finish") &&
+        !signature.includes("background_job_expire_reminders"),
+      queue_execute: signature.includes("background_job_claim") || signature.includes("background_job_renew") ||
+        signature.includes("background_job_finish") || signature.includes("background_job_expire_reminders"),
+    })),
   };
 }
 
@@ -62,6 +85,30 @@ describe("production database readiness", () => {
     snapshot.policies[0]!.qual = "true";
     snapshot.policies[0]!.with_check = "true";
     expect(databaseSecurityProblems(snapshot).join("\n")).toContain("politique requise différente");
+  });
+
+  it("refuses a missing 0028 SECURITY DEFINER function", () => {
+    const snapshot = safeSnapshot();
+    snapshot.functions.find((fn) => fn.signature === "public.background_job_claim(text[])")!.exists = false;
+    expect(databaseSecurityProblems(snapshot).join("\n")).toContain("background_job_claim(text[])");
+  });
+
+  it("refuses an old search_path or an owner differing from the managed table owner", () => {
+    const snapshot = safeSnapshot();
+    const fn = snapshot.functions.find((row) => row.signature === "public.platform_admin_company(text,uuid)")!;
+    fn.proconfig = ["search_path=public"];
+    // public is commonly owned by pg_database_owner while protected tables
+    // and migration-created functions are owned by neondb_owner/postgres.
+    fn.owner = "pg_database_owner";
+    fn.managed_owner = "neondb_owner";
+    const problems = databaseSecurityProblems(snapshot).join("\n");
+    expect(problems).toContain("platform_admin_company(text,uuid)");
+  });
+
+  it("refuses an app login that cannot execute a required function despite a group grant", () => {
+    const snapshot = safeSnapshot();
+    snapshot.functions.find((fn) => fn.signature === "public.platform_admin_company(text,uuid)")!.executable = false;
+    expect(databaseSecurityProblems(snapshot).join("\n")).toContain("platform_admin_company(text,uuid)");
   });
 
   it("refuses a database connection that owns protected tables", () => {

@@ -14,7 +14,9 @@ const PAYROLL_KEY = Buffer.alloc(32, 7).toString("base64");
 function productionEnv(over: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return {
     NODE_ENV: "production",
-    DATABASE_URL: "postgres://user:pass@db.internal:5432/arcompt",
+    DATABASE_URL: "postgres://owner:pass@db.internal:5432/arcompt",
+    APP_DATABASE_URL: "postgres://app:pass@db.internal:5432/arcompt",
+    QUEUE_DATABASE_URL: "postgres://queue:pass@db.internal:5432/arcompt",
     AUTH_MODE: "oidc",
     KEYCLOAK_ISSUER: "https://auth.arcompt.africa/realms/arcompt",
     KEYCLOAK_CLIENT_ID: "arcompt-api",
@@ -80,7 +82,7 @@ describe("loadConfig — production conforme", () => {
     expect(cfg.problems).toEqual([]);
     expect(cfg.port).toBe(8080);
     expect(cfg.baseCurrency).toBe("XAF");
-    expect(cfg.databaseUrl).toBe("postgres://user:pass@db.internal:5432/arcompt");
+    expect(cfg.databaseUrl).toBe("postgres://app:pass@db.internal:5432/arcompt");
     expect(cfg.auth).toEqual({ mode: "oidc", issuer: "https://auth.arcompt.africa/realms/arcompt", audience: "arcompt-api" });
     expect(cfg.storage.driver).toBe("r2");
     expect(cfg.antivirus.driver).toBe("clamav");
@@ -195,7 +197,7 @@ describe("loadConfig — production incomplète", () => {
     } catch (e) {
       message = (e as Error).message;
     }
-    for (const variable of ["DATABASE_URL", "AUTH_MODE", "PAYMENT_WEBHOOK_SECRET", "PAYROLL_ENCRYPTION_KEY", "ANTHROPIC_API_KEY", "CLAMAV_HOST"]) {
+    for (const variable of ["APP_DATABASE_URL", "QUEUE_DATABASE_URL", "AUTH_MODE", "PAYMENT_WEBHOOK_SECRET", "PAYROLL_ENCRYPTION_KEY", "ANTHROPIC_API_KEY", "CLAMAV_HOST"]) {
       expect(message).toContain(variable);
     }
   });

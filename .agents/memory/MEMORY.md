@@ -13,3 +13,4 @@
 - [EICAR scanner proof](eicar-scanner-proof.md) — test the exact canonical EICAR bytes; prefixed PDF text can scan clean despite a working signature database.
 - [Protected Replit config edits](protected-replit-config.md) — .replit changes require schema-validated replacement; direct patches may be rejected even during cleanup.
 - [Zoho SMTP endpoint](zoho-smtp-endpoint.md) — trust the account-tested SMTP host over generic Zoho guidance; a test message was confirmed received.
+- [Queue privilege boundary](queue-privilege-boundary.md) — test queue startup with the actual restricted login; cross-tenant claim capability must not be granted to the HTTP data role.

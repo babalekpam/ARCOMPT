@@ -15,7 +15,7 @@ export class PostgresQueue implements JobQueue {
   private active: Promise<void> | undefined;
   private closed = false;
 
-  constructor(private readonly db: Sql, private readonly intervalMs = 1000) {}
+  constructor(private readonly db: Sql, private readonly intervalMs = 1000, private readonly queueDb: Sql = db) {}
 
   async enqueue<N extends JobName>(name: N, payload: JobPayloads[N], opts: EnqueueOptions = {}): Promise<{ id: string }> {
     if (this.closed) throw new Error("File fermée");
@@ -52,23 +52,23 @@ export class PostgresQueue implements JobQueue {
   async tick(): Promise<void> {
     if (this.closed || !this.handlers.size) return;
     try {
-      const [expired] = await this.db`SELECT background_job_expire_reminders() AS count`;
+      const [expired] = await this.queueDb`SELECT background_job_expire_reminders() AS count`;
       if (Number(expired?.count) > 0) log("error", "job.dunning.uncertain", { count: expired?.count });
-      const rows = await this.db`SELECT * FROM background_job_claim(${[...this.handlers.keys()]})` as unknown as Row[];
+      const rows = await this.queueDb`SELECT * FROM background_job_claim(${[...this.handlers.keys()]})` as unknown as Row[];
       const job = rows[0];
       if (!job) return;
       const renew = setInterval(() => {
-        void this.db`SELECT background_job_renew(${job.id}, ${job.lock_token})`.catch((e: unknown) =>
+        void this.queueDb`SELECT background_job_renew(${job.id}, ${job.lock_token})`.catch((e: unknown) =>
           log("error", "job.lease.renew_failed", { id: job.id, detail: String(e) }));
       }, 30_000);
       try {
         await this.handlers.get(job.name)!(job.payload as never, { id: job.id, name: job.name, attempt: job.attempts });
-        const [done] = await this.db`SELECT background_job_finish(${job.id}, ${job.lock_token}, ${null}) AS acknowledged`;
+        const [done] = await this.queueDb`SELECT background_job_finish(${job.id}, ${job.lock_token}, ${null}) AS acknowledged`;
         if (!done?.acknowledged) log("error", "job.lease.lost", { id: job.id });
       } catch (e) {
         const detail = e instanceof Error ? e.message : String(e);
         log("error", "job.failed", { id: job.id, name: job.name, detail });
-        const [done] = await this.db`SELECT background_job_finish(${job.id}, ${job.lock_token}, ${detail}) AS acknowledged`;
+        const [done] = await this.queueDb`SELECT background_job_finish(${job.id}, ${job.lock_token}, ${detail}) AS acknowledged`;
         if (!done?.acknowledged) log("error", "job.lease.lost", { id: job.id });
       } finally {
         clearInterval(renew);

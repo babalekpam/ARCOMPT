@@ -26,7 +26,7 @@ describe("Replit durable background queue", () => {
              (${org!.id}, 'B', 'CI', 'XOF', 'NORMAL', 'ci@2025.1') RETURNING id`;
     tenantId = String(companies[0]!.id);
     otherTenantId = String(companies[1]!.id);
-    queue = new PostgresQueue(app, 1);
+    queue = new PostgresQueue(app, 1, admin);
   });
   afterAll(async () => { await queue?.close(); await fixture?.drop(); });
 
@@ -37,7 +37,7 @@ describe("Replit durable background queue", () => {
       seen.push(`extract:${p.documentId}:${ctx.attempt}`);
       if (ctx.attempt === 1) throw new Error("temporary AI outage");
     });
-    const second = new PostgresQueue(app);
+    const second = new PostgresQueue(app, 1000, admin);
     second.process("import.statement", async (p) => { seen.push(`import:${p.accountId}`); });
     const payload = { tenantId, userId: tenantId, documentId: tenantId };
     const first = await queue.enqueue("document.extract", payload, { jobId: "extract-a", backoffMs: 0 });
@@ -49,6 +49,21 @@ describe("Replit durable background queue", () => {
     expect(seen).toEqual([`extract:${tenantId}:1`, `extract:${tenantId}:2`, `import:${tenantId}`]);
     expect((await admin`SELECT status, attempts FROM background_job WHERE id = ${first.id}`)[0]).toMatchObject({ status: "DONE", attempts: 2 });
     await second.close();
+  });
+
+  it("keeps tenant writes on the app pool and claims on the dedicated queue pool", async () => {
+    if (!fixture) return;
+    const split = new PostgresQueue(app, 1, admin);
+    split.process("document.extract", async () => {});
+    const { id } = await split.enqueue("document.extract", { tenantId, userId: tenantId, documentId: tenantId });
+    expect((await app`SELECT id FROM background_job WHERE id = ${id}`)).toHaveLength(0);
+    await split.tick();
+    expect((await admin`SELECT status FROM background_job WHERE id = ${id}`)[0]?.status).toBe("DONE");
+    const [privileges] = await admin`
+      SELECT has_function_privilege('arcompt_app', 'background_job_claim(text[])', 'EXECUTE') AS app_claim,
+             has_function_privilege('arcompt_queue', 'background_job_claim(text[])', 'EXECUTE') AS queue_claim`;
+    expect(privileges).toMatchObject({ app_claim: false, queue_claim: true });
+    await split.close();
   });
 
   it("recovers abandoned extraction/import but never blindly resends a reminder", async () => {

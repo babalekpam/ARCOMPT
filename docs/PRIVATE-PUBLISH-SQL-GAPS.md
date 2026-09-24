@@ -15,6 +15,10 @@ preview. No production SQL was executed.
   functions or policies from those migrations.
 - The restricted `arcompt_app` group and `arcompt_app_login` are absent.
   Production's available `neondb_owner` login has `BYPASSRLS`.
+- Development now defines a separate `arcompt_queue` capability and hardens
+  security-definer function bodies against temporary-object shadowing. Neither
+  change is established in production merely by changing local source files;
+  the private Publish preview and any reviewed SQL repair must be rechecked.
 - Twelve function names are missing in production:
   `auth_bootstrap_lookup`, `auth_bootstrap_replay`,
   `platform_admin_identity`, `platform_admin_company`,
@@ -37,9 +41,8 @@ table and function**, which roles can execute the functions, and whether the
 reserved platform-admin organization invariant exists. Replaying migration
 fragments onto partially published tables can create functions owned by a
 `BYPASSRLS` role or expose cross-company job payloads through broad grants.
-The review also found that the app and queue worker currently share a database
-capability for cross-tenant job claiming. This needs a reviewed privilege
-boundary before signing off on real accounting data.
+The code now splits the app and queue roles, but the corresponding production
+roles/grants and the latest hardened definitions are not yet present.
 
 Before drafting any production SQL, verify the exact production ownership,
 policies, grants, function bodies, trigger attachments, migration invariants,
@@ -48,6 +51,14 @@ disposable copy, including read-only checks for tenant isolation and worker
 privileges. Do not run the migration files wholesale. The app startup guard
 will reject the currently observed privileged role and incomplete policies;
 that safe refusal is **not** proof a private deployment is ready.
+
+A preliminary transaction draft was withdrawn after independent review: it
+covered only 12 of the 20 functions checked at startup and omitted historical
+table/sequence grants required because `arcompt_app` does not exist in
+production. Its rehearsal helper could not guarantee a disposable target.
+No executable production repair is approved; a replacement must prove all
+20 function definitions, the full effective privilege baseline, and a
+production-shaped disposable rehearsal before anyone runs SQL.
 
 Replit's agent production database connection is read-only. Any later manual
 SQL step in Replit's Database tool requires an independently reviewed

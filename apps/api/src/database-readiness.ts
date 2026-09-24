@@ -22,7 +22,25 @@ const REQUIRED_FUNCTIONS = [
   "public.platform_admin_record_access(text,uuid,text,text)",
   "public.background_job_retry_internal(uuid)",
   "public.background_job_review_reminder(uuid,uuid,text)",
+  "public.background_job_claim(text[])",
+  "public.background_job_renew(uuid,uuid)",
+  "public.background_job_finish(uuid,uuid,text)",
+  "public.background_job_expire_reminders()",
+  "public.auth_resolve_identity(text)",
+  "public.auth_link_subject(text,text)",
+  "public.auth_touch_last_active(uuid)",
+  "public.organization_of_company(uuid)",
+  "public.portal_dashboard(uuid)",
+  "public.invitation_by_token_hash(text)",
+  "public.whatsapp_resolve_phone(text)",
+  "public.payment_link_resolve(text,text)",
 ] as const;
+const QUEUE_FUNCTIONS = new Set([
+  "public.background_job_claim(text[])",
+  "public.background_job_renew(uuid,uuid)",
+  "public.background_job_finish(uuid,uuid,text)",
+  "public.background_job_expire_reminders()",
+]);
 
 function normalized(expression: string | null): string {
   return (expression ?? "").replace(/\s+/g, " ").trim();
@@ -38,10 +56,21 @@ function requiredPolicyExpression(table: string, name: string): string {
   return `(CURRENT_USER = ( SELECT r.rolname FROM (pg_class c JOIN pg_roles r ON ((r.oid = c.relowner))) WHERE (c.oid = ('${table}'::regclass)::oid)))`;
 }
 
-type RoleRow = { name: string; rolsuper: boolean; rolbypassrls: boolean };
+type RoleRow = { name: string; rolsuper: boolean; rolbypassrls: boolean; rolcreaterole?: boolean; rolcreatedb?: boolean };
 type TableRow = { relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; owned_by_app: boolean };
 type PolicyRow = { tablename: string; policyname: string; qual: string | null; with_check: string | null };
-type FunctionRow = { signature: string; exists: boolean; security_definer: boolean | null; executable: boolean | null };
+type FunctionRow = {
+  signature: string;
+  exists: boolean;
+  security_definer: boolean | null;
+  executable: boolean | null;
+  owner: string | null;
+  managed_owner: string | null;
+  proconfig: string[] | null;
+  public_execute: boolean | null;
+  app_execute: boolean | null;
+  queue_execute: boolean | null;
+};
 
 export type DatabaseSecuritySnapshot = {
   role: RoleRow;
@@ -53,7 +82,7 @@ export type DatabaseSecuritySnapshot = {
 /** A read-only, fail-closed check of the database properties this API relies on. */
 export function databaseSecurityProblems(snapshot: DatabaseSecuritySnapshot): string[] {
   const problems: string[] = [];
-  if (snapshot.role.rolsuper || snapshot.role.rolbypassrls) {
+  if (snapshot.role.rolsuper || snapshot.role.rolbypassrls || snapshot.role.rolcreaterole || snapshot.role.rolcreatedb) {
     problems.push("le rôle applicatif contourne les politiques RLS");
   }
 
@@ -86,7 +115,13 @@ export function databaseSecurityProblems(snapshot: DatabaseSecuritySnapshot): st
   }
   for (const signature of REQUIRED_FUNCTIONS) {
     const fn = snapshot.functions.find((row) => row.signature === signature);
-    if (!fn?.exists || !fn.security_definer || !fn.executable) {
+    if (!fn?.exists || !fn.security_definer ||
+        !fn.owner || !fn.managed_owner || fn.owner !== fn.managed_owner ||
+        JSON.stringify(fn.proconfig) !== JSON.stringify(["search_path=pg_catalog, public, pg_temp"]) ||
+        fn.public_execute !== false ||
+        (QUEUE_FUNCTIONS.has(signature) ? fn.executable !== false : fn.executable !== true) ||
+        (QUEUE_FUNCTIONS.has(signature) ? fn.app_execute !== false : fn.app_execute !== true) ||
+        (QUEUE_FUNCTIONS.has(signature) ? fn.queue_execute === false : fn.queue_execute === true)) {
       problems.push(`fonction sécurisée indisponible pour l'application : ${signature}`);
     }
   }
@@ -96,7 +131,7 @@ export function databaseSecurityProblems(snapshot: DatabaseSecuritySnapshot): st
 /** Called before opening the HTTP listener, not from a migration or publish hook. */
 export async function assertProductionDatabaseSecurity(db: Sql): Promise<void> {
   const [roles, tables, policies, functions] = await Promise.all([
-    db<RoleRow[]>`SELECT current_user AS name, r.rolsuper, r.rolbypassrls
+    db<RoleRow[]>`SELECT current_user AS name, r.rolsuper, r.rolbypassrls, r.rolcreaterole, r.rolcreatedb
       FROM pg_roles r WHERE r.rolname = current_user`,
     db<TableRow[]>`SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity,
         c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user) AS owned_by_app
@@ -107,8 +142,18 @@ export async function assertProductionDatabaseSecurity(db: Sql): Promise<void> {
             WHERE col.table_schema = 'public' AND col.table_name = c.relname AND col.column_name = 'tenant_id'))`,
     db<PolicyRow[]>`SELECT p.tablename, p.policyname, p.qual, p.with_check
       FROM pg_policies p WHERE p.schemaname = 'public'`,
-    db<FunctionRow[]>`SELECT f.signature, p.oid IS NOT NULL AS exists, p.prosecdef AS security_definer,
-        has_function_privilege(current_user, p.oid, 'EXECUTE') AS executable
+      db<FunctionRow[]>`SELECT f.signature, p.oid IS NOT NULL AS exists, p.prosecdef AS security_definer,
+        has_function_privilege(current_user, p.oid, 'EXECUTE') AS executable,
+        pg_get_userbyid(p.proowner) AS owner,
+        (SELECT pg_get_userbyid(c.relowner) FROM pg_class c
+          JOIN pg_namespace cn ON cn.oid = c.relnamespace
+         WHERE cn.nspname = 'public' AND c.relname = 'app_user'
+           AND c.relkind IN ('r', 'p')) AS managed_owner,
+        p.proconfig,
+        has_function_privilege('public', p.oid, 'EXECUTE') AS public_execute,
+        has_function_privilege('arcompt_app', p.oid, 'EXECUTE') AS app_execute,
+        CASE WHEN EXISTS (SELECT 1 FROM pg_roles qr WHERE qr.rolname = 'arcompt_queue')
+          THEN has_function_privilege('arcompt_queue', p.oid, 'EXECUTE') ELSE NULL END AS queue_execute
       FROM (VALUES
         ('public.auth_bootstrap_lookup(text,text)'),
         ('public.auth_bootstrap_replay(text)'),
@@ -117,9 +162,22 @@ export async function assertProductionDatabaseSecurity(db: Sql): Promise<void> {
         ('public.platform_admin_companies(text)'),
         ('public.platform_admin_record_access(text,uuid,text,text)'),
         ('public.background_job_retry_internal(uuid)'),
-        ('public.background_job_review_reminder(uuid,uuid,text)')
-      ) AS f(signature)
-      LEFT JOIN pg_proc p ON p.oid = to_regprocedure(f.signature)`,
+         ('public.background_job_review_reminder(uuid,uuid,text)'),
+         ('public.background_job_claim(text[])'),
+         ('public.background_job_renew(uuid,uuid)'),
+         ('public.background_job_finish(uuid,uuid,text)'),
+         ('public.background_job_expire_reminders()'),
+         ('public.auth_resolve_identity(text)'),
+         ('public.auth_link_subject(text,text)'),
+         ('public.auth_touch_last_active(uuid)'),
+         ('public.organization_of_company(uuid)'),
+         ('public.portal_dashboard(uuid)'),
+         ('public.invitation_by_token_hash(text)'),
+         ('public.whatsapp_resolve_phone(text)'),
+         ('public.payment_link_resolve(text,text)')
+       ) AS f(signature)
+       LEFT JOIN pg_proc p ON p.oid = to_regprocedure(f.signature)
+      `,
   ]);
   if (!roles[0]) throw new Error("Sécurité de la base de production : rôle de connexion introuvable.");
   const problems = databaseSecurityProblems({
