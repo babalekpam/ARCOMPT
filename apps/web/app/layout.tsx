@@ -8,6 +8,7 @@ import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar"
 import { ClerkProvider } from "@clerk/nextjs";
 import { enUS, frFR } from "@clerk/localizations";
 import { shadcn } from "@clerk/themes";
+import { parseClerkHosting } from "@/lib/clerk-hosting";
 import "./globals.css";
 
 /**
@@ -44,11 +45,13 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale();
+  const clerkHosting = parseClerkHosting(process.env.NEXT_PUBLIC_CLERK_HOSTING);
+  const clerkProxyUrl = process.env.NEXT_PUBLIC_CLERK_PROXY_URL?.trim();
   return (
     <html lang={locale}>
       <body suppressHydrationWarning className="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
         <ClerkProvider
-          proxyUrl={process.env.NEXT_PUBLIC_CLERK_PROXY_URL ?? ""}
+          {...(clerkHosting === "managed" && clerkProxyUrl ? { proxyUrl: clerkProxyUrl } : {})}
           localization={locale === "fr" ? frFR : enUS}
           appearance={{
             theme: shadcn,

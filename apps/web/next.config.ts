@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { NextConfig } from "next";
+import { clerkProxyUrl, parseClerkHosting } from "./lib/clerk-hosting";
+
+const clerkHosting = parseClerkHosting(process.env.CLERK_HOSTING);
+const resolvedClerkProxyUrl = clerkProxyUrl(process.env);
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -13,13 +17,10 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000",
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.VITE_CLERK_PUBLISHABLE_KEY ?? "",
-    // The managed Vite variable may only be injected at publish time. Next
-    // embeds public env at BUILD time, so use our actual App Router proxy route
-    // when building for Clerk production rather than silently bypassing it.
-    NEXT_PUBLIC_CLERK_PROXY_URL:
-      process.env.NEXT_PUBLIC_CLERK_PROXY_URL?.trim() ||
-      process.env.VITE_CLERK_PROXY_URL?.trim() ||
-      (process.env.NODE_ENV === "production" && process.env.AUTH_MODE === "clerk" ? "/api/__clerk" : ""),
+    // External tenants use the Frontend API encoded in their publishable key.
+    // Managed builds retain Replit's proxy and same-origin production default.
+    NEXT_PUBLIC_CLERK_HOSTING: clerkHosting,
+    NEXT_PUBLIC_CLERK_PROXY_URL: resolvedClerkProxyUrl ?? "",
     NEXT_PUBLIC_AUTH_MODE: process.env.AUTH_MODE ?? "dev",
   },
 };

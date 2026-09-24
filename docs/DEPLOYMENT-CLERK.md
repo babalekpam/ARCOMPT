@@ -1,11 +1,11 @@
-# Déploiement actuel — Replit-managed Clerk
+# Déploiement actuel — Clerk géré ou externe
 
 > **État : procédure de contrôle, pas une autorisation de publier.** Les
 > contrôles de sécurité non liés à l'identité restent obligatoires. Aucun
 > compte OWNER de production ne doit être créé uniquement pour faire passer un
 > health-check.
 
-ARCOMPT utilise désormais **Replit-managed Clerk** pour l'identité web et la
+ARCOMPT utilise par défaut **Replit-managed Clerk** pour l'identité web et la
 récupération de mot de passe. Le navigateur conserve sa session Clerk ; Next.js
 obtient côté serveur un jeton court et le transmet au proxy Hono. Le navigateur
 ne choisit jamais son utilisateur, son organisation ou son dossier.
@@ -23,9 +23,13 @@ Dans l'environnement de production, vérifier sans afficher les valeurs :
 - `AUTH_MODE=clerk` ;
 - `CLERK_SECRET_KEY` (vérification API, secret) ;
 - `CLERK_PUBLISHABLE_KEY` / clé publique exposée au web ;
-- le proxy Clerk même origine `/api/__clerk` est inclus dans le build Next.js
-  de production ; vérifier après publication que le navigateur l'utilise
-  effectivement, et que les cookies de session fonctionnent ;
+- `CLERK_HOSTING=managed` (ou variable absente) conserve le comportement
+  Replit : le proxy même origine `/api/__clerk` est inclus dans le build Next.js ;
+- pour le VPS avec le tenant externe, `CLERK_HOSTING=external` et une clé
+  publique appartenant à `clerk.arcompt.com` : le build omet alors tout
+  `proxyUrl`, y compris une variable de proxy Replit héritée, et Clerk contacte
+  directement la Frontend API indiquée par la clé. Ne configurez pas
+  `NEXT_PUBLIC_CLERK_PROXY_URL` pour ce mode ;
 - `CLERK_AUTHORIZED_PARTIES` contenant l'origine HTTPS canonique, ou `APP_URL`
   correctement configurée ;
 - `DATABASE_URL` est la connexion propriétaire gérée, réservée à l'étape de

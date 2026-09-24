@@ -11,4 +11,10 @@ When adapting Replit-managed Clerk guidance to Next.js, ensure the same-origin F
 
 A direct development curl to the proxy can return Clerk `host_invalid` even when the SDK route is present: the managed proxy is intended for a recognized published hostname, not the development instance. Do not treat this response alone as evidence of a code bug or bypass the SDK's Host handling. Verify the production hostname mapping and browser flow before declaring success.
 
+When changing production Clerk tenants on the same domain, validate the tenant-specific mail/DKIM CNAME targets and the Frontend API HTTPS connection independently of key validation.
+
+**Why:** A new live key pair can authenticate successfully while public DNS still contains the previous tenant's mail targets. The generic frontend/accounts CNAME targets alone do not prove that the new tenant's domain verification and certificate are ready.
+
+**How to apply:** Compare the new tenant's domain configuration with authoritative DNS before public cutover. Do not alter unrelated website or mailbox records, and do not declare sign-in ready based on a successful Backend API request.
+
 Replit rejects direct patches to `.replit`; build a full candidate TOML file and pass it to `verifyAndReplaceDotReplit` for schema validation. This is a workspace tooling constraint, not a reason to change the deployment workflow through ad hoc shell edits.

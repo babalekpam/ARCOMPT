@@ -42,6 +42,7 @@ import { assertProductionDatabaseSecurity } from "../apps/api/src/database-readi
 import { assertDistinctDatabaseUrls, assertProductionQueueDatabaseSecurity } from "../apps/api/src/queue-database.js";
 import { MailError, SmtpMailer, smtpOptionsFromEnv } from "../packages/mailer/src/index.js";
 import { createDb } from "../packages/db/src/client.js";
+import { parseClerkHosting } from "../apps/web/lib/clerk-hosting.js";
 
 type Level = "ok" | "warn" | "fail" | "skip";
 
@@ -218,7 +219,7 @@ if (smtp) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Identité — Replit-managed Clerk
+// 4. Identité — Clerk géré par Replit ou tenant externe
 // ---------------------------------------------------------------------------
 open("Identité");
 
@@ -233,14 +234,36 @@ const clerkSecret = env.CLERK_SECRET_KEY?.trim();
 const clerkPublishable = (env.CLERK_PUBLISHABLE_KEY ?? env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? env.VITE_CLERK_PUBLISHABLE_KEY)?.trim();
 const authorizedParties = (env.CLERK_AUTHORIZED_PARTIES ?? env.APP_URL ?? "")
   .split(",").map((v) => v.trim()).filter(Boolean);
+let clerkHosting: ReturnType<typeof parseClerkHosting> | null = null;
+
+try {
+  clerkHosting = parseClerkHosting(env.CLERK_HOSTING);
+  ok("Hébergement Clerk", clerkHosting === "external"
+    ? "tenant externe : le navigateur contacte directement la Frontend API portée par la clé publique, sans proxy Replit"
+    : "géré par Replit : le proxy même origine reste actif en production");
+} catch (e) {
+  fail("Hébergement Clerk", e instanceof Error ? e.message : String(e), 'Posez CLERK_HOSTING=managed ou CLERK_HOSTING=external. Une valeur inconnue bloque aussi le build Next.js.');
+}
 
 if (!clerkSecret) {
-  fail("Clé secrète Clerk", "CLERK_SECRET_KEY absent", "Laissez Replit-managed Clerk provisionner CLERK_SECRET_KEY dans l'environnement de production ; ne l'imprimez jamais.");
+  fail(
+    "Clé secrète Clerk",
+    "CLERK_SECRET_KEY absent",
+    clerkHosting === "external"
+      ? "Injectez la clé secrète du tenant Clerk externe dans l'environnement de production ; ne l'imprimez jamais."
+      : "Laissez Replit-managed Clerk provisionner CLERK_SECRET_KEY dans l'environnement de production ; ne l'imprimez jamais.",
+  );
 } else {
   ok("Clé secrète Clerk", "CLERK_SECRET_KEY est présente (valeur non affichée)");
 }
 if (!clerkPublishable) {
-  fail("Clé publique Clerk", "CLERK_PUBLISHABLE_KEY (ou VITE_CLERK_PUBLISHABLE_KEY) absent", "Vérifiez que Replit-managed Clerk a provisionné la clé publique du web ; cette clé n'est pas un secret.");
+  fail(
+    "Clé publique Clerk",
+    "CLERK_PUBLISHABLE_KEY (ou VITE_CLERK_PUBLISHABLE_KEY) absent",
+    clerkHosting === "external"
+      ? "Renseignez la clé publique du tenant externe dont la Frontend API est clerk.arcompt.com."
+      : "Vérifiez que Replit-managed Clerk a provisionné la clé publique du web ; cette clé n'est pas un secret.",
+  );
 } else {
   ok("Clé publique Clerk", "la clé publique du web est présente (valeur non affichée)");
 }
@@ -256,11 +279,19 @@ skip(
   "non vérifiable sans connexion interactive : signature, expiration, sujet Clerk, email vérifié et éventuel second facteur",
   "Après déploiement, connectez-vous avec un compte Clerk, vérifiez la récupération de mot de passe, puis testez un OWNER/MFA et un utilisateur sans accès au dossier d'un autre tenant.",
 );
-skip(
-  "Proxy Clerk en production",
-  "Next.js utilise /api/__clerk au build de production ; le chargement du navigateur et les cookies n'ont pas été vérifiés ici",
-  "Après déploiement, confirmez que /api/__clerk sert la Frontend API Clerk et que la connexion fonctionne via ce chemin, sans exposer CLERK_SECRET_KEY.",
-);
+if (clerkHosting === "external") {
+  skip(
+    "Frontend API Clerk externe",
+    "le build omet tout proxy Clerk ; l'accessibilité de la Frontend API du tenant portée par la clé publique n'a pas été vérifiée ici",
+    "Après déploiement, confirmez dans le navigateur que Clerk contacte directement clerk.arcompt.com, puis testez connexion, cookies et récupération de mot de passe.",
+  );
+} else if (clerkHosting === "managed") {
+  skip(
+    "Proxy Clerk en production",
+    "Next.js utilise /api/__clerk au build de production ; le chargement du navigateur et les cookies n'ont pas été vérifiés ici",
+    "Après déploiement, confirmez que /api/__clerk sert la Frontend API Clerk et que la connexion fonctionne via ce chemin, sans exposer CLERK_SECRET_KEY.",
+  );
+}
 
 // ---------------------------------------------------------------------------
 // 5. Base de données — isolation, droits, migrations
