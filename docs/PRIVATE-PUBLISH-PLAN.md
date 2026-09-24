@@ -40,7 +40,10 @@ grants and role provisioning from its ordered SQL migrations. The managed
 Publish diff does not reproduce all of these; replaying migrations blindly
 against existing production tables is unsafe. There is no production DDL in
 the deployment build or startup script. The agent's production database
-access is read-only.
+access is read-only. See `docs/PRIVATE-PUBLISH-SQL-GAPS.md` for the read-only
+catalog gap inventory. No runnable production SQL is approved yet: ownership,
+function privileges and the cross-tenant queue capability still need an
+independent security review and disposable-copy rehearsal.
 
 ## Sequence before a private test can be approved
 
