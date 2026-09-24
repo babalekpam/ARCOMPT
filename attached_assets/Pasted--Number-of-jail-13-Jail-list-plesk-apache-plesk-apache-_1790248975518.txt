@@ -1,0 +1,35 @@
+|- Number of jail:      13
+`- Jail list:   plesk-apache, plesk-apache-badbot, plesk-dovecot, plesk-modsecurity, plesk-one-week-ban, plesk-panel, plesk-permanent-ban, plesk-postfix, plesk-proftpd, plesk-roundcube, plesk-wordpress, recidive, ssh
+-N f2b-ssh
+-A f2b-ssh -j RETURN
+-N f2b-recidive
+-A f2b-recidive -s 109.160.32.48/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 109.160.32.70/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 109.160.32.30/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 45.148.10.61/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 109.160.32.31/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 2.57.122.209/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 109.160.32.80/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 92.118.39.77/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 52.224.109.126/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 172.94.9.55/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 202.155.236.242/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 109.160.32.21/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 77.239.124.209/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 109.160.32.155/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 109.160.32.89/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 109.160.32.45/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 80.94.92.234/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 104.43.56.65/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 109.160.32.67/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 109.160.32.94/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 195.178.110.227/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 45.148.10.141/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 92.118.39.49/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 185.46.197.79/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 103.248.120.6/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 178.128.7.6/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 138.197.195.132/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 195.178.110.228/32 -j REJECT --reject-with icmp-port-unreachable
+-A f2b-recidive -s 111.9.22.102/32 -j REJECT --reject-with icmp-port-unreachable
+[root@mail ~]# 
