@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # Rehearse the captured private-publish diff in a disposable PostgreSQL 16
-# cluster.  This intentionally stops at the preview: it does not repair the
-# simulated production gaps.
+# cluster. With REHEARSE_REPAIR=1, exercise the review-only repair against
+# this local cluster; never connect it to development or production.
 set -Eeuo pipefail
 
 for forbidden in DATABASE_URL PGHOST PGPORT PGPASSWORD PGSERVICE; do
@@ -34,8 +34,8 @@ cleanup() {
 trap cleanup EXIT INT TERM
 mkdir "$SOCKET"
 
-initdb -D "$DATA" --no-locale --encoding=UTF8 --auth=trust >/dev/null
-pg_ctl -D "$DATA" -o "-k $SOCKET -p $PORT" -w start >/dev/null
+initdb -D "$DATA" --no-locale --encoding=UTF8 --auth-local=trust --auth-host=scram-sha-256 >/dev/null
+pg_ctl -D "$DATA" -o "-k $SOCKET -h 127.0.0.1 -p $PORT" -w start >/dev/null
 PGPID=started
 export PGHOST="$SOCKET" PGPORT="$PORT" PGUSER="$(id -un)" PGDATABASE=postgres
 
@@ -181,16 +181,38 @@ if [[ "${REHEARSE_REPAIR:-0}" == 1 ]]; then
   [[ "$(grep -c '^COMMIT;' "$WORK/repair.sql")" == 1 ]] || {
     printf 'repair must have exactly one final COMMIT\n' >&2; exit 1;
   }
+  if [[ "${REHEARSE_REPAIR_DRIFT:-0}" == 1 ]]; then
+    psql_local -c 'ALTER TABLE organization ADD COLUMN rehearsal_catalog_drift text' >/dev/null
+    if psql_local -f "$WORK/repair.sql" >"$WORK/drift.log" 2>&1; then
+      printf 'repair accepted an unexpected catalog change\n' >&2; exit 1
+    fi
+    if [[ "$(psql_local -Atqc "SELECT to_regrole('arcompt_app') IS NULL AND to_regrole('arcompt_queue') IS NULL")" != t ]]; then
+      printf 'rejected repair left new roles behind\n' >&2; exit 1
+    fi
+    printf '%s\n' 'unexpected catalog change rejected with no repair roles committed: PASS'
+    exit 0
+  fi
   psql_local -f "$WORK/repair.sql" >/dev/null
   printf '%s\n' "review-only repair transaction: applied to isolated local PostgreSQL cluster"
-  psql_local <<'SQL' >/dev/null
-CREATE ROLE arcompt_app_login LOGIN INHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
-CREATE ROLE arcompt_queue_login LOGIN INHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+  app_password="$(openssl rand -hex 24)"
+  queue_password="$(openssl rand -hex 24)"
+  psql_local -v app_password="$app_password" -v queue_password="$queue_password" <<'SQL' >/dev/null
+CREATE ROLE arcompt_app_login LOGIN INHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD :'app_password';
+CREATE ROLE arcompt_queue_login LOGIN INHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD :'queue_password';
 GRANT arcompt_app TO arcompt_app_login;
 GRANT arcompt_queue TO arcompt_queue_login;
 SQL
-  app_url="postgres://arcompt_app_login@127.0.0.1:$PORT/arcompt_rehearsal"
-  LOCAL_APP_URL="$app_url" LOCAL_QUEUE_URL="postgres://arcompt_queue_login@127.0.0.1:$PORT/arcompt_rehearsal" corepack pnpm exec tsx -e '
+  if PGHOST=127.0.0.1 PGUSER=arcompt_app_login PGPASSWORD=incorrect \
+    psql_local -Atqc 'SELECT current_user' >/dev/null 2>&1; then
+    printf 'restricted login accepted a wrong password\n' >&2; exit 1
+  fi
+  [[ "$(PGHOST=127.0.0.1 PGUSER=arcompt_app_login PGPASSWORD="$app_password" \
+    psql_local -Atqc 'SELECT current_user')" == arcompt_app_login ]] || exit 1
+  [[ "$(PGHOST=127.0.0.1 PGUSER=arcompt_queue_login PGPASSWORD="$queue_password" \
+    psql_local -Atqc 'SELECT current_user')" == arcompt_queue_login ]] || exit 1
+  printf '%s\n' 'restricted app/queue logins authenticated over TCP with SCRAM: PASS'
+  app_url="postgres://arcompt_app_login:$app_password@127.0.0.1:$PORT/arcompt_rehearsal"
+  LOCAL_APP_URL="$app_url" LOCAL_QUEUE_URL="postgres://arcompt_queue_login:$queue_password@127.0.0.1:$PORT/arcompt_rehearsal" corepack pnpm exec tsx -e '
     import { createDb } from "./packages/db/src/client.ts";
     import { assertProductionDatabaseSecurity } from "./apps/api/src/database-readiness.ts";
     import { assertProductionQueueDatabaseSecurity } from "./apps/api/src/queue-database.ts";
@@ -216,6 +238,10 @@ SQL
   PGUSER=arcompt_queue_login psql_local -Atqc "SELECT has_function_privilege(current_user, 'public.background_job_claim(text[])', 'EXECUTE')" |
     grep -qx t
   printf '%s\n' 'actual restricted queue-login grant and table-denial checks: PASS'
+  if [[ "$(psql_local -Atqc "SELECT count(*) FROM pg_proc p WHERE p.pronamespace='public'::regnamespace AND p.prosecdef AND EXISTS (SELECT 1 FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) x WHERE x.grantee=0 AND x.privilege_type='EXECUTE')")" != 0 ]]; then
+    printf 'SECURITY DEFINER function remains executable by PUBLIC\n' >&2; exit 1
+  fi
+  printf '%s\n' 'SECURITY DEFINER functions deny PUBLIC execution: PASS'
   # Exercise the repaired catalog with two synthetic companies. All rows stay
   # inside this disposable cluster.
   psql_local <<'SQL' >/dev/null
