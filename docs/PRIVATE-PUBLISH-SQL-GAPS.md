@@ -61,11 +61,31 @@ that safe refusal is **not** proof a private deployment is ready.
 
 A preliminary transaction draft was withdrawn after independent review: it
 covered only 12 of the 20 functions checked at startup and omitted historical
-table/sequence grants required because `arcompt_app` does not exist in
-production. Its rehearsal helper could not guarantee a disposable target.
-No executable production repair is approved; a replacement must prove all
-20 function definitions, the full effective privilege baseline, and a
-production-shaped disposable rehearsal before anyone runs SQL.
+table/sequence grants. Its rehearsal helper could not guarantee a disposable
+target. The replacement in `PRIVATE-PUBLISH-REPAIR-REVIEW.md` is **for operator
+review only, not production execution**. It includes the 20 guarded functions,
+the qualified ledger-balance trigger, all 278 observed application grants,
+preflight catalog checks and a local-only rehearsal. The local rehearsal
+passes the restricted app startup guard, tenant-isolation checks, queue
+separation and ledger/audit immutability tests. Its synthetic PostgreSQL
+cluster is not a production backup or proof of live runtime behavior.
+
+Read-only catalog comparisons found that the 74 existing tables' constraints,
+indexes, unaffected triggers, policies, RLS flags and PUBLIC table grants
+match development, apart from the three known policy/FORCE gaps and missing
+audit trigger. The 817 comparable column definitions/defaults/PUBLIC column
+grants, six sequence definitions/PUBLIC grants, and 15 unchanged non-extension
+application function bodies also match. The optional vector embedding is
+excluded from the local fixture comparison because pgvector is unavailable
+there. The reviewed transaction checks these baselines again before changing
+anything and aborts on drift.
+
+Production remains blocked: this candidate neither provisions restricted
+logins nor reconciles migration history. Before any private Publish or manual
+SQL, an authorized operator must establish the execution, backup/rollback,
+restricted-login and migration-history procedure, recapture the Publish
+preview and production catalog, and approve the exact SQL. Keep the public
+site closed through post-Publish runtime smoke tests.
 
 The latest read-only comparison found 76 development tables and 74 production
 tables; the two missing tables are the background-job tables. The other 74
