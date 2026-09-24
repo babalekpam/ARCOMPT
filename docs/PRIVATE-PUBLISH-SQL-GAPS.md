@@ -44,6 +44,13 @@ fragments onto partially published tables can create functions owned by a
 The code now splits the app and queue roles, but the corresponding production
 roles/grants and the latest hardened definitions are not yet present.
 
+The exact current **13-statement, read-only Publish preview** is saved as a
+non-runnable reference in `docs/PRIVATE-PUBLISH-PREVIEW.md`. It is a snapshot
+of what Publish proposes to apply, **not** a repair script. If a private
+Publish ever applies that diff, do not replay the preview afterward: the
+background-job tables will already exist. Recheck the diff immediately before
+any Publish, because the saved preview may become stale.
+
 Before drafting any production SQL, verify the exact production ownership,
 policies, grants, function bodies, trigger attachments, migration invariants,
 and protected role membership. Test a *specific, idempotent* repair against a
@@ -59,6 +66,12 @@ production. Its rehearsal helper could not guarantee a disposable target.
 No executable production repair is approved; a replacement must prove all
 20 function definitions, the full effective privilege baseline, and a
 production-shaped disposable rehearsal before anyone runs SQL.
+
+The latest read-only comparison found 76 development tables and 74 production
+tables; the two missing tables are the background-job tables. The other 74
+tables have matching column names, types, and nullability. That limited match
+does **not** establish matching constraints, roles, functions, policies,
+ownership, grants, or runtime behavior.
 
 Replit's agent production database connection is read-only. Any later manual
 SQL step in Replit's Database tool requires an independently reviewed

@@ -130,6 +130,15 @@ the absent application role. No production-shaped disposable rehearsal has
 passed. Do not reconstruct that draft from fragments or treat the current
 startup guards as a substitute for the missing repair.
 
+The production startup guard was exercised end-to-end against a disposable
+fully migrated database using the *restricted application login*, not the
+migration owner. That test caught and corrected a false positive: the global
+subscription-plan catalogue intentionally has one `SELECT`-only
+`USING (true)` policy. The guard now allows only that exact read policy while
+still rejecting open write policies and a bare Publish-generated policy.
+This verifies the local baseline and startup refusal, **not** the untested
+production catalog or a successful private Publish.
+
 No private Publish runtime, production Clerk session, disposable production
 R2 round trip, production payroll-key round trip, production backup/restore,
 or private-runtime scanner packaging check has succeeded yet. The public

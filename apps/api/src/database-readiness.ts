@@ -58,7 +58,7 @@ function requiredPolicyExpression(table: string, name: string): string {
 
 type RoleRow = { name: string; rolsuper: boolean; rolbypassrls: boolean; rolcreaterole?: boolean; rolcreatedb?: boolean };
 type TableRow = { relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; owned_by_app: boolean };
-type PolicyRow = { tablename: string; policyname: string; qual: string | null; with_check: string | null };
+type PolicyRow = { tablename: string; policyname: string; cmd: string; qual: string | null; with_check: string | null };
 type FunctionRow = {
   signature: string;
   exists: boolean;
@@ -98,6 +98,13 @@ export function databaseSecurityProblems(snapshot: DatabaseSecuritySnapshot): st
     const policies = snapshot.policies.filter((policy) => policy.tablename === table.relname);
     if (!policies.length) problems.push(`aucune politique RLS sur ${table.relname}`);
     for (const policy of policies) {
+      // The global subscription-plan catalogue is intentionally readable,
+      // but never writable, by the app. Its SELECT-only policy cannot
+      // authorize a write; verifyAppPrivileges checks the missing DML grants.
+      const publicCatalogueRead = table.relname === "subscription_plan" &&
+        policy.policyname === "subscription_plan_read" && policy.cmd === "SELECT" &&
+        normalized(policy.qual) === "true" && policy.with_check === null;
+      if (publicCatalogueRead) continue;
       if (!policy.qual && !policy.with_check) {
         problems.push(`politique RLS sans condition : ${table.relname}.${policy.policyname}`);
       } else if (["true", "(true)"].includes(normalized(policy.qual)) || ["true", "(true)"].includes(normalized(policy.with_check))) {
@@ -140,7 +147,7 @@ export async function assertProductionDatabaseSecurity(db: Sql): Promise<void> {
         AND (c.relrowsecurity OR c.relname IN ('onboarding_bootstrap', 'platform_admin', 'platform_admin_audit', 'background_job', 'background_job_review')
           OR EXISTS (SELECT 1 FROM information_schema.columns col
             WHERE col.table_schema = 'public' AND col.table_name = c.relname AND col.column_name = 'tenant_id'))`,
-    db<PolicyRow[]>`SELECT p.tablename, p.policyname, p.qual, p.with_check
+    db<PolicyRow[]>`SELECT p.tablename, p.policyname, p.cmd, p.qual, p.with_check
       FROM pg_policies p WHERE p.schemaname = 'public'`,
       db<FunctionRow[]>`SELECT f.signature, p.oid IS NOT NULL AS exists, p.prosecdef AS security_definer,
         has_function_privilege(current_user, p.oid, 'EXECUTE') AS executable,

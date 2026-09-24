@@ -15,10 +15,10 @@ function safeSnapshot(): DatabaseSecuritySnapshot {
         : tablename === "onboarding_bootstrap"
         ? "(clerk_sub = current_setting('app.clerk_sub'::text, true))"
         : `(CURRENT_USER = ( SELECT r.rolname FROM (pg_class c JOIN pg_roles r ON ((r.oid = c.relowner))) WHERE (c.oid = ('${tablename}'::regclass)::oid)))`;
-      return { tablename, policyname: policies[i]!, qual: expression, with_check: expression };
+      return { tablename, policyname: policies[i]!, cmd: "ALL", qual: expression, with_check: expression };
     }), ...names.slice(3).map((tablename) => {
       const expression = `(CURRENT_USER = ( SELECT r.rolname FROM (pg_class c JOIN pg_roles r ON ((r.oid = c.relowner))) WHERE (c.oid = ('${tablename}'::regclass)::oid)))`;
-      return { tablename, policyname: `${tablename}_owner`, qual: expression, with_check: expression };
+      return { tablename, policyname: `${tablename}_owner`, cmd: "ALL", qual: expression, with_check: expression };
     })],
     functions: [
       "public.auth_bootstrap_lookup(text,text)",
@@ -129,7 +129,16 @@ describe("production database readiness", () => {
 
   it("rejects a newly added permissive policy even if the tenant policy remains intact", () => {
     const snapshot = safeSnapshot();
-    snapshot.policies.push({ tablename: "background_job", policyname: "allow_all", qual: "true", with_check: "true" });
+    snapshot.policies.push({ tablename: "background_job", policyname: "allow_all", cmd: "ALL", qual: "true", with_check: "true" });
     expect(databaseSecurityProblems(snapshot).join("\n")).toContain("politique RLS autorisant tout : background_job.allow_all");
+  });
+
+  it("permits only the read-only global catalogue policy, not an open write policy", () => {
+    const snapshot = safeSnapshot();
+    snapshot.tables.push({ relname: "subscription_plan", relrowsecurity: true, relforcerowsecurity: true, owned_by_app: false });
+    snapshot.policies.push({ tablename: "subscription_plan", policyname: "subscription_plan_read", cmd: "SELECT", qual: "true", with_check: null });
+    expect(databaseSecurityProblems(snapshot)).toEqual([]);
+    snapshot.policies.at(-1)!.cmd = "ALL";
+    expect(databaseSecurityProblems(snapshot).join("\n")).toContain("politique RLS autorisant tout : subscription_plan.subscription_plan_read");
   });
 });

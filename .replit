@@ -69,13 +69,13 @@ args = "ARCOMPT development"
 name = "ARCOMPT development"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "bash -c 'set -uo pipefail; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; trap \"kill 0\" EXIT; corepack pnpm --filter @arcompt/api dev & corepack pnpm --filter @arcompt/web dev & wait -n; exit 1'"
+args = "bash -c 'set -uo pipefail; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; api=\"\"; web=\"\"; cleanup() { trap - EXIT TERM INT; if [ -n \"$api\" ]; then kill -- \"-$api\" 2>/dev/null || true; fi; if [ -n \"$web\" ]; then kill -- \"-$web\" 2>/dev/null || true; fi; wait 2>/dev/null || true; }; trap cleanup EXIT; trap \"exit 143\" TERM INT; setsid corepack pnpm --filter @arcompt/api dev & api=$!; setsid corepack pnpm --filter @arcompt/web dev & web=$!; wait -n \"$api\" \"$web\"; exit 1'"
 waitForPort = 3000
-
-[workflows.workflow.metadata]
-outputType = "webview"
 
 [userenv]
 
