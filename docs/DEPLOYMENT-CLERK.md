@@ -5,6 +5,10 @@
 > compte OWNER de production ne doit être créé uniquement pour faire passer un
 > health-check.
 
+Pour la route Replit actuelle (sans utiliser le VPS partagé), suivre aussi
+[`DEPLOYMENT-REPLIT-CURRENT.md`](DEPLOYMENT-REPLIT-CURRENT.md). L'ancien
+`DEPLOYMENT-REPLIT.md` reste une référence historique Keycloak/Auth.js.
+
 ARCOMPT utilise par défaut **Replit-managed Clerk** pour l'identité web et la
 récupération de mot de passe. Le navigateur conserve sa session Clerk ; Next.js
 obtient côté serveur un jeton court et le transmet au proxy Hono. Le navigateur
