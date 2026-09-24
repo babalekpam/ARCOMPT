@@ -133,8 +133,18 @@ describe("Replit durable background queue", () => {
       jobs: queue, jobStatusSupported: true,
       ledgerFor: () => new Ledger(new MemoryStore(), { baseCurrency: "XOF" }) });
     const headers = (tenant: string) => ({ "content-type": "application/json", "x-user-id": tenantId, "x-tenant-id": tenant });
+    const count = async (tenant: string) => {
+      const response = await api.request("/v1/jobs/review-count", { headers: headers(tenant) });
+      expect(response.status).toBe(200);
+      return (await response.json() as { count: number }).count;
+    };
+    const initial = await count(tenantId);
     const { id } = await queue.enqueue("dunning.send", { tenantId, userId: tenantId, invoiceId: tenantId, channel: "EMAIL" });
+    expect(await count(tenantId)).toBe(initial);
     await admin`UPDATE background_job SET status = 'FAILED', attempts = 1 WHERE id = ${id}`;
+    const before = await count(tenantId);
+    expect(before).toBe(initial + 1);
+    expect(await count(otherTenantId)).toBe(0);
     const list = await api.request("/v1/jobs?status=FAILED", { headers: headers(tenantId) });
     expect(list.status).toBe(200);
     const jobs = await list.json() as { id: string; resource_id: string; payload?: unknown }[];
@@ -147,10 +157,12 @@ describe("Replit durable background queue", () => {
       api.request(path, { method: "POST", headers: headers(tenant), body: JSON.stringify(body) });
     expect((await post(`/v1/jobs/${id}/retry`, {})).status).toBe(409);
     expect((await post(`/v1/jobs/${id}/review`, { outcome: "NOT_DELIVERED", confirmed: false })).status).toBe(400);
+    expect(await count(tenantId)).toBe(before);
     expect((await post(`/v1/jobs/${id}/review`, { outcome: "NOT_DELIVERED", confirmed: true }, otherTenantId)).status).toBe(409);
     expect((await post(`/v1/sales/${tenantId}/dunning/schedule`, { channel: "EMAIL", delayMs: 0, requestId: tenantId })).status).toBe(409);
     expect((await post(`/v1/sales/${tenantId}/dunning`, { channel: "EMAIL", level: 1 })).status).toBe(409);
     expect((await post(`/v1/jobs/${id}/review`, { outcome: "DELIVERED", confirmed: true })).status).toBe(200);
+    expect(await count(tenantId)).toBe(before - 1);
     expect((await post(`/v1/jobs/${id}/review`, { outcome: "NOT_DELIVERED", confirmed: true })).status).toBe(409);
   });
 });

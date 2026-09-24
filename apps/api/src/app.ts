@@ -133,6 +133,19 @@ export function createApp(deps: AppDeps) {
   api.route("/closing", closingRoutes(deps));
   api.route("/anchors", anchoringRoutes(deps));
   api.route("/", documentsRoutes(deps)); // /documents, /proposals, /assistant, /anomalies
+  api.get("/jobs/review-count", requireRole("OWNER", "ACCOUNTANT", "CASHIER"), async (c) => {
+    if (!db || !deps.jobStatusSupported) return c.json({ error: { code: "UNAVAILABLE", message: "Statut de la file indisponible" } }, 503);
+    const auth = c.get("auth");
+    const [row] = await withTenant(db, auth, (tx) => tx`
+      SELECT count(*)::integer AS count
+      FROM background_job j
+      WHERE j.tenant_id = ${auth.tenantId} AND j.name = 'dunning.send' AND j.status = 'FAILED'
+        AND NOT EXISTS (
+          SELECT 1 FROM background_job_review r
+          WHERE r.source_job_id = j.id AND r.tenant_id = j.tenant_id
+        )`);
+    return c.json({ count: Number(row?.count ?? 0) });
+  });
   api.get("/jobs", async (c) => {
     if (!db || !deps.jobStatusSupported) return c.json({ error: { code: "UNAVAILABLE", message: "Statut de la file indisponible" } }, 503);
     const status = c.req.query("status") ?? "FAILED";

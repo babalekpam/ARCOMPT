@@ -13,6 +13,7 @@ import { UserMenu } from "./UserMenu";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { getPlatformAdmin } from "@/lib/platform";
 import { getCurrentMemberReference } from "@/lib/member-reference";
+import { ReminderReviewAlert } from "./ReminderReviewAlert";
 
 /** Coque applicative : en-tête, barre latérale (≥ md), barre inférieure (< md). */
 export async function AppShell({ auth, children }: { auth: AuthContext; children: ReactNode }) {
@@ -40,6 +41,7 @@ export async function AppShell({ auth, children }: { auth: AuthContext; children
             <UserMenu displayName={displayName} />
           </div>
         </header>
+        {auth.tenantId ? <ReminderReviewAlert key={auth.tenantId} tenantId={auth.tenantId} /> : null}
         <OfflineIndicator />
         <main className="flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10">
           {platformAdmin && !auth.tenantId ? <Link href="/platform" className="mb-4 block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Select a company to continue with platform administration.</Link> : null}

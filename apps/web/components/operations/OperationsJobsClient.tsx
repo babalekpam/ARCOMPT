@@ -126,6 +126,7 @@ export function OperationsJobsClient() {
   const [notice, setNotice] = useState("");
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [remindersToReview, setRemindersToReview] = useState<number | null>(null);
 
   const loadJobs = useCallback(async (background = false) => {
     if (background) setRefreshing(true); else setLoading(true);
@@ -133,7 +134,15 @@ export function OperationsJobsClient() {
     try {
       const data = await apiClient<FailedJob[]>("/jobs", { query: { status: "FAILED" } });
       setJobs(Array.isArray(data) ? data : []);
+      try {
+        const reminderCount = await apiClient<{ count: number }>("/jobs/review-count", { cache: "no-store" });
+        setRemindersToReview(reminderCount.count);
+        window.dispatchEvent(new Event("reminder-review-changed"));
+      } catch {
+        setRemindersToReview(null);
+      }
     } catch (requestError) {
+      setRemindersToReview(null);
       setError(errorMessage(requestError));
     } finally {
       setLoading(false);
@@ -173,7 +182,7 @@ export function OperationsJobsClient() {
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60"><p className="text-xs uppercase tracking-wide text-slate-500">À examiner</p><p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">{loading ? "—" : jobs.filter((job) => !job.review_outcome).length}</p></div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60"><p className="text-xs uppercase tracking-wide text-slate-500">Relançables</p><p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">{loading ? "—" : retryableCount}</p></div>
-        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 dark:border-amber-900/60 dark:bg-amber-950/20"><p className="text-xs uppercase tracking-wide text-amber-800 dark:text-amber-200">Rappels à vérifier</p><p className="mt-1 text-2xl font-semibold text-amber-950 dark:text-amber-100">{loading ? "—" : jobs.filter((job) => job.name === "dunning.send" && !job.review_outcome).length}</p></div>
+        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 dark:border-amber-900/60 dark:bg-amber-950/20"><p className="text-xs uppercase tracking-wide text-amber-800 dark:text-amber-200">Rappels à vérifier</p><p className="mt-1 text-2xl font-semibold text-amber-950 dark:text-amber-100">{loading ? "—" : remindersToReview ?? "—"}</p></div>
       </div>
 
       {notice ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200" role="status">{notice}</p> : null}
