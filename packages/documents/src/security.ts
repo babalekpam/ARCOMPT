@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import { connect } from "node:net";
+import { open } from "node:fs/promises";
+import { join } from "node:path";
 
 /**
  * Sécurité de la capture (docs/SECURITY.md §8–9) : type réel des fichiers,
@@ -39,6 +41,34 @@ export interface AntivirusScanner {
   scan(bytes: Uint8Array): Promise<ScanResult>;
 }
 
+/** The daily database's signed build timestamp must stay recent. */
+export async function assertRecentClamAvDatabase(directory: string, now = Date.now()): Promise<void> {
+  let header: string | undefined;
+  for (const filename of ["daily.cld", "daily.cvd"]) {
+    try {
+      const file = await open(join(directory, filename), "r");
+      try {
+        const bytes = Buffer.alloc(512);
+        await file.read(bytes, 0, bytes.length, 0);
+        header = bytes.toString("ascii");
+      } finally {
+        await file.close();
+      }
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  const buildTime = /^ClamAV-VDB:([^:]+):/.exec(header ?? "")?.[1];
+  const publishedAt = buildTime
+    ? Date.parse(buildTime.replace(/(\d{2})-(\d{2}) ([+-]\d{4})$/, "$1:$2 $3"))
+    : NaN;
+  const age = now - publishedAt;
+  if (!Number.isFinite(age) || age < -10 * 60_000 || age > 72 * 60 * 60_000) {
+    throw new Error("clamd : signatures absentes, invalides ou périmées");
+  }
+}
+
 /** Sans antivirus configuré : tout est accepté (développement, tests). */
 export class NoopScanner implements AntivirusScanner {
   async scan(): Promise<ScanResult> {
@@ -52,9 +82,11 @@ export class ClamAvScanner implements AntivirusScanner {
     private readonly host: string,
     private readonly port = 3310,
     private readonly timeoutMs = 30000,
+    private readonly databaseDirectory?: string,
   ) {}
 
-  scan(bytes: Uint8Array): Promise<ScanResult> {
+  async scan(bytes: Uint8Array): Promise<ScanResult> {
+    if (this.databaseDirectory) await assertRecentClamAvDatabase(this.databaseDirectory);
     return new Promise((resolve, reject) => {
       const socket = connect({ host: this.host, port: this.port });
       let reply = "";
@@ -71,8 +103,8 @@ export class ClamAvScanner implements AntivirusScanner {
       socket.on("data", (d) => void (reply += d.toString()));
       socket.on("close", () => {
         const text = reply.replace(/\0/g, "").trim();
-        if (/OK$/.test(text)) return resolve({ clean: true });
-        const m = /: (.+) FOUND$/.exec(text);
+        if (text === "stream: OK") return resolve({ clean: true });
+        const m = /^stream: (.+) FOUND$/.exec(text);
         if (m) return resolve({ clean: false, signature: m[1]! });
         reject(new Error(`clamd : réponse inattendue « ${text} »`));
       });
@@ -106,7 +138,7 @@ export function guardSimulatedDependency(opts: {
 
 /** Antivirus réel si `CLAMAV_HOST` ; sinon scanner neutre, interdit en production sans `ALLOW_INSECURE_ANTIVIRUS=1`. */
 export function createScannerFromEnv(env: NodeJS.ProcessEnv = process.env): AntivirusScanner {
-  if (env.CLAMAV_HOST) return new ClamAvScanner(env.CLAMAV_HOST, env.CLAMAV_PORT ? Number(env.CLAMAV_PORT) : 3310);
+  if (env.CLAMAV_HOST) return new ClamAvScanner(env.CLAMAV_HOST, env.CLAMAV_PORT ? Number(env.CLAMAV_PORT) : 3310, 30000, env.CLAMAV_DATABASE_DIR);
   guardSimulatedDependency({
     env,
     simulated: "l'analyse antivirus des pièces téléversées (tous les fichiers seraient acceptés)",

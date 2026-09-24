@@ -29,13 +29,9 @@ requiredFiles = [".replit"]
 # dupliquée perd. Le panneau « Publishing » reste la source de vérité : il
 # réécrit cette clé si vous y changez le type de déploiement.
 [deployment]
-deploymentTarget = "gce"
-build = ["bash", "-c", "corepack pnpm install --frozen-lockfile && AUTH_MODE=clerk corepack pnpm --filter @arcompt/web build"]
-run = [
-  "bash",
-  "-c",
-  "set -uo pipefail; export NODE_ENV=production AUTH_MODE=clerk API_PORT=4000 API_URL=http://127.0.0.1:4000; export CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(command -v chromium || true)}\"; trap 'kill 0' EXIT; corepack pnpm --filter @arcompt/api start & corepack pnpm --filter @arcompt/web start & wait -n; echo 'ARCOMPT : un des deux processus s est arrete, le deploiement redemarre' >&2; exit 1",
-]
+deploymentTarget = "vm"
+build = ["bash", "-c", "corepack pnpm install --frozen-lockfile && bash scripts/install-clamav.sh && AUTH_MODE=clerk corepack pnpm --filter @arcompt/web build"]
+run = ["bash", "scripts/run-production.sh"]
 
 [[ports]]
 localPort = 3000

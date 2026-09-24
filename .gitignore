@@ -10,3 +10,4 @@ coverage/
 .pgdata/
 .data/
 test-results/
+.build/

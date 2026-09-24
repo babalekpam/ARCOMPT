@@ -7,6 +7,8 @@ import type { Sql } from "postgres";
 import { LedgerError, type Ledger } from "@arcompt/ledger";
 import { authMiddleware, type AuthOptions } from "./auth.js";
 import { readinessHandler } from "./health.js";
+import { checkClamd } from "./clamav-health.js";
+import { assertRecentClamAvDatabase } from "@arcompt/documents";
 import { recordPlatformAccess, resolveIdentity, resolvePlatformAdmin, resolvePlatformCompanies, resolvePlatformCompany, touchLastActive, type TokenIdentityHints } from "./identity.js";
 import { rateLimit, securityHeaders } from "./security.js";
 import { BurstDetector, log, raiseSecurityAlert } from "./telemetry.js";
@@ -60,6 +62,14 @@ export function createApp(deps: AppDeps) {
   // dépendance ; le détail des pannes part dans les journaux.
   const readiness = readinessHandler({
     ...(deps.db ? { db: deps.db } : {}),
+    ...(process.env.CLAMAV_HOST ? { probes: [{
+      name: "antivirus",
+      required: true,
+      check: async () => {
+        if (process.env.CLAMAV_DATABASE_DIR) await assertRecentClamAvDatabase(process.env.CLAMAV_DATABASE_DIR);
+        await checkClamd(process.env.CLAMAV_HOST!, Number(process.env.CLAMAV_PORT || 3310));
+      },
+    }] } : {}),
     ...(deps.quiet ? {} : { onFailure: (name: string, error: unknown) => log("warn", "ready.dependency_down", { dependency: name, detail: error instanceof Error ? error.message : String(error) }) }),
   });
   app.get("/ready", readiness);
