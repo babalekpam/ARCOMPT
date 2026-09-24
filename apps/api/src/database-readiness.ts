@@ -2,12 +2,16 @@
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { Sql } from "postgres";
 
-const REQUIRED_TABLES = ["onboarding_bootstrap", "platform_admin", "platform_admin_audit"] as const;
-const REQUIRED_POLICIES = new Map([
+const REQUIRED_TABLES = ["onboarding_bootstrap", "platform_admin", "platform_admin_audit", "background_job", "background_job_review"] as const;
+const REQUIRED_POLICIES = [
   ["onboarding_bootstrap", "onboarding_bootstrap_access"],
   ["platform_admin", "platform_admin_internal"],
   ["platform_admin_audit", "platform_admin_audit_internal"],
-]);
+  ["background_job", "tenant_isolation"],
+  ["background_job", "background_job_owner"],
+  ["background_job_review", "tenant_isolation"],
+  ["background_job_review", "background_job_review_owner"],
+] as const;
 const REQUIRED_FUNCTIONS = [
   "public.auth_bootstrap_lookup(text,text)",
   "public.auth_bootstrap_replay(text)",
@@ -21,7 +25,8 @@ function normalized(expression: string | null): string {
   return (expression ?? "").replace(/\s+/g, " ").trim();
 }
 
-function requiredPolicyExpression(table: string): string {
+function requiredPolicyExpression(table: string, name: string): string {
+  if (name === "tenant_isolation") return "(tenant_id = app_tenant_id())";
   if (table === "onboarding_bootstrap") {
     return "(clerk_sub = current_setting('app.clerk_sub'::text, true))";
   }
@@ -63,6 +68,8 @@ export function databaseSecurityProblems(snapshot: DatabaseSecuritySnapshot): st
     for (const policy of policies) {
       if (!policy.qual && !policy.with_check) {
         problems.push(`politique RLS sans condition : ${table.relname}.${policy.policyname}`);
+      } else if (["true", "(true)"].includes(normalized(policy.qual)) || ["true", "(true)"].includes(normalized(policy.with_check))) {
+        problems.push(`politique RLS autorisant tout : ${table.relname}.${policy.policyname}`);
       }
     }
   }
@@ -70,7 +77,7 @@ export function databaseSecurityProblems(snapshot: DatabaseSecuritySnapshot): st
     const policy = snapshot.policies.find((row) => row.tablename === table && row.policyname === name);
     if (!policy || !policy.qual || !policy.with_check) {
       problems.push(`politique requise absente ou incomplète : ${table}.${name}`);
-    } else if (normalized(policy.qual) !== requiredPolicyExpression(table) || normalized(policy.with_check) !== requiredPolicyExpression(table)) {
+    } else if (normalized(policy.qual) !== requiredPolicyExpression(table, name) || normalized(policy.with_check) !== requiredPolicyExpression(table, name)) {
       problems.push(`politique requise différente de la règle de développement : ${table}.${name}`);
     }
   }
@@ -92,7 +99,9 @@ export async function assertProductionDatabaseSecurity(db: Sql): Promise<void> {
         c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user) AS owned_by_app
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
-        AND (c.relrowsecurity OR c.relname IN ('onboarding_bootstrap', 'platform_admin', 'platform_admin_audit'))`,
+        AND (c.relrowsecurity OR c.relname IN ('onboarding_bootstrap', 'platform_admin', 'platform_admin_audit', 'background_job', 'background_job_review')
+          OR EXISTS (SELECT 1 FROM information_schema.columns col
+            WHERE col.table_schema = 'public' AND col.table_name = c.relname AND col.column_name = 'tenant_id'))`,
     db<PolicyRow[]>`SELECT p.tablename, p.policyname, p.qual, p.with_check
       FROM pg_policies p WHERE p.schemaname = 'public'`,
     db<FunctionRow[]>`SELECT f.signature, p.oid IS NOT NULL AS exists, p.prosecdef AS security_definer,

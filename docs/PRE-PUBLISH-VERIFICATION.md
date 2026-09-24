@@ -80,3 +80,25 @@ The public site stays closed until these items have actual evidence. In
 particular, a successful local build and tests are not evidence that the
 Publish build and runtime share the scanner files or that the live application
 uses a safe database role.
+
+## Recheck after the background-job and review changes
+
+The read-only Publish schema preview now contains 13 statements, with no
+reported structural data loss. It would create `background_job` and
+`background_job_review`, but the generated policies have **no tenant or owner
+conditions**, neither table gets `FORCE ROW LEVEL SECURITY`, and no job
+claim/acknowledgment functions or role grants are included. The development
+database has forced RLS and conditioned policies on both tables; the preview
+would **not** reproduce that security model. Do not approve this schema diff
+for production. The read-only production-role check still found only
+`neondb_owner` (`BYPASSRLS`), not the restricted app login.
+
+The API already refuses a privileged production login, missing required
+functions, and unforced or unconditioned policies. Its startup guard now also
+requires the two job tables and their tenant/owner policies, and inspects
+every tenant-bearing table even if RLS was disabled. Targeted tests and API
+typechecking passed. **A startup refusal is a safety measure, not proof the
+deployment can run:** completing this requires an approved path to deliver
+the missing PostgreSQL security objects and restricted login through the
+supported production workflow, followed by a private-runtime smoke test.
+Neither production data nor production schema was changed during this recheck.
