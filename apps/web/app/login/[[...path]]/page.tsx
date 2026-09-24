@@ -27,7 +27,7 @@ export default async function LoginPage() {
       <Card>
         <h1 className="text-lg font-semibold">{t("login.title")}</h1>
         <p className="mt-1 text-sm text-slate-500">{t("login.subtitle")}</p>
-        {mode === "clerk" ? <div className="mt-5"><ClerkSignIn /></div> : null}
+        {mode === "clerk" ? <div className="mt-5"><ClerkSignIn loadingLabel={t("login.loading")} /></div> : null}
       </Card>
       {mode === "dev" ? (
         <Card className="mt-4">

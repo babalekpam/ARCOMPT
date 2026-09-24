@@ -76,6 +76,7 @@
   "offline.syncError": "Sync failed: {message}",
   "login.title": "Sign in",
   "login.subtitle": "Access your accounting files.",
+  "login.loading": "Loading secure sign-in…",
   "login.keycloak": "Sign in with Keycloak",
   "login.resetPassword": "Forgot your password?",
   "login.resetHint": "On the next page, choose the identity provider's password reset option.",

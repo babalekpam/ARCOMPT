@@ -76,6 +76,7 @@
   "offline.syncError": "Échec de synchronisation : {message}",
   "login.title": "Connexion",
   "login.subtitle": "Accédez à vos dossiers comptables.",
+  "login.loading": "Chargement de la connexion sécurisée…",
   "login.keycloak": "Se connecter avec Keycloak",
   "login.resetPassword": "Mot de passe oublié ?",
   "login.resetHint": "Sur la page suivante, choisissez la réinitialisation du mot de passe proposée par le fournisseur d'identité.",
