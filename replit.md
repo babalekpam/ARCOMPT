@@ -4,4 +4,5 @@
 - Do not stop, restart, replace, reconfigure, or remove existing VPS apps or shared services, and do not change firewall or proxy rules, without the user's informed approval of the exact changes and their impact.
 - Keep VPS credentials in Replit Secrets; never print them or put them in this file, logs, or chat.
 - The user chose to prepare a Replit-hosted production route instead of deploying ARCOMPT on the shared VPS. Leave the VPS staging stopped and do not use or modify that VPS unless the user explicitly revisits this decision.
+- The user selected Replit Reserved VM for hosting and declined a separate Neon project. The built-in Replit production database is not yet a safe runtime target: its observed Publish diff omits required RLS conditions, custom functions, roles, and grants. Do not substitute the privileged managed owner URL for restricted app/queue logins or apply production DDL from build/startup.
 - Do not publish ARCOMPT or move its website DNS until restricted production database roles, RLS, scanner packaging, backups, and live sign-in/tenant isolation have been verified. See `docs/DEPLOYMENT-REPLIT-CURRENT.md`.
