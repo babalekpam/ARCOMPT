@@ -27,6 +27,8 @@ function safeSnapshot(): DatabaseSecuritySnapshot {
       "public.platform_admin_company(text,uuid)",
       "public.platform_admin_companies(text)",
       "public.platform_admin_record_access(text,uuid,text,text)",
+      "public.background_job_retry_internal(uuid)",
+      "public.background_job_review_reminder(uuid,uuid,text)",
     ].map((signature) => ({ signature, exists: true, security_definer: true, executable: true })),
   };
 }

@@ -12,6 +12,10 @@ if [[ "${ALLOW_INSECURE_ANTIVIRUS:-}" == 1 || "${ALLOW_INSECURE_STORAGE:-}" == 1
   echo "Insecure dependency opt-outs are not allowed by this production launcher." >&2
   exit 1
 fi
+if [[ -z "${APP_DATABASE_URL:-}" ]]; then
+  echo "Restricted APP_DATABASE_URL is missing; refusing to start with the managed owner connection." >&2
+  exit 1
+fi
 
 export NODE_ENV=production AUTH_MODE=clerk API_PORT=4000 API_URL=http://127.0.0.1:4000
 export CHROMIUM_PATH="${CHROMIUM_PATH:-$(command -v chromium || true)}"

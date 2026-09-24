@@ -6,3 +6,4 @@ export * from "./seed.js";
 export * from "./chart.js";
 export * from "./crypto.js";
 export * from "./tenant-keys.js";
+export { APP_GROUP_ROLE, verifyAppPrivileges, describeViolation } from "./provision.js";

@@ -6,6 +6,7 @@ import { createDb } from "@arcompt/db";
 import { createQueueFromEnv } from "@arcompt/jobs";
 import { createCompanyCurrencyResolver, Ledger, PostgresRateProvider, PostgresStore } from "@arcompt/ledger";
 import { createApp } from "./app.js";
+import { applicationDatabaseUrl } from "./app-database.js";
 import { loadConfig } from "./config.js";
 import { assertProductionDatabaseSecurity } from "./database-readiness.js";
 import { beginDraining } from "./health.js";
@@ -24,7 +25,8 @@ for (const d of cfg.degraded) log("warn", "api.degraded", { detail: d });
 
 await initTelemetry();
 
-const db = createDb();
+const appDatabaseUrl = applicationDatabaseUrl();
+const db = appDatabaseUrl ? createDb({ url: appDatabaseUrl }) : createDb();
 if (cfg.isProduction) {
   try {
     await assertProductionDatabaseSecurity(db);

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import type { Sql } from "postgres";
+import { describeViolation, verifyAppPrivileges } from "@arcompt/db";
 
 const REQUIRED_TABLES = ["onboarding_bootstrap", "platform_admin", "platform_admin_audit", "background_job", "background_job_review"] as const;
 const REQUIRED_POLICIES = [
@@ -19,6 +20,8 @@ const REQUIRED_FUNCTIONS = [
   "public.platform_admin_company(text,uuid)",
   "public.platform_admin_companies(text)",
   "public.platform_admin_record_access(text,uuid,text,text)",
+  "public.background_job_retry_internal(uuid)",
+  "public.background_job_review_reminder(uuid,uuid,text)",
 ] as const;
 
 function normalized(expression: string | null): string {
@@ -112,7 +115,9 @@ export async function assertProductionDatabaseSecurity(db: Sql): Promise<void> {
         ('public.platform_admin_identity(text)'),
         ('public.platform_admin_company(text,uuid)'),
         ('public.platform_admin_companies(text)'),
-        ('public.platform_admin_record_access(text,uuid,text,text)')
+        ('public.platform_admin_record_access(text,uuid,text,text)'),
+        ('public.background_job_retry_internal(uuid)'),
+        ('public.background_job_review_reminder(uuid,uuid,text)')
       ) AS f(signature)
       LEFT JOIN pg_proc p ON p.oid = to_regprocedure(f.signature)`,
   ]);
@@ -125,5 +130,9 @@ export async function assertProductionDatabaseSecurity(db: Sql): Promise<void> {
   });
   if (problems.length) {
     throw new Error(`Sécurité de la base de production non conforme ; démarrage refusé :\n${problems.map((p) => `  - ${p}`).join("\n")}`);
+  }
+  const privileges = await verifyAppPrivileges(db, roles[0].name);
+  if (!privileges.ok) {
+    throw new Error(`Droits du rôle applicatif non conformes ; démarrage refusé :\n${privileges.violations.map((v) => `  - ${describeViolation(v)}`).join("\n")}`);
   }
 }
