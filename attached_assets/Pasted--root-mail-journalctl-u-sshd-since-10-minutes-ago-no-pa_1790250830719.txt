@@ -1,0 +1,37 @@
+[root@mail ~]# journalctl -u sshd --since "10 minutes ago" --no-pager | tail -35
+Sep 24 11:47:12 mail.navimedi.org sshd-session[481455]: banner exchange: Connection from 165.227.45.141 port 45422: invalid format
+Sep 24 11:48:04 mail.navimedi.org sshd[134586]: Timeout before authentication for connection from 127.0.0.1 to 127.0.0.1, pid = 481480
+Sep 24 11:49:01 mail.navimedi.org sshd-session[481708]: Invalid user ubuntu from 211.72.100.146 port 33144
+Sep 24 11:49:01 mail.navimedi.org sshd-session[481708]: pam_unix(sshd:auth): check pass; user unknown
+Sep 24 11:49:01 mail.navimedi.org sshd-session[481708]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=211.72.100.146
+Sep 24 11:49:01 mail.navimedi.org sshd-session[481708]: Unable to connect to Plesk Database: Can't connect to local server through socket '/var/lib/mysql/mysql.sock' (13)
+Sep 24 11:49:04 mail.navimedi.org sshd-session[481708]: Failed password for invalid user ubuntu from 211.72.100.146 port 33144 ssh2
+Sep 24 11:49:05 mail.navimedi.org sshd-session[481708]: Connection closed by invalid user ubuntu 211.72.100.146 port 33144 [preauth]
+Sep 24 11:49:21 mail.navimedi.org sshd-session[481756]: Invalid user docker from 211.72.100.146 port 36786
+Sep 24 11:49:21 mail.navimedi.org sshd-session[481756]: pam_unix(sshd:auth): check pass; user unknown
+Sep 24 11:49:21 mail.navimedi.org sshd-session[481756]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=211.72.100.146
+Sep 24 11:49:21 mail.navimedi.org sshd-session[481756]: Unable to connect to Plesk Database: Can't connect to local server through socket '/var/lib/mysql/mysql.sock' (13)
+Sep 24 11:49:24 mail.navimedi.org sshd-session[481756]: Failed password for invalid user docker from 211.72.100.146 port 36786 ssh2
+Sep 24 11:49:24 mail.navimedi.org sshd-session[481756]: Connection closed by invalid user docker 211.72.100.146 port 36786 [preauth]
+Sep 24 11:49:33 mail.navimedi.org sshd-session[481772]: Connection closed by 103.145.34.141 port 46662
+Sep 24 11:50:08 mail.navimedi.org sshd-session[481893]: Invalid user marvin from 193.24.211.218 port 55782
+Sep 24 11:50:08 mail.navimedi.org sshd-session[481893]: pam_unix(sshd:auth): check pass; user unknown
+Sep 24 11:50:08 mail.navimedi.org sshd-session[481893]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=193.24.211.218
+Sep 24 11:50:08 mail.navimedi.org sshd-session[481893]: Unable to connect to Plesk Database: Can't connect to local server through socket '/var/lib/mysql/mysql.sock' (13)
+Sep 24 11:50:10 mail.navimedi.org sshd-session[481893]: Failed password for invalid user marvin from 193.24.211.218 port 55782 ssh2
+Sep 24 11:50:10 mail.navimedi.org sshd-session[481896]: Invalid user es from 211.72.100.146 port 34752
+Sep 24 11:50:11 mail.navimedi.org sshd-session[481896]: pam_unix(sshd:auth): check pass; user unknown
+Sep 24 11:50:11 mail.navimedi.org sshd-session[481896]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=211.72.100.146
+Sep 24 11:50:11 mail.navimedi.org sshd-session[481896]: Unable to connect to Plesk Database: Can't connect to local server through socket '/var/lib/mysql/mysql.sock' (13)
+Sep 24 11:50:11 mail.navimedi.org sshd-session[481893]: Received disconnect from 193.24.211.218 port 55782:11: Client disconnecting normally [preauth]
+Sep 24 11:50:11 mail.navimedi.org sshd-session[481893]: Disconnected from invalid user marvin 193.24.211.218 port 55782 [preauth]
+Sep 24 11:50:12 mail.navimedi.org sshd-session[481896]: Failed password for invalid user es from 211.72.100.146 port 34752 ssh2
+Sep 24 11:50:33 mail.navimedi.org sshd-session[481956]: Connection closed by 103.145.34.141 port 33232
+Sep 24 11:50:42 mail.navimedi.org sshd[134586]: Timeout before authentication for connection from 211.72.100.146 to 74.208.166.77, pid = 481896
+Sep 24 11:52:52 mail.navimedi.org unix_chkpwd[482279]: password check failed for user (root)
+Sep 24 11:52:52 mail.navimedi.org sshd-session[482252]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=123.1.147.204  user=root
+Sep 24 11:52:52 mail.navimedi.org sshd-session[482252]: Unable to connect to Plesk Database: Can't connect to local server through socket '/var/lib/mysql/mysql.sock' (13)
+Sep 24 11:52:54 mail.navimedi.org sshd-session[482252]: Failed password for root from 123.1.147.204 port 57754 ssh2
+Sep 24 11:52:54 mail.navimedi.org sshd-session[482252]: Received disconnect from 123.1.147.204 port 57754:11: Bye Bye [preauth]
+Sep 24 11:52:54 mail.navimedi.org sshd-session[482252]: Disconnected from authenticating user root 123.1.147.204 port 57754 [preauth]
+[root@mail ~]# 
