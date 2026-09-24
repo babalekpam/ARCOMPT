@@ -23,6 +23,7 @@ export const MAIN_NAV: NavItem[] = [
   { href: "/statements", labelKey: "nav.statements", icon: "▤" },
   { href: "/accounts", labelKey: "nav.accounts", icon: "⌗" },
   { href: "/firm", labelKey: "nav.firm", icon: "◫" },
+  { href: "/firm/members", labelKey: "nav.invitations", icon: "✉" },
   { href: "/sync", labelKey: "nav.sync", icon: "⟳" },
   { href: "/settings", labelKey: "nav.settings", icon: "⚙" },
 ];
@@ -44,5 +45,7 @@ export const SOON_MODULES: Record<string, string> = {
 };
 
 export function isActivePath(pathname: string, href: string): boolean {
+  // The invitations screen has its own main-nav entry; don't highlight Cabinet twice.
+  if (href === "/firm" && (pathname === "/firm/members" || pathname.startsWith("/firm/members/"))) return false;
   return pathname === href || pathname.startsWith(`${href}/`);
 }

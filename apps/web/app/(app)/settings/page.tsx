@@ -40,7 +40,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       <PageHeader title={t("settings.title")} subtitle={t("settings.subtitle")} />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
-          <CardTitle hint={t("settings.companyHint")}>{t("settings.company")}</CardTitle>
+          <CardTitle hint={t("settings.companyHint")} action={<Link href="/firm/members" className="text-sm font-medium text-teal-700 underline hover:text-teal-900 dark:text-teal-300">{t("nav.invitations")}</Link>}>{t("settings.company")}</CardTitle>
           <dl className="divide-y divide-slate-100 dark:divide-slate-800">
             {company ? <Row label={t("settings.company")} value={company.name} /> : null}
             <Row label={t("settings.tenantId")} value={auth.tenantId} mono />

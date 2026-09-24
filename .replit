@@ -85,6 +85,7 @@ MAIL_FROM_NAME = "ARCOMPT"
 SMTP_PORT = "465"
 SMTP_SECURE = "1"
 SMTP_USER = "info@arcompt.com"
+SMTP_HOST = "smtp.zoho.com"
 
 [userenv.development]
 APP_URL = "https://caf6d426-fdba-4a8a-bc42-8c5c67b804e2-00-abi9d4vbbqmh.picard.replit.dev"
