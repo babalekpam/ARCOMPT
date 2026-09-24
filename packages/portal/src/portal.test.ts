@@ -139,13 +139,13 @@ run("invitations et membres", () => {
     expect((await orgs.listInvitations(orgCtx, { pending: true })).map((i) => i.id)).toContain(invitation.id);
 
     invitedId = randomUUID();
-    const accepted = await orgs.acceptInvitation({ token, user: { id: invitedId, email: "compta@cabinet.test", displayName: "Compta" } });
+    const accepted = await orgs.acceptInvitation({ token, user: { id: invitedId, email: "compta@cabinet.test", secondFactor: true, displayName: "Compta" } });
     expect(accepted).toMatchObject({ userId: invitedId, organizationId: firm.id, role: "ACCOUNTANT", companyIds: [companyA, companyB] });
     const members = await orgs.listMembers(orgCtx, companyB);
     expect(members.find((m) => m.userId === invitedId)).toMatchObject({ role: "ACCOUNTANT", email: "compta@cabinet.test", companyName: "Bêta SA" });
     expect(await auditActions(companyB)).toContain("MEMBER_INVITATION_ACCEPTED");
-    await expect(orgs.acceptInvitation({ token, user: { id: invitedId } })).rejects.toMatchObject({ code: "INVITATION_ACCEPTED" });
-    await expect(orgs.acceptInvitation({ token: "inconnu", user: {} })).rejects.toMatchObject({ code: "INVITATION_INVALID" });
+    await expect(orgs.acceptInvitation({ token, user: { id: invitedId, email: "compta@cabinet.test" } })).rejects.toMatchObject({ code: "INVITATION_ACCEPTED" });
+    await expect(orgs.acceptInvitation({ token: "inconnu", user: { email: "compta@cabinet.test" } })).rejects.toMatchObject({ code: "INVITATION_INVALID" });
   });
 
   it("refuse l'acceptation après un bootstrap concurrent sans dupliquer l'utilisateur", async () => {
@@ -154,7 +154,7 @@ run("invitations et membres", () => {
     await db`INSERT INTO onboarding_bootstrap (clerk_sub, company_id) VALUES (${clerkSub}, ${companyA})`;
     const before = await db`SELECT count(*)::int AS n FROM app_user WHERE lower(email) = lower(${email})`;
     const { token } = await orgs.invite(orgCtx, { email, role: "ACCOUNTANT", companyIds: [companyA] });
-    await expect(orgs.acceptInvitation({ token, user: { keycloakSub: clerkSub, email, displayName: "Should not exist" } }))
+    await expect(orgs.acceptInvitation({ token, user: { keycloakSub: clerkSub, email, secondFactor: true, displayName: "Should not exist" } }))
       .rejects.toMatchObject({ code: "CONFLICT" });
     const after = await db`SELECT count(*)::int AS n FROM app_user WHERE lower(email) = lower(${email})`;
     expect(Number(after[0]!.n)).toBe(Number(before[0]!.n));
@@ -163,8 +163,38 @@ run("invitations et membres", () => {
   it("refuse une invitation expirée ou vers un dossier étranger", async () => {
     const { invitation, token: t } = await orgs.invite(orgCtx, { email: "late@cabinet.test", role: "AUDITOR", companyIds: [companyA] });
     await db`UPDATE invitation SET expires_at = now() - interval '1 minute' WHERE id = ${invitation.id}`;
-    await expect(orgs.acceptInvitation({ token: t, user: {} })).rejects.toMatchObject({ code: "INVITATION_EXPIRED" });
+    await expect(orgs.acceptInvitation({ token: t, user: { email: "late@cabinet.test" } })).rejects.toMatchObject({ code: "INVITATION_EXPIRED" });
     await expect(orgs.invite(orgCtx, { email: "x@y.z", role: "AUDITOR", companyIds: [randomUUID()] })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("refuse une autre adresse ou une identité déjà liée ailleurs sans consommer l'invitation", async () => {
+    const email = "nouveau@cabinet.test";
+    const { token: fresh } = await orgs.invite(orgCtx, { email, role: "AUDITOR", companyIds: [companyA] });
+    await expect(orgs.acceptInvitation({ token: fresh, user: { email: "autre@cabinet.test", secondFactor: true, keycloakSub: "other" } }))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
+    const foreignOrg = await orgs.createOrganization({ name: "Autre", kind: "COMPANY" });
+    const foreign = await orgs.createUser({ organizationId: foreignOrg.id, email, displayName: "Autre" });
+    await expect(orgs.acceptInvitation({ token: fresh, user: { id: foreign.id, email, secondFactor: true, keycloakSub: "foreign" } }))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
+    await db`DELETE FROM app_user WHERE id = ${foreign.id}`;
+    const accepted = await orgs.acceptInvitation({ token: fresh, user: { email, secondFactor: true, keycloakSub: "new-clerk-sub" } });
+    expect(accepted.companyIds).toEqual([companyA]);
+    const [created] = await db`SELECT keycloak_sub FROM app_user WHERE id = ${accepted.userId}`;
+    expect(created?.keycloak_sub).toBe("new-clerk-sub");
+    const resolved = await appDb`SELECT user_id, company_id, role FROM auth_resolve_identity(${"new-clerk-sub"})`;
+    expect(resolved).toEqual([expect.objectContaining({ user_id: accepted.userId, company_id: companyA, role: "AUDITOR" })]);
+    expect((await withTenant(appDb, { tenantId: companyB, userId: accepted.userId, organizationId: firm.id },
+      (tx) => tx`SELECT * FROM company_member WHERE company_id = ${companyB} AND user_id = ${accepted.userId}`))).toEqual([]);
+  });
+
+  it("ne consomme pas le code si un rattachement échoue", async () => {
+    const { invitation, token: fresh } = await orgs.invite(orgCtx, { email: "rollback@cabinet.test", role: "AUDITOR", companyIds: [companyA] });
+    await db`UPDATE invitation SET company_ids = ${db.json([companyA, randomUUID()])} WHERE id = ${invitation.id}`;
+    await expect(orgs.acceptInvitation({ token: fresh, user: { email: "rollback@cabinet.test", secondFactor: true, keycloakSub: "rollback-sub" } })).rejects.toThrow();
+    const [stored] = await db`SELECT accepted_at FROM invitation WHERE id = ${invitation.id}`;
+    expect(stored?.accepted_at).toBeNull();
+    const [created] = await db`SELECT id FROM app_user WHERE keycloak_sub = 'rollback-sub'`;
+    expect(created).toBeUndefined();
   });
 
   it("change un rôle, protège le dernier OWNER, retire un membre ; tout est dans audit_log", async () => {

@@ -9,6 +9,7 @@ export type PortalErrorCode =
   | "INVITATION_EXPIRED"
   | "INVITATION_ACCEPTED"
   | "LAST_OWNER"
+  | "MFA_REQUIRED"
   | "MFA_REQUIRED_FOR_FIRM"
   | "PACK_UNAVAILABLE"
   | "FILING_STATE"
@@ -30,6 +31,7 @@ export class PortalError extends Error {
       case "VALIDATION":
         return 400;
       case "FORBIDDEN":
+      case "MFA_REQUIRED":
         return 403;
       case "NOT_FOUND":
       case "INVITATION_INVALID":

@@ -63,7 +63,7 @@ export interface InviteInput {
 export interface AcceptInvitationInput {
   token: string;
   /** Utilisateur connecté (issu du jeton). Créé dans l'organisation de l'invitation s'il n'existe pas. */
-  user: { id?: string; keycloakSub?: string; email?: string; displayName?: string };
+  user: { id?: string; keycloakSub?: string; email: string; secondFactor?: boolean; displayName?: string };
 }
 
 export interface EntitlementReviewItem extends CompanyMember {
@@ -267,13 +267,18 @@ export class OrganizationService {
     if (!inv) throw new PortalError("INVITATION_INVALID", "Invitation introuvable");
     if (inv.accepted_at) throw new PortalError("INVITATION_ACCEPTED", "Invitation déjà acceptée");
     if (new Date(iso(inv.expires_at)).getTime() < Date.now()) throw new PortalError("INVITATION_EXPIRED", "Invitation expirée");
+    if (input.user.email.trim().toLowerCase() !== str(inv.email).trim().toLowerCase()) {
+      throw new PortalError("FORBIDDEN", "Cette invitation est destinée à une autre adresse");
+    }
     const organizationId = str(inv.organization_id);
     const role = str(inv.role) as MemberRole;
     const companyIds = (inv.company_ids as string[]) ?? [];
 
     const userId = await withTenant(this.db, { tenantId: "", organizationId, ...(input.user.id ? { userId: input.user.id } : {}) }, async (tx) => {
+      const [organization] = await tx`SELECT mfa_required FROM organization WHERE id = ${organizationId}`;
+      if (organization?.mfa_required && !input.user.secondFactor) throw new PortalError("MFA_REQUIRED", "Authentification multifacteur requise pour cette organisation");
       let user: Row | undefined;
-      const email = input.user.email ?? str(inv.email);
+      const email = input.user.email;
       // Bootstrap and invitation acceptance must serialize on the verified
       // email, even when RLS would otherwise hide the other organization.
       await tx`SELECT pg_advisory_xact_lock(hashtext(lower(${email})))`;
@@ -281,8 +286,11 @@ export class OrganizationService {
       // check; its result is informational here, the invitation still owns
       // the invited organization's membership decision.
       const [eligibility] = await tx`SELECT state FROM auth_bootstrap_lookup(${input.user.keycloakSub ?? ""}, ${email})`;
-      if (input.user.id) [user] = await tx`SELECT id FROM app_user WHERE id = ${input.user.id}`;
-      if (!user && input.user.keycloakSub) [user] = await tx`SELECT id FROM app_user WHERE keycloak_sub = ${input.user.keycloakSub}`;
+      if (input.user.id) [user] = await tx`SELECT id, organization_id, keycloak_sub FROM app_user WHERE id = ${input.user.id}`;
+      if (!user && input.user.keycloakSub) [user] = await tx`SELECT id, organization_id, keycloak_sub FROM app_user WHERE keycloak_sub = ${input.user.keycloakSub}`;
+      if (user && (str(user.organization_id) !== organizationId || (user.keycloak_sub && user.keycloak_sub !== input.user.keycloakSub))) {
+        throw new PortalError("FORBIDDEN", "Compte rattaché à une autre organisation ou identité");
+      }
       // A user already belonging to this organization may safely retry an
       // invitation. A new row, however, is only legal for a globally eligible
       // email: bootstrap/replay/linked/suspended/ambiguous identities must
@@ -297,22 +305,22 @@ export class OrganizationService {
           RETURNING id`;
       }
       const uid = str(user!.id);
-      const [updated] = await tx`UPDATE invitation SET accepted_at = now(), accepted_by = ${uid} WHERE id = ${inv.id} AND accepted_at IS NULL RETURNING id`;
-      if (!updated) throw new PortalError("INVITATION_ACCEPTED", "Invitation déjà acceptée");
-      return uid;
-    });
-
-    for (const companyId of companyIds) {
-      await withTenant(this.db, { tenantId: companyId, organizationId, userId }, async (tx) => {
-        const [before] = await tx`SELECT role FROM company_member WHERE company_id = ${companyId} AND user_id = ${userId}`;
-        await tx`INSERT INTO company_member (company_id, user_id, role) VALUES (${companyId}, ${userId}, ${role})
+      const [updated] = await tx`UPDATE invitation SET accepted_at = now(), accepted_by = ${uid}
+        WHERE id = ${inv.id} AND accepted_at IS NULL AND expires_at > now() RETURNING id`;
+      if (!updated) throw new PortalError("INVITATION_ACCEPTED", "Invitation déjà acceptée ou expirée");
+      for (const companyId of companyIds) {
+        await tx`SELECT set_config('app.tenant_id', ${companyId}, true)`;
+        await tx`SELECT set_config('app.user_id', ${uid}, true)`;
+        const [before] = await tx`SELECT role FROM company_member WHERE company_id = ${companyId} AND user_id = ${uid}`;
+        await tx`INSERT INTO company_member (company_id, user_id, role) VALUES (${companyId}, ${uid}, ${role})
                  ON CONFLICT (company_id, user_id) DO UPDATE SET role = EXCLUDED.role`;
         await audit(tx, {
-          tenantId: companyId, userId, action: "MEMBER_INVITATION_ACCEPTED", entity: "company_member", entityId: `${companyId}:${userId}`,
+          tenantId: companyId, userId: uid, action: "MEMBER_INVITATION_ACCEPTED", entity: "company_member", entityId: `${companyId}:${uid}`,
           before: before ? { role: before.role } : null, after: { role, invitationId: inv.id },
         });
-      });
-    }
+      }
+      return uid;
+    });
     return { userId, organizationId, role, companyIds };
   }
 

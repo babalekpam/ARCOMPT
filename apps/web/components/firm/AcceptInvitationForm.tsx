@@ -15,7 +15,6 @@ export function AcceptInvitationForm() {
   const t = useT();
   const router = useRouter();
   const [token, setToken] = useState("");
-  const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,10 +43,19 @@ export function AcceptInvitationForm() {
     try {
       const r = await apiClient<AcceptResult>("/portal/org/invitations/accept", {
         method: "POST",
-        body: { token: token.trim(), ...(email.trim() ? { email: email.trim() } : {}), ...(displayName.trim() ? { displayName: displayName.trim() } : {}) },
+        body: { token: token.trim(), ...(displayName.trim() ? { displayName: displayName.trim() } : {}) },
       });
       setResult(r);
       setToken("");
+      const selected = r.companyIds[0];
+      if (!selected) throw new Error("Invitation sans dossier");
+      const selection = await fetch("/api/session/tenant", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tenantId: selected }),
+      });
+      if (!selection.ok) throw new Error("Invitation acceptée, mais le dossier n'a pas pu être sélectionné");
+      router.push("/dashboard");
       router.refresh();
     } catch (err) {
       setError(errorMessage(err));
@@ -61,14 +69,9 @@ export function AcceptInvitationForm() {
       <Field label={t("firm.invitations.token")}>
         <Input value={token} onChange={(e) => setToken(e.target.value)} required minLength={16} className="font-mono text-xs" autoComplete="off" />
       </Field>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label={`${t("firm.invitations.email")} (${t("common.optional")})`}>
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </Field>
-        <Field label={`${t("firm.members.displayName")} (${t("common.optional")})`}>
-          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={120} />
-        </Field>
-      </div>
+      <Field label={`${t("firm.members.displayName")} (${t("common.optional")})`}>
+        <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={120} />
+      </Field>
       {error ? <Alert tone="danger">{error}</Alert> : null}
       {result ? <Alert tone="success">{t("firm.invitations.accepted", { role: t(`firm.role.${result.role}`), n: result.companyIds.length })}</Alert> : null}
       <Button type="submit" variant="secondary" disabled={busy || token.trim().length < 16}>{busy ? t("common.loading") : t("firm.invitations.accept")}</Button>

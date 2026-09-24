@@ -46,7 +46,7 @@ export interface PortalRouteOptions {
 }
 
 /** Page du portail web qui porte le formulaire « Accepter une invitation ». */
-export const INVITATION_ACCEPT_PATH = "/firm/members";
+export const INVITATION_ACCEPT_PATH = "/invite";
 
 const uuid = z.string().uuid();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -68,7 +68,7 @@ const CreateCompanySchema = z.object({
 // Personne d'autre que celui qui invite ne sait dans quelle langue écrire ;
 // absent, on retombe sur la langue du premier dossier de l'invitation.
 const InviteSchema = z.object({ email: z.string().email(), role, companyIds: z.array(uuid).min(1), ttlHours: z.number().int().positive().optional(), locale: z.enum(["fr", "en"]).optional() });
-const AcceptSchema = z.object({ token: z.string().min(16), email: z.string().email().optional(), displayName: z.string().max(120).optional(), keycloakSub: z.string().max(200).optional() });
+const AcceptSchema = z.object({ token: z.string().min(16), displayName: z.string().max(120).optional() }).strict();
 const SetRoleSchema = z.object({ role });
 const CommentSchema = z.object({ entityKind: z.enum(["ENTRY", "DOCUMENT", "PROPOSAL", "PERIOD", "FISCAL_YEAR"]), entityId: uuid, body: z.string().min(1).max(4000) });
 const CommentQuery = z.object({ entityKind: z.enum(["ENTRY", "DOCUMENT", "PROPOSAL", "PERIOD", "FISCAL_YEAR"]).optional(), entityId: uuid.optional(), resolved: z.enum(["true", "false"]).optional() });
@@ -231,7 +231,14 @@ export function portalRoutes(deps: AppDeps, opts: PortalRouteOptions = {}) {
   r.post("/org/invitations/accept", h(async (c) => {
     const auth = c.get("auth");
     const input = await body(c, AcceptSchema);
-    const user = strip({ ...(UUID_RE.test(auth.userId) ? { id: auth.userId } : {}), email: input.email, displayName: input.displayName, keycloakSub: input.keycloakSub });
+    if (!auth.invitationIdentity) throw new PortalError("FORBIDDEN", "Identité Clerk vérifiée requise");
+    const user = strip({
+      ...(UUID_RE.test(auth.userId) ? { id: auth.userId } : {}),
+      email: auth.invitationIdentity.email,
+      keycloakSub: auth.invitationIdentity.sub,
+      secondFactor: auth.invitationIdentity.secondFactor,
+      displayName: input.displayName,
+    });
     return c.json(await orgs.acceptInvitation({ token: input.token, user }));
   }));
 

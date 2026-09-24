@@ -44,6 +44,8 @@ export interface AuthContext {
   clerkSub?: string;
   clerkEmail?: string;
   clerkDisplayName?: string;
+  /** Verified primary address and session factor for tenant-free invitation acceptance. */
+  invitationIdentity?: { sub: string; email: string; secondFactor: boolean };
 }
 
 export type Role = "OWNER" | "ACCOUNTANT" | "CASHIER" | "AUDITOR" | "REVIEWER";
@@ -266,6 +268,8 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
     if (opts.mode === "clerk") {
       const membershipsPath = c.req.method === "GET" &&
         (c.req.path === "/v1/session/memberships" || c.req.path === "/session/memberships");
+      const invitationPath = c.req.method === "POST" &&
+        (c.req.path === "/v1/portal/org/invitations/accept" || c.req.path === "/portal/org/invitations/accept");
       let payload: JWTPayload & { fva?: unknown; azp?: unknown };
       try {
         payload = await verifyToken(token, {
@@ -339,6 +343,24 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
       }
       // A signed-in person must be able to discover *their own* memberships
       // before choosing a tenant. No other endpoint may skip tenant selection.
+      if (invitationPath) {
+        if (identity?.suspendedAt) return forbidden(c, "Compte suspendu", "ACCOUNT_SUSPENDED");
+        if (identity?.mfaRequired && !hasClerkSecondFactor(payload.fva)) return forbidden(c, "Authentification multifacteur requise", "MFA_REQUIRED");
+        let account: { email?: string; emailVerified: boolean } | null;
+        try {
+          account = await clerkLookup!(sub);
+        } catch {
+          return c.json({ error: { code: "IDENTITY_PROVIDER_UNAVAILABLE", message: "Profil Clerk inexploitable" } }, 503);
+        }
+        if (!account?.email || !account.emailVerified) return forbidden(c, "Adresse Clerk vérifiée requise");
+        c.set("auth", {
+          userId: identity?.userId ?? "",
+          tenantId: "",
+          roles: [],
+          invitationIdentity: { sub, email: account.email, secondFactor: hasClerkSecondFactor(payload.fva) },
+        });
+        return next();
+      }
       if (!identity) {
         if (membershipsPath) {
           try {

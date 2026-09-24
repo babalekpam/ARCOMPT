@@ -36,6 +36,7 @@ function app(
   }));
   hono.get("/me", (c) => c.json(c.get("auth")));
   hono.get("/v1/session/memberships", (c) => c.json(c.get("auth")));
+  hono.post("/v1/portal/org/invitations/accept", (c) => c.json(c.get("auth")));
   return hono;
 }
 
@@ -114,6 +115,31 @@ describe("Clerk API authentication", () => {
   it("keeps tenant authorization in the database", async () => {
     const hono = app(async () => identity());
     expect((await request(hono, OTHER)).status).toBe(403);
+  });
+
+  it("allows only the exact invitation route for a verified unassigned session", async () => {
+    const lookup = vi.fn(async () => ({ email: "invitee@example.com", emailVerified: true }));
+    const hono = app(async () => null, lookup);
+    const headers = { authorization: "Bearer session-token" };
+    const accepted = await hono.request("/v1/portal/org/invitations/accept", { method: "POST", headers });
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toMatchObject({
+      tenantId: "", roles: [], invitationIdentity: { sub: "user_clerk", email: "invitee@example.com", secondFactor: false },
+    });
+    expect((await hono.request("/v1/portal/org/invitations/accept", { method: "GET", headers })).status).toBe(403);
+    expect((await hono.request("/me", { headers: { ...headers, "x-tenant-id": TENANT } })).status).toBe(403);
+    expect(lookup).toHaveBeenCalledWith("user_clerk");
+  });
+
+  it("rejects unverified, suspended and non-session invitation attempts", async () => {
+    const headers = { authorization: "Bearer session-token" };
+    const path = "/v1/portal/org/invitations/accept";
+    expect((await app(async () => null, async () => ({ email: "invitee@example.com", emailVerified: false }))
+      .request(path, { method: "POST", headers })).status).toBe(403);
+    expect((await app(async () => identity({ suspendedAt: new Date() }), async () => ({ email: "invitee@example.com", emailVerified: true }))
+      .request(path, { method: "POST", headers })).status).toBe(403);
+    verifyToken.mockResolvedValueOnce({ sub: "user_clerk" });
+    expect((await app(async () => null).request(path, { method: "POST", headers })).status).toBe(401);
   });
 
   it("does not link an unknown user from an unverified Clerk email", async () => {
