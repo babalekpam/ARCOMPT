@@ -221,6 +221,17 @@ export function invoicingRoutes(deps: InvoicingRouteDeps) {
 
   const write = requireRole("OWNER", "ACCOUNTANT", "CASHIER");
   const issue = requireRole("OWNER", "ACCOUNTANT");
+  async function reminderNeedsReview(c: Context, invoiceId: string): Promise<boolean> {
+    if (!deps.jobStatusSupported) return false;
+    const auth = c.get("auth");
+    const [row] = await withTenant(deps.db!, auth, (tx) => tx`
+      SELECT 1 FROM background_job j
+      WHERE j.tenant_id = ${auth.tenantId} AND j.name = 'dunning.send'
+        AND j.status = 'FAILED' AND j.payload->>'invoiceId' = ${invoiceId}
+        AND NOT EXISTS (SELECT 1 FROM background_job_review r WHERE r.source_job_id = j.id)
+      LIMIT 1`);
+    return Boolean(row);
+  }
 
   // -------------------------------------------------------------------------
   // Catalogue
@@ -293,6 +304,8 @@ export function invoicingRoutes(deps: InvoicingRouteDeps) {
   r.post("/sales/:id/dunning", write, async (c) => {
     const parsed = z.object({ level: z.number().int().min(1).max(5), channel: z.enum(["EMAIL", "WHATSAPP", "SMS"]), message: z.string().max(4000).optional() }).safeParse(await c.req.json());
     if (!parsed.success) return invalid(c, parsed.error.issues);
+    if (await reminderNeedsReview(c, c.req.param("id")))
+      return c.json({ error: { code: "REVIEW_REQUIRED", message: "Vérifiez d'abord la livraison du rappel en échec dans Opérations" } }, 409);
     return c.json(await (await servicesFor(c)).invoicing.recordDunning(c.req.param("id"), strip(parsed.data)), 201);
   });
   r.post("/sales/:id/dunning/schedule", write, async (c) => {
@@ -304,6 +317,8 @@ export function invoicingRoutes(deps: InvoicingRouteDeps) {
       requestId: uuid,
     }).safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return invalid(c, parsed.error.issues);
+    if (await reminderNeedsReview(c, c.req.param("id")))
+      return c.json({ error: { code: "REVIEW_REQUIRED", message: "Vérifiez d'abord la livraison du rappel en échec dans Opérations" } }, 409);
     const auth = c.get("auth");
     const job = await deps.jobs.enqueue("dunning.send", {
       tenantId: auth.tenantId, userId: auth.userId, invoiceId: c.req.param("id"),

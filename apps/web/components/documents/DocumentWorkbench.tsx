@@ -28,6 +28,7 @@ export function DocumentWorkbench({ document: initial, currency, proposals = [],
   const [busy, setBusy] = useState<"extract" | "propose" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [queued, setQueued] = useState(Boolean(jobId));
+  const [failedJob, setFailedJob] = useState(false);
 
   useEffect(() => {
     if (!jobId || !queued) return;
@@ -39,6 +40,7 @@ export function DocumentWorkbench({ document: initial, currency, proposals = [],
         clearInterval(timer);
         setQueued(false);
         if (job.status === "FAILED") {
+          setFailedJob(true);
           setError(job.last_error ?? t("documents.upload.processingFailed"));
           return;
         }
@@ -106,7 +108,7 @@ export function DocumentWorkbench({ document: initial, currency, proposals = [],
             </LinkButton>
           ) : null}
         </div>
-        {error ? <Alert tone="danger" className="mt-3">{error}</Alert> : null}
+        {error ? <Alert tone="danger" className="mt-3">{error}{failedJob ? <span className="ml-2"><LinkButton href="/operations/jobs" variant="ghost" size="sm">Voir les travaux en échec</LinkButton></span> : null}</Alert> : null}
       </div>
       {extract ? <ExtractionCard extraction={extract.extraction} issues={extract.issues} needsOcr={extract.needsOcr} fallbackCurrency={currency} /> : null}
       {proposal ? <ProposalCard proposal={proposal} currency={currency} /> : null}

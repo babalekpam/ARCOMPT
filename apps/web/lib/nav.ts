@@ -25,6 +25,7 @@ export const MAIN_NAV: NavItem[] = [
   { href: "/firm", labelKey: "nav.firm", icon: "◫" },
   { href: "/firm/members", labelKey: "nav.invitations", icon: "✉" },
   { href: "/sync", labelKey: "nav.sync", icon: "⟳" },
+  { href: "/operations/jobs", labelKey: "nav.operations", icon: "OP" },
   { href: "/settings", labelKey: "nav.settings", icon: "⚙" },
 ];
 

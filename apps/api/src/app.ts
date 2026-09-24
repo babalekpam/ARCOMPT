@@ -6,6 +6,7 @@ import { logger } from "hono/logger";
 import type { Sql } from "postgres";
 import { LedgerError, type Ledger } from "@arcompt/ledger";
 import { authMiddleware, type AuthOptions } from "./auth.js";
+import { requireRole } from "./auth.js";
 import { readinessHandler } from "./health.js";
 import { checkClamd } from "./clamav-health.js";
 import { assertRecentClamAvDatabase } from "@arcompt/documents";
@@ -138,9 +139,16 @@ export function createApp(deps: AppDeps) {
     if (!["PENDING", "RUNNING", "DONE", "FAILED"].includes(status)) return c.json({ error: { code: "VALIDATION" } }, 400);
     const auth = c.get("auth");
     const jobs = await withTenant(db, auth, (tx) => tx`
-      SELECT id, name, status, attempts, last_error, created_at
-      FROM background_job WHERE tenant_id = ${auth.tenantId} AND status = ${status}
-      ORDER BY created_at DESC LIMIT 100`);
+      SELECT j.id, j.name, j.status, j.attempts, j.last_error, j.created_at,
+        CASE j.name WHEN 'document.extract' THEN j.payload->>'documentId'
+          WHEN 'import.statement' THEN j.payload->>'accountId'
+          WHEN 'dunning.send' THEN j.payload->>'invoiceId' END AS resource_id,
+        CASE WHEN j.name = 'dunning.send' THEN j.payload->>'channel' END AS channel,
+        r.outcome AS review_outcome, r.reviewed_at
+      FROM background_job j LEFT JOIN background_job_review r ON r.source_job_id = j.id AND r.tenant_id = j.tenant_id
+      WHERE j.tenant_id = ${auth.tenantId} AND j.status = ${status}
+      ORDER BY CASE WHEN j.status = 'FAILED' AND r.source_job_id IS NOT NULL THEN 1 ELSE 0 END,
+        j.created_at DESC LIMIT 100`);
     return c.json(jobs);
   });
   api.get("/jobs/:id", async (c) => {
@@ -152,6 +160,31 @@ export function createApp(deps: AppDeps) {
       SELECT id, name, status, attempts, last_error, created_at
       FROM background_job WHERE id = ${id} AND tenant_id = ${auth.tenantId}`);
     return job ? c.json(job) : c.json({ error: { code: "NOT_FOUND" } }, 404);
+  });
+  const jobWrite = requireRole("OWNER", "ACCOUNTANT", "CASHIER");
+  api.post("/jobs/:id/retry", jobWrite, async (c) => {
+    if (!db || !deps.jobStatusSupported || !deps.jobs) return c.json({ error: { code: "UNAVAILABLE" } }, 503);
+    const id = c.req.param("id");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return c.json({ error: { code: "VALIDATION" } }, 400);
+    const auth = c.get("auth");
+    const [row] = await withTenant(db, auth, (tx) => tx`SELECT background_job_retry_internal(${id}) AS retried`);
+    return row?.retried ? c.json({ id, status: "PENDING" }) : c.json({ error: { code: "CONFLICT", message: "Tâche introuvable ou non réessayable" } }, 409);
+  });
+  api.post("/jobs/:id/review", jobWrite, async (c) => {
+    if (!db || !deps.jobStatusSupported || !deps.jobs) return c.json({ error: { code: "UNAVAILABLE" } }, 503);
+    const id = c.req.param("id");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return c.json({ error: { code: "VALIDATION" } }, 400);
+    const body: unknown = await c.req.json().catch(() => null);
+    if (!body || typeof body !== "object" || !("confirmed" in body) || body.confirmed !== true
+      || !("outcome" in body) || (body.outcome !== "DELIVERED" && body.outcome !== "NOT_DELIVERED"))
+      return c.json({ error: { code: "VALIDATION", message: "Vérifiez la livraison externe et confirmez votre décision" } }, 400);
+    const outcome = body.outcome as "DELIVERED" | "NOT_DELIVERED";
+    const auth = c.get("auth");
+    const [row] = await withTenant(db, auth, (tx) => tx`
+      SELECT background_job_review_reminder(${id}, ${auth.userId}, ${outcome}) AS reviewed`);
+    return row?.reviewed
+      ? c.json({ id, outcome, replacementScheduled: outcome === "NOT_DELIVERED" })
+      : c.json({ error: { code: "CONFLICT", message: "Relance introuvable ou déjà examinée" } }, 409);
   });
   api.route("/portal", portalRoutes(deps));
   api.route("/platform", platformRoutes(db ? (sub: string) => resolvePlatformCompanies(db, sub) : undefined));
