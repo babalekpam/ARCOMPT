@@ -101,6 +101,7 @@ export interface ProposalRecord {
 export interface UploadResult {
   document: DocumentRecord;
   duplicate: boolean;
+  jobId?: string | null;
 }
 
 export interface ExtractResult {

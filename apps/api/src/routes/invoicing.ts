@@ -295,6 +295,22 @@ export function invoicingRoutes(deps: InvoicingRouteDeps) {
     if (!parsed.success) return invalid(c, parsed.error.issues);
     return c.json(await (await servicesFor(c)).invoicing.recordDunning(c.req.param("id"), strip(parsed.data)), 201);
   });
+  r.post("/sales/:id/dunning/schedule", write, async (c) => {
+    if (!deps.jobs) return c.json({ error: { code: "UNAVAILABLE", message: "File de tâches indisponible" } }, 503);
+    const parsed = z.object({
+      channel: z.enum(["EMAIL", "WHATSAPP", "SMS"]),
+      level: z.number().int().min(1).max(5).optional(),
+      delayMs: z.number().int().min(0).max(30 * 24 * 60 * 60 * 1000),
+      requestId: uuid,
+    }).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return invalid(c, parsed.error.issues);
+    const auth = c.get("auth");
+    const job = await deps.jobs.enqueue("dunning.send", {
+      tenantId: auth.tenantId, userId: auth.userId, invoiceId: c.req.param("id"),
+      channel: parsed.data.channel, ...(parsed.data.level ? { level: parsed.data.level } : {}),
+    }, { delayMs: parsed.data.delayMs, jobId: `dunning-${parsed.data.requestId}` });
+    return c.json(job, 202);
+  });
 
   // -------------------------------------------------------------------------
   // Achats

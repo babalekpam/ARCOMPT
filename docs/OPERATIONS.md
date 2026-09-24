@@ -7,7 +7,7 @@ Ce guide décrit le déploiement et l'exploitation d'ARCOMPT conformément à `S
 | Processus | Commande | Rôle |
 | --- | --- | --- |
 | API | `pnpm --filter @arcompt/api start` (image `infra/docker/api.Dockerfile`) | Hono sur `API_PORT` (4000) : modules métier, webhooks publics `/whatsapp`, `/webhooks` |
-| Worker | `pnpm worker` | Tâches de fond (extraction IA, réponses WhatsApp, relances) ; BullMQ si `REDIS_URL`, sinon en processus |
+| Worker | `pnpm worker` | Seulement avec `REDIS_URL` (BullMQ). Sans Redis, l'API consomme la file PostgreSQL |
 | Web | `pnpm --filter @arcompt/web start` (image `infra/docker/web.Dockerfile`) | Next.js PWA sur 3000, proxy `/api/proxy` vers l'API |
 | PostgreSQL 16 | Neon en production, `docker compose up postgres` en local | Une base par environnement, jamais partagée |
 | Redis 7 | facultatif | File de tâches |

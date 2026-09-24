@@ -10,7 +10,7 @@
 export interface JobPayloads {
   "document.extract": { tenantId: string; userId: string; documentId: string; organizationId?: string };
   "render.pdf": { tenantId: string; kind: string; params: Record<string, unknown> };
-  "import.statement": { tenantId: string; userId: string; documentId: string };
+  "import.statement": { tenantId: string; userId: string; accountId: string; csv: string; organizationId?: string };
   /**
    * Relance d'une facture échue. `userId` porte l'auteur : la ligne `dunning`
    * l'exige (`sent_by`), une relance étant toujours imputable à quelqu'un.

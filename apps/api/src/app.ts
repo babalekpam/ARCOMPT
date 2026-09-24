@@ -33,8 +33,12 @@ import { whatsappRoutes } from "./routes/whatsapp.js";
 import { whatsappLinkRoutes } from "./routes/whatsapp-link.js";
 import { platformRoutes } from "./routes/platform.js";
 import { sessionRoutes } from "./routes/session.js";
+import type { JobQueue } from "@arcompt/jobs";
+import { withTenant } from "@arcompt/db";
 
 export interface AppDeps {
+  jobs?: JobQueue;
+  jobStatusSupported?: boolean;
   /** Fabrique un moteur comptable pour le contexte courant (adaptateur mémoire ou PostgreSQL). */
   ledgerFor: (ctx: { userId: string; tenantId: string; organizationId?: string }) => Ledger;
   /** Connexion PostgreSQL (absente dans les tests API en mémoire) ; les modules l'utilisent via withTenant(). */
@@ -128,6 +132,27 @@ export function createApp(deps: AppDeps) {
   api.route("/closing", closingRoutes(deps));
   api.route("/anchors", anchoringRoutes(deps));
   api.route("/", documentsRoutes(deps)); // /documents, /proposals, /assistant, /anomalies
+  api.get("/jobs", async (c) => {
+    if (!db || !deps.jobStatusSupported) return c.json({ error: { code: "UNAVAILABLE", message: "Statut de la file indisponible" } }, 503);
+    const status = c.req.query("status") ?? "FAILED";
+    if (!["PENDING", "RUNNING", "DONE", "FAILED"].includes(status)) return c.json({ error: { code: "VALIDATION" } }, 400);
+    const auth = c.get("auth");
+    const jobs = await withTenant(db, auth, (tx) => tx`
+      SELECT id, name, status, attempts, last_error, created_at
+      FROM background_job WHERE tenant_id = ${auth.tenantId} AND status = ${status}
+      ORDER BY created_at DESC LIMIT 100`);
+    return c.json(jobs);
+  });
+  api.get("/jobs/:id", async (c) => {
+    if (!db || !deps.jobStatusSupported) return c.json({ error: { code: "UNAVAILABLE", message: "Statut de la file indisponible" } }, 503);
+    const id = c.req.param("id");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return c.json({ error: { code: "VALIDATION" } }, 400);
+    const auth = c.get("auth");
+    const [job] = await withTenant(db, auth, (tx) => tx`
+      SELECT id, name, status, attempts, last_error, created_at
+      FROM background_job WHERE id = ${id} AND tenant_id = ${auth.tenantId}`);
+    return job ? c.json(job) : c.json({ error: { code: "NOT_FOUND" } }, 404);
+  });
   api.route("/portal", portalRoutes(deps));
   api.route("/platform", platformRoutes(db ? (sub: string) => resolvePlatformCompanies(db, sub) : undefined));
   api.route("/", sessionRoutes(deps));

@@ -99,7 +99,16 @@ export function documentsRoutes(deps: AppDeps) {
       source = parsed.data.source;
     }
     const result = await service(c).upload({ bytes, ...(filename ? { filename } : {}), ...(mimeType ? { mimeType } : {}), ...(source ? { source } : {}) });
-    return c.json(result, result.duplicate ? 200 : 201);
+    let jobId: string | null = null;
+    if (deps.jobs && result.document.status === "UPLOADED") {
+      const auth = c.get("auth");
+      const job = await deps.jobs.enqueue("document.extract", {
+        tenantId: auth.tenantId, userId: auth.userId, documentId: result.document.id,
+        ...(auth.organizationId ? { organizationId: auth.organizationId } : {}),
+      }, { jobId: `extract-${result.document.id}` });
+      jobId = job.id;
+    }
+    return c.json({ ...result, jobId: deps.jobStatusSupported ? jobId : null }, result.duplicate ? 200 : 201);
   });
 
   r.get("/documents/:id", async (c) => c.json(await service(c).getDocument(c.req.param("id"))));

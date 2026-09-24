@@ -23,10 +23,9 @@ Prévoir **deux heures** la première fois, dont une bonne demi-heure d'attente
 (propagation DNS, vérification du domaine par Replit).
 
 > **Lisez le chapitre [11](#11-ce-que-replit-ne-sait-pas-faire) avant de
-> commencer.** Replit fait gagner beaucoup de temps, et fait perdre quatre
-> choses que la route serveur donnait : le fournisseur d'identité Keycloak, la
-> file de tâches durable, le disque persistant des pièces justificatives et
-> l'entrée publique des webhooks. Trois sont contournables, une ne l'est pas
+> commencer.** Replit fait gagner beaucoup de temps, mais la route serveur
+> disposait aussi d'un fournisseur d'identité dédié, d'un disque persistant
+> et d'une entrée publique pour les webhooks
 > sans un service tiers.
 
 ---
@@ -82,9 +81,9 @@ Trois différences de fond avec la route serveur :
   pas sa place ici. Il faut un fournisseur d'identité hébergé (§ 6). Le code de
   l'API a été rendu compatible avec n'importe quel fournisseur OpenID Connect
   conforme : il découvre l'URL du trousseau de clés au lieu de la deviner.
-- **Pas de Redis, pas de disque persistant.** La file de tâches retombe en
-  mémoire et le système de fichiers d'une application publiée est réinitialisé
-  à chaque publication (§ 11).
+- **Pas de Redis, pas de disque persistant.** La file de tâches de l'API est
+  persistée dans PostgreSQL ; le système de fichiers d'une application publiée
+  est réinitialisé à chaque publication (§ 11).
 
 ---
 
@@ -191,10 +190,9 @@ Replit propose quatre types de publication. Deux conviennent techniquement :
 
 Pourquoi pas Autoscale, alors que c'est le choix par défaut de Replit :
 
-- **La file de tâches est en mémoire.** Sans `REDIS_URL`, `createQueueFromEnv()`
-  rend une `InProcessQueue` (`packages/jobs/src/index.ts`) : les tâches vivent
-  dans le processus. Une instance mise en veille emporte ce qu'elle n'a pas
-  fini ; plusieurs instances ne partagent rien.
+- **Les tâches planifiées doivent pouvoir tourner sans requête.** Sans Redis,
+  l'API consomme une file PostgreSQL persistante ; une instance mise en veille
+  retarde les imports et les relances jusqu'à son prochain réveil.
 - **Chromium coûte cher à démarrer.** Le rendu PDF lance un navigateur, gardé
   ouvert et réutilisé (`packages/render/src/pdf.ts`). Une veille à zéro le
   refait payer à chaque réveil, et le premier PDF après une pause devient très
@@ -350,7 +348,7 @@ et c'est `config.ts` qui fait foi :
 | `PAYMENT_PROVIDER` | Aucun opérateur mobile money réel n'est implémenté. La valeur `mock` est **refusée en production, sans échappatoire** : elle accepterait des encaissements fictifs. Vide = fonction proprement désactivée |
 | `CERTIFICATION_CONNECTOR` | `mock` imprimerait une référence fiscale et un QR code **inventés** sur les factures de vos clients. Refusé en production |
 | `KEYCLOAK_CLIENT_ID` | Posé par processus dans `.replit` (§ 3.1). Le définir ici casse l'un des deux côtés |
-| `REDIS_URL` | Aucun Redis n'existe sur Replit. Une URL morte ferait échouer le worker au lieu de le laisser retomber en mémoire |
+| `REDIS_URL` | Optionnel : sans Redis, l'API utilise PostgreSQL pour la file et exécute les tâches elle-même. N'utilisez pas une URL Redis morte |
 | `ALLOW_INSECURE_DRAFT_PACK_FILINGS` | Laisse produire déclarations, liasse DSF et dépôts depuis un pack pays non publié. N'empêche pas le démarrage et ne produit rien d'officiel — chaque document part marqué « DOCUMENT NON OFFICIEL » — mais ne le posez que si vous éprouvez sciemment le parcours déclaratif d'un pays dont le pack n'est pas encore publié |
 
 ### 5.3 Ce dont le web a besoin
@@ -756,8 +754,8 @@ son mécanisme de récupération propre ; ne créez pas de mot de passe ARCOMPT.
 | Sujet | État sur Replit | Conséquence |
 |---|---|---|
 | **Stockage des pièces** | Le système de fichiers d'une application publiée **n'est pas persistant : il est réinitialisé à chaque publication** | Avec `ALLOW_INSECURE_STORAGE=1`, toute pièce justificative disparaît au déploiement suivant. La conservation décennale AUDCIF devient impossible. **Cloudflare R2 n'est pas optionnel ici** — c'est la seule différence vraiment bloquante avec la route serveur |
-| **File de tâches** | Aucun Redis. `createQueueFromEnv()` retombe sur une file **en mémoire** | Les tâches de fond ne survivent ni à un redémarrage ni à une publication. Aujourd'hui rien n'y est encore déposé par l'API, donc rien n'est perdu en pratique — mais le jour où l'extraction IA passera par la file, il faudra un Redis externe |
-| **Worker séparé** | Impossible : un seul processus exposé, et rien ne relie deux files en mémoire | Ne lancez pas `pnpm worker` : il tournerait dans le vide |
+| **File de tâches** | Sans Redis, l'API dépose et consomme les tâches dans PostgreSQL (`background_job`) | Les extractions et imports reprennent après redémarrage. Une relance interrompue reste en échec pour vérification humaine afin d'éviter un double envoi |
+| **Worker séparé** | Inutile sans Redis : le consommateur PostgreSQL tourne dans l'API | Ne lancez `pnpm worker` que si `REDIS_URL` est configuré |
 | **Webhooks entrants** | `api.arcompt.com` n'existe plus | WhatsApp entrant et webhooks de paiement sont injoignables. Sans objet tant que ces canaux ne sont pas branchés — à rouvrir le jour où ils le seront |
 | **Antivirus** | Aucun clamd à faire tourner à côté | `ALLOW_INSECURE_ANTIVIRUS=1` ou un service d'analyse externe |
 | **Keycloak** | Application Java avec sa propre base : hors sujet ici | Fournisseur hébergé obligatoire (§ 6) |

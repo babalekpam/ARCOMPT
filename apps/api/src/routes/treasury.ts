@@ -179,6 +179,21 @@ export function treasuryRoutes(deps: TreasuryRouteDeps) {
   const manage = requireRole("OWNER", "ACCOUNTANT");
   const operate = requireRole("OWNER", "ACCOUNTANT", "CASHIER");
 
+  // CSV is persisted in the queue before accepting the request. The document
+  // upload service intentionally rejects CSV; do not pretend it stores one.
+  r.post("/accounts/:id/import-async", operate, guard(async (c) => {
+    if (!deps.jobs) return c.json({ error: { code: "UNAVAILABLE", message: "File de tâches indisponible" } }, 503);
+    const parsed = z.object({ csv: z.string().min(1).max(1_000_000), requestId: uuid }).safeParse(await readJson(c));
+    if (!parsed.success) return validationError(c, parsed.error.issues);
+    await service(c).getAccount(param(c, "id"));
+    const auth = c.get("auth");
+    const job = await deps.jobs.enqueue("import.statement", {
+      tenantId: auth.tenantId, userId: auth.userId, csv: parsed.data.csv,
+      accountId: param(c, "id"), ...(auth.organizationId ? { organizationId: auth.organizationId } : {}),
+    }, { jobId: `statement-${parsed.data.requestId}` });
+    return c.json(job, 202);
+  }));
+
   // ----- Comptes de trésorerie -----
   r.get("/accounts", guard(async (c) => c.json(await service(c).listAccounts({ includeInactive: c.req.query("includeInactive") === "true" }))));
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiClient, errorMessage } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n-client";
 import { formatDate } from "@/lib/i18n";
@@ -19,7 +19,7 @@ import type { DocumentRecord, ExtractResult, ProposalRecord } from "./types";
  * « Proposer une écriture ». L'extraction et la proposition affichées sont
  * celles renvoyées par l'API ; rien n'est comptabilisé ici.
  */
-export function DocumentWorkbench({ document: initial, currency, proposals = [], showLink = false }: { document: DocumentRecord; currency: string; proposals?: ProposalRecord[]; showLink?: boolean }) {
+export function DocumentWorkbench({ document: initial, currency, proposals = [], showLink = false, jobId }: { document: DocumentRecord; currency: string; proposals?: ProposalRecord[]; showLink?: boolean; jobId?: string | null }) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const [doc, setDoc] = useState(initial);
@@ -27,6 +27,33 @@ export function DocumentWorkbench({ document: initial, currency, proposals = [],
   const [proposal, setProposal] = useState<ProposalRecord | null>(null);
   const [busy, setBusy] = useState<"extract" | "propose" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [queued, setQueued] = useState(Boolean(jobId));
+
+  useEffect(() => {
+    if (!jobId || !queued) return;
+    let live = true;
+    const timer = setInterval(async () => {
+      try {
+        const job = await apiClient<{ status: string; last_error: string | null }>(`/jobs/${jobId}`);
+        if (!live || job.status !== "DONE" && job.status !== "FAILED") return;
+        clearInterval(timer);
+        setQueued(false);
+        if (job.status === "FAILED") {
+          setError(job.last_error ?? t("documents.upload.processingFailed"));
+          return;
+        }
+        const updated = await apiClient<DocumentRecord>(`/documents/${initial.id}`);
+        if (!live) return;
+        setError(null);
+        setDoc(updated);
+        if (updated.extracted) setExtract({ document: updated, extraction: updated.extracted, issues: updated.extracted.issues ?? [], needsOcr: updated.extracted.needs_ocr ?? false });
+        router.refresh();
+      } catch (e) {
+        if (live) setError(errorMessage(e));
+      }
+    }, 2000);
+    return () => { live = false; clearInterval(timer); };
+  }, [jobId, queued, initial.id, router, t]);
 
   const run = async (action: "extract" | "propose") => {
     setBusy(action);
@@ -62,11 +89,12 @@ export function DocumentWorkbench({ document: initial, currency, proposals = [],
         <p className="mt-1 text-xs text-slate-500">
           {doc.mimeType} · {formatBytes(doc.sizeBytes)} · {formatDate(locale, doc.createdAt)} · <span className="font-mono">{doc.id}</span>
         </p>
+        {queued ? <p className="mt-2 text-sm" role="status">{t("documents.actions.extracting")}</p> : null}
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => void run("extract")} disabled={busy !== null}>
+          <Button size="sm" onClick={() => void run("extract")} disabled={busy !== null || queued}>
             {busy === "extract" ? t("documents.actions.extracting") : t("documents.actions.extract")}
           </Button>
-          <Button size="sm" variant="secondary" onClick={() => void run("propose")} disabled={busy !== null}>
+          <Button size="sm" variant="secondary" onClick={() => void run("propose")} disabled={busy !== null || queued}>
             {busy === "propose" ? t("documents.actions.proposing") : t("documents.actions.propose")}
           </Button>
           <LinkButton href={`/api/proxy/documents/${doc.id}/download`} variant="ghost" size="sm" external>

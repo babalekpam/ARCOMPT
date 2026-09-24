@@ -3,12 +3,15 @@
 import { serve } from "@hono/node-server";
 import type { Sql } from "postgres";
 import { createDb } from "@arcompt/db";
+import { createQueueFromEnv } from "@arcompt/jobs";
 import { createCompanyCurrencyResolver, Ledger, PostgresRateProvider, PostgresStore } from "@arcompt/ledger";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { assertProductionDatabaseSecurity } from "./database-readiness.js";
 import { beginDraining } from "./health.js";
 import { initTelemetry, log } from "./telemetry.js";
+import { PostgresQueue } from "./postgres-queue.js";
+import { registerJobHandlers } from "./job-handlers.js";
 
 /**
  * La validation passe avant tout le reste : en production elle lève en listant
@@ -43,8 +46,28 @@ if (cfg.isProduction) {
  * `cfg.baseCurrency` ne sert plus que de repli pour un dossier sans devise.
  */
 const currencyResolver = createCompanyCurrencyResolver(db as unknown as Sql);
+// Without Redis, jobs live in PostgreSQL and run in this API process. A
+// standalone in-memory worker would never see jobs submitted by HTTP requests.
+const jobs = process.env.REDIS_URL ? createQueueFromEnv() : new PostgresQueue(db as unknown as Sql);
+if (jobs instanceof PostgresQueue) {
+  // Fail startup instead of accepting uploads with a missing queue migration.
+  await db`SELECT id FROM background_job LIMIT 0`;
+  if (cfg.isProduction) {
+    const [check] = await db`SELECT
+      has_function_privilege(current_user, to_regprocedure('background_job_claim(text[])'), 'EXECUTE') AS claim,
+      has_function_privilege(current_user, to_regprocedure('background_job_finish(uuid,uuid,text)'), 'EXECUTE') AS finish,
+      has_function_privilege(current_user, to_regprocedure('background_job_renew(uuid,uuid)'), 'EXECUTE') AS renew,
+      has_function_privilege(current_user, to_regprocedure('background_job_expire_reminders()'), 'EXECUTE') AS expire`;
+    if (!check?.claim || !check.finish || !check.renew || !check.expire)
+      throw new Error("Fonctions de la file PostgreSQL manquantes : démarrage refusé");
+  }
+  registerJobHandlers(jobs, db as unknown as Sql);
+  jobs.start();
+}
 
 const app = createApp({
+  jobs,
+  jobStatusSupported: jobs instanceof PostgresQueue,
   db: db as unknown as Sql,
   auth: {
     mode: cfg.auth.mode,
@@ -118,6 +141,7 @@ const shutdown = async (signal: string): Promise<void> => {
   });
 
   try {
+    await jobs.close();
     await db.end({ timeout: POOL_CLOSE_TIMEOUT_S });
   } catch (e) {
     log("error", "api.shutdown.pool_close_failed", { detail: e instanceof Error ? e.message : String(e) });

@@ -136,7 +136,7 @@ export function UploadFlow({ currency }: { currency: string }) {
           ) : (
             <Alert tone="success">{t("documents.upload.done")}</Alert>
           )}
-          <DocumentWorkbench document={result.document} currency={currency} showLink />
+          <DocumentWorkbench document={result.document} currency={currency} jobId={result.jobId} showLink />
           <Button variant="secondary" onClick={reset}>{t("documents.upload.reset")}</Button>
         </>
       ) : null}

@@ -56,6 +56,7 @@
   "documents.upload.send": "Upload",
   "documents.upload.sending": "Uploading…",
   "documents.upload.done": "Document uploaded.",
+  "documents.upload.processingFailed": "Document processing failed. You can retry extraction.",
   "documents.upload.duplicate": "Duplicate detected:",
   "documents.upload.duplicateHint": "this document already exists in this company (same digest). The existing document is shown below.",
   "documents.upload.reset": "Upload another document",
