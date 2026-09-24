@@ -11,3 +11,4 @@
 - [Optional delivery channels](optional-delivery-channels.md) — absent WhatsApp must disable sending and fail queued replies, not acknowledge undelivered messages.
 - [ClamAV version on Replit](clamav-version.md) — do not use the pinned Nix channel's unsupported scanner for production; verify supported versions before enabling uploads.
 - [Protected Replit config edits](protected-replit-config.md) — .replit changes require schema-validated replacement; direct patches may be rejected even during cleanup.
+- [Zoho SMTP endpoint](zoho-smtp-endpoint.md) — trust the account-tested SMTP host over generic Zoho guidance; a test message was confirmed received.
