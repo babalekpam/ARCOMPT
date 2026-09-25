@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
-import { defineWorkspace } from "vitest/config";
+import { defineConfig } from "vitest/config";
 
-export default defineWorkspace([
+// Vitest 4 loads multi-project suites from test.projects, not the legacy
+// vitest.workspace.ts discovery convention.
+export default defineConfig({ test: { projects: [
   { test: { name: "ledger", root: "packages/ledger", include: ["src/**/*.test.ts"] } },
   { test: { name: "statements", root: "packages/statements", include: ["src/**/*.test.ts"] } },
   { test: { name: "rules", root: "packages/rules", include: ["src/**/*.test.ts"] } },
@@ -28,4 +30,4 @@ export default defineWorkspace([
   // du code que l'on n'exécute qu'un jour de panne, donc à couvrir en continu.
   { test: { name: "scripts", root: "scripts", include: ["**/*.test.mts"] } },
   "apps/web/vitest.config.ts",
-]);
+] } });
