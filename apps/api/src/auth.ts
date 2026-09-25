@@ -5,6 +5,9 @@ import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { createClerkClient, verifyToken } from "@clerk/backend";
 import type { Identity, PlatformAdminIdentity, PlatformCompany, TokenIdentityHints } from "./identity.js";
 import { log } from "./telemetry.js";
+import { TokenVerificationErrorReason } from "@clerk/backend/errors";
+
+const safeClerkReasons = new Set<string>(Object.values(TokenVerificationErrorReason));
 
 /**
  * Contexte d'authentification. Keycloak authentifie, ARCOMPT autorise : le
@@ -263,7 +266,10 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
     }
     const header = c.req.header("authorization") ?? "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-    if (!token) return unauthorized(c, "Jeton Bearer requis");
+    if (!token) {
+      if (opts.mode === "clerk") log("warn", "auth.clerk.rejected", { reason: "missing-token" });
+      return unauthorized(c, "Jeton Bearer requis");
+    }
 
     if (opts.mode === "clerk") {
       const membershipsPath = c.req.method === "GET" &&
@@ -276,13 +282,23 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
           secretKey: opts.clerkSecretKey!,
           authorizedParties: opts.authorizedParties,
         }) as JWTPayload & { fva?: unknown; azp?: unknown };
-      } catch {
+      } catch (error) {
+        // SDK messages/claims may contain tokens or personal data. Log only
+        // recognized reason codes and our configured public origin allowlist.
+        const reason = error && typeof error === "object" && "reason" in error ? error.reason : undefined;
+        log("warn", "auth.clerk.rejected", {
+          reason: typeof reason === "string" && safeClerkReasons.has(reason) ? reason : "verification-failed",
+          authorizedParties: opts.authorizedParties,
+        });
         return unauthorized(c, "Jeton Clerk invalide");
       }
       const sub = typeof payload.sub === "string" ? payload.sub : "";
       // Clerk session tokens carry sid; rejecting tokens without it prevents a
       // verified machine/JWT-template token from being accepted as a browser session.
-      if (!sub || typeof payload.sid !== "string" || payload.sid.length === 0) return unauthorized(c, "Jeton Clerk sans session (sub/sid)");
+      if (!sub || typeof payload.sid !== "string" || payload.sid.length === 0) {
+        log("warn", "auth.clerk.rejected", { reason: "session-claims-missing" });
+        return unauthorized(c, "Jeton Clerk sans session (sub/sid)");
+      }
       const platformAdmin = opts.resolvePlatformAdmin ? await opts.resolvePlatformAdmin(sub) : null;
       if (platformAdmin) {
         if (platformAdmin.suspendedAt) return forbidden(c, "Compte suspendu : contactez l'administrateur", "ACCOUNT_SUSPENDED");

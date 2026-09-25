@@ -31,7 +31,7 @@
     "@arcompt/tax": "workspace:*",
     "@arcompt/treasury": "workspace:*",
     "@arcompt/whatsapp": "workspace:*",
-    "@clerk/backend": "^3.19.0",
+    "@clerk/backend": "^3.20.1",
     "@hono/node-server": "^1.13.7",
     "@opentelemetry/auto-instrumentations-node": "^0.80.0",
     "@opentelemetry/sdk-node": "^0.222.0",

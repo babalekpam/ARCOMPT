@@ -18,3 +18,14 @@ When changing production Clerk tenants on the same domain, validate the tenant-s
 **How to apply:** Compare the new tenant's domain configuration with authoritative DNS before public cutover. Do not alter unrelated website or mailbox records, and do not declare sign-in ready based on a successful Backend API request.
 
 Replit rejects direct patches to `.replit`; build a full candidate TOML file and pass it to `verifyAndReplaceDotReplit` for schema validation. This is a workspace tooling constraint, not a reason to change the deployment workflow through ad hoc shell edits.
+
+Treat the Clerk administrative integration and the published app's runtime
+credentials as separate until their configuration is explicitly matched.
+
+**Why:** The administrative connector can report an invalid key while the
+website still completes Clerk sign-up. That connector error alone does not
+establish the cause of the application's subsequent session rejection.
+
+**How to apply:** Diagnose application verification from its own safe error
+codes and configured origins. Never replace managed runtime secrets based
+solely on a failed administrative lookup.

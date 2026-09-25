@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { verifyToken } = vi.hoisted(() => ({ verifyToken: vi.fn() }));
+const { verifyToken, log } = vi.hoisted(() => ({ verifyToken: vi.fn(), log: vi.fn() }));
+vi.mock("./telemetry.js", () => ({ log }));
 vi.mock("@clerk/backend", () => ({
   verifyToken,
   createClerkClient: vi.fn(),
@@ -51,6 +52,7 @@ async function request(hono: Hono, tenant = TENANT, token = "session-token") {
 
 describe("Clerk API authentication", () => {
   beforeEach(() => {
+    log.mockReset();
     verifyToken.mockReset();
     verifyToken.mockResolvedValue({ sub: "user_clerk", sid: "sess_1", fva: [0, null] });
   });
@@ -66,6 +68,21 @@ describe("Clerk API authentication", () => {
     verifyToken.mockResolvedValueOnce({ sub: "user_clerk", fva: [0, null] });
     expect((await request(app(async () => identity()))).status).toBe(401);
   });
+
+  it.each(["token-invalid-authorized-parties", "token-expired", "not-a-safe-code private-token"])(
+    "logs a safe verification reason without exposing tokens: %s", async (reason) => {
+      verifyToken.mockRejectedValueOnce({ reason, message: "secret credential private-token", token: "private-token" });
+      const response = await request(app(async () => identity()));
+      expect(response.status).toBe(401);
+      expect(log).toHaveBeenCalledWith("warn", "auth.clerk.rejected", {
+        reason: reason.startsWith("not-a-safe") ? "verification-failed" : reason,
+        authorizedParties: ["https://app.example"],
+      });
+      expect(JSON.stringify(log.mock.calls)).not.toContain("private-token");
+      expect(JSON.stringify(log.mock.calls)).not.toContain("secret credential");
+      expect(await response.text()).not.toContain(reason);
+    },
+  );
 
   it("verifies the JWT without confusing its header type with the Bearer transport", async () => {
     expect((await request(app(async () => identity()))).status).toBe(200);
