@@ -32,6 +32,9 @@ with a fake successful health endpoint or permit unscanned uploads.
 
 **Why:** The publishing startup deadline can expire while the launcher waits
 on antivirus setup, before any website listener exists.
+The user confirmed that separating website startup allowed publishing. This
+confirms website availability, not full API readiness or sufficient capacity
+for the website, API, and scanner together.
 
 **How to apply:** Supervise the early website with the same failure cleanup
 as the scanner and API. Verify both early HTTP availability and shutdown on
