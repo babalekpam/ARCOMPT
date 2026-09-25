@@ -7,8 +7,9 @@ alongside NaviMed. This replaces the earlier Replit-managed-database-only
 constraint. It does not authorize replacing NaviMed data or deleting the
 original ARCOMPT database.
 
-**Provisioning is complete; data migration and application cutover are not.**
-Do not publish against the new empty database.
+**Data migration and production connection configuration are complete.**
+The app remains unpublished until the user publishes it. Preserve the original
+Replit database; do not reset it or replace it with development data.
 
 ### Explicit targets
 
@@ -37,7 +38,10 @@ database above. Never select a migration target using database name alone.
 - Preserved NaviMed's explicit CONNECT permission and revoked the default
   PUBLIC CONNECT permission on its database. No NaviMed tables or records
   were changed.
-- Left the app configuration and the Replit production database unchanged.
+- Left the Replit production database unchanged.
+- Configured the production launcher to source `select-production-database.sh`,
+  which requires the external runtime secrets and sets both explicit and
+  default clients to restricted connections. Development is unchanged.
 
 ## Checks completed
 
@@ -49,13 +53,18 @@ database above. Never select a migration target using database name alone.
 - No public application SECURITY DEFINER function has PUBLIC EXECUTE.
 - NaviMed's login can connect to NaviMed but not ARCOMPT.
 - Both ARCOMPT logins can connect to ARCOMPT but not NaviMed.
-- The source inventory contains four companies and thirteen journal entries.
-  The destination has zero companies; no business records have been copied.
+- Copied all 75 business tables, including four companies and thirteen journal
+  entries. Every destination business-table count and content fingerprint
+  matches the source. All six sequence states match.
 
 The staged secrets have now passed real password-authenticated connections
 using `scripts/check-neon-staging.mts`, including both existing production
-security guards and the cross-application database privilege checks. This does
-not yet constitute a full application or data-migration test.
+security guards and the cross-application database privilege checks.
+`scripts/check-neon-import.mts` also passed with the actual restricted logins:
+contextless/cross-company reads denied, own-company reads allowed,
+validated-entry changes denied, audit and balance writes denied, direct queue
+table reads denied, and app cross-company job claims denied. Test writes were
+transactional with forced rollback even on unexpected success.
 
 Read-only preparation also confirmed:
 - All 75 source business tables match the destination's column names, types,
@@ -63,38 +72,44 @@ Read-only preparation also confirmed:
 - The table-level foreign-key graph has a complete dependency ordering when
   self-references are excluded. Self-references still require explicit handling.
 - Source records include 2,152 accounts, 13 entries, 38 journal lines, 29
-  balance rows, and 23 audit rows. No business records have been copied yet.
-- The old ARCOMPT deployment is still reported as published. A confirmed
-  source write pause is required before the final snapshot and cutover.
+  balance rows, and 23 audit rows. These now match the destination exactly.
+- The user shut down ARCOMPT and deployment metadata confirmed it unpublished.
+  Source fingerprints matched before export, after export, and after import.
 
-## Next gates — required before cutover
+## Transfer procedure and publishing handoff
 
-1. **Complete:** Obtain the two destination connection strings through Replit Secrets.
-   Stage them as `ARCOMPT_NEON_APP_URL` and `ARCOMPT_NEON_QUEUE_URL`, not the
-   active production URL keys. Select database `arcompt` and the exact runtime
-   login for each string in Neon's Connect dialog. Never use the owner login.
-2. **Complete:** Test real authenticated connections and the application's existing
-   database-security and queue-security guards.
-3. Confirm the old ARCOMPT deployment has been shut down and no other writer
-   is using its source database. Take a consistent read-only source snapshot, including all business,
-   identity, audit, document-reference, and encryption-related records.
-   Keep sensitive exports out of Git and chat.
-4. Import with an independently reviewed, atomic procedure that preserves
-   IDs, decimals, timestamps, validated ledger history, audit hashes, and
-   existing derived balances. Normal INSERT triggers can alter history and
-   recompute balances; do not casually replay records or use seed data.
-   Any destination-only temporary import accommodations must be restored
-   before commit and before runtime access. Never weaken source protections.
-5. Compare every table's counts and content fingerprints; check foreign keys,
-   sequences, ledger balance/hash invariants, and external document/encryption
-   dependencies. Reconcile source writes since snapshot before cutover.
-6. Test tenant denial, immutable accounting/audit records, and queue isolation
-   with the actual restricted logins.
-7. Configure the application to use the verified external destination only
-   after all checks pass. Keep privileged migration credentials out of the
-   runtime. No schema changes belong in build or startup hooks.
-8. Preserve the original Replit database for recovery. Publishing is a
-   separate user action; this setup has not published the app.
+The large single-request transfer was rejected by the connector, and the
+destination was checked to confirm zero business rows. Bounded batches were
+then uploaded to an owner-only temporary schema and fingerprinted before import.
+
+The final import was atomic: lock and fingerprint the seed-only destination,
+temporarily disable only user triggers, reconcile factory seeds, insert in
+foreign-key dependency order, re-enable triggers, verify every business table,
+check accounting invariants, and restore sequence state. Internal foreign-key
+triggers remained active. No user trigger remains disabled. The temporary
+transfer schema was removed after post-commit verification.
+
+The destination retains its 29-entry schema-migration ledger, rather than
+overwriting it with the source's 16 historical entries. The original source
+retains that history unchanged.
+
+Accounting checks returned zero unbalanced entries, cross-tenant lines,
+invalid periods, broken audit links, invalid audit hashes, or mismatched
+balance rows. Exact row fingerprints also cover ledger hashes and decimals.
+
+The production launcher intentionally consumes `ARCOMPT_NEON_APP_URL` and
+`ARCOMPT_NEON_QUEUE_URL`. Do not remove them because their names originated as
+staging secrets. Missing values stop startup; there is no managed-owner fallback.
+
+The production web build, shell configuration checks, and development preview
+passed. Publishing remains a user action. The complete published runtime,
+including scanner startup and production identity configuration, must still
+be verified after publishing. Do not add schema mutations to build/startup.
+
+Keep the original Replit database for recovery and decline any publishing
+option to reset or replace its data. The existing Neon project reported a
+six-hour recovery window at setup; recovery policy and a restore rehearsal
+should be reviewed separately before relying on it for business continuity.
 
 Future NaviMed/ARCOMPT runtime roles must receive explicit CONNECT only to
 their own database. Both databases share compute and privileged

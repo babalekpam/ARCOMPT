@@ -3,6 +3,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
+source "$root/scripts/select-production-database.sh"
 clamav="$root/.build/clamav-1.4.6/usr/local"
 if [[ ! -x "$clamav/sbin/clamd" || ! -x "$clamav/bin/freshclam" ]]; then
   echo "ClamAV build is missing; refusing to start." >&2

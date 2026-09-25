@@ -33,3 +33,16 @@ creating minimal SQL roles avoids temporarily introducing privileged logins.
 **How to apply:** Keep migration-ledger writes atomic with each migration;
 verify actual role attributes and cross-database CONNECT permissions.
 Use Replit Secrets to collect runtime URLs; never print generated passwords.
+
+Use bounded transfers through an owner-only staging area for larger data
+copies, then apply and verify the destination import atomically.
+
+**Why:** The connector rejected a roughly 677 KB transaction request even
+though smaller calls worked. A frozen source with before/after fingerprints
+allowed bounded exports without silently accepting a changing data set.
+
+**How to apply:** Check destination state after transport errors before
+retrying. Preserve numeric precision by transporting PostgreSQL row JSON as
+text, not JS-parsed numeric fields. Compare all row fingerprints and sequence
+states, keep FK triggers active, restore any destination-only user-trigger
+accommodations before commit, and remove temporary staging after verification.
