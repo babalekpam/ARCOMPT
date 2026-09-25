@@ -1,5 +1,9 @@
 # Automatic Publish redesign: security feasibility
 
+> Historical scope: the user subsequently approved a separate external Neon
+> database. See `NEON-ARCOMPT-MIGRATION.md` for that work. The conclusions below
+> still apply to the earlier managed-database/automatic-Publish-only constraint.
+
 ## Decision
 
 No security-equivalent, application-only redesign was identified under all of
