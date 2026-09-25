@@ -13,6 +13,7 @@
 - [ClamAV version on Replit](clamav-version.md) — do not use the pinned Nix channel's unsupported scanner for production; verify supported versions before enabling uploads.
 - [EICAR scanner proof](eicar-scanner-proof.md) — test the exact canonical EICAR bytes; prefixed PDF text can scan clean despite a working signature database.
 - [Protected Replit config edits](protected-replit-config.md) — .replit changes require schema-validated replacement; direct patches may be rejected even during cleanup.
+- [Publishing public port](publishing-public-port.md) — VM publishing supports one external port; keep API and temporary test servers internal.
 - [Zoho SMTP endpoint](zoho-smtp-endpoint.md) — trust the account-tested SMTP host over generic Zoho guidance; a test message was confirmed received.
 - [Queue privilege boundary](queue-privilege-boundary.md) — test queue startup with the actual restricted login; cross-tenant claim capability must not be granted to the HTTP data role.
 - [Development workflow cleanup](workflow-process-groups.md) — a failed restart can leave Next.js listening; stop the old process group before retrying, and isolate child groups for cleanup.

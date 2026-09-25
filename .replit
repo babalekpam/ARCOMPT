@@ -37,17 +37,8 @@ run = ["bash", "scripts/run-production.sh"]
 localPort = 3000
 externalPort = 80
 
-[[ports]]
-localPort = 3100
-externalPort = 3002
 
-[[ports]]
-localPort = 4000
-externalPort = 3000
 
-[[ports]]
-localPort = 4100
-externalPort = 3003
 
 
 
