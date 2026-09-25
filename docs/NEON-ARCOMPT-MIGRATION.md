@@ -52,18 +52,31 @@ database above. Never select a migration target using database name alone.
 - The source inventory contains four companies and thirteen journal entries.
   The destination has zero companies; no business records have been copied.
 
-These are catalog/privilege checks, not successful password-authenticated
-connections or a full application-readiness test.
+The staged secrets have now passed real password-authenticated connections
+using `scripts/check-neon-staging.mts`, including both existing production
+security guards and the cross-application database privilege checks. This does
+not yet constitute a full application or data-migration test.
+
+Read-only preparation also confirmed:
+- All 75 source business tables match the destination's column names, types,
+  generated-column flags, and identity flags.
+- The table-level foreign-key graph has a complete dependency ordering when
+  self-references are excluded. Self-references still require explicit handling.
+- Source records include 2,152 accounts, 13 entries, 38 journal lines, 29
+  balance rows, and 23 audit rows. No business records have been copied yet.
+- The old ARCOMPT deployment is still reported as published. A confirmed
+  source write pause is required before the final snapshot and cutover.
 
 ## Next gates — required before cutover
 
-1. Obtain the two destination connection strings through Replit Secrets.
+1. **Complete:** Obtain the two destination connection strings through Replit Secrets.
    Stage them as `ARCOMPT_NEON_APP_URL` and `ARCOMPT_NEON_QUEUE_URL`, not the
    active production URL keys. Select database `arcompt` and the exact runtime
    login for each string in Neon's Connect dialog. Never use the owner login.
-2. Test real authenticated connections and the application's existing
+2. **Complete:** Test real authenticated connections and the application's existing
    database-security and queue-security guards.
-3. Take a consistent read-only source snapshot, including all business,
+3. Confirm the old ARCOMPT deployment has been shut down and no other writer
+   is using its source database. Take a consistent read-only source snapshot, including all business,
    identity, audit, document-reference, and encryption-related records.
    Keep sensitive exports out of Git and chat.
 4. Import with an independently reviewed, atomic procedure that preserves
