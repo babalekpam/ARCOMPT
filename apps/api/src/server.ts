@@ -87,7 +87,10 @@ const app = createApp({
 
 // Only the Next.js frontend is public in production. The API is reached by
 // Next.js over the local loopback interface and must not accept direct traffic.
-const server = serve({ fetch: app.fetch, port: cfg.port, hostname: process.env.NODE_ENV === "production" ? "127.0.0.1" : "0.0.0.0" }, () => {
+// Browsers use the Next.js same-origin proxy in both environments. Keeping
+// this listener private also prevents development port discovery from adding
+// a second public port to the publishing configuration.
+const server = serve({ fetch: app.fetch, port: cfg.port, hostname: "127.0.0.1" }, () => {
   log("info", "api.started", {
     port: cfg.port,
     auth: cfg.auth.mode,
