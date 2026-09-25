@@ -11,6 +11,12 @@ Inspect the generated development-to-production SQL whenever publishing custom d
 
 Replit documentation distinguishes the user's manual production SQL runner from Agent's read-only production access. A semantic documentation search once suggested manual Agent DDL despite the actual production-database page saying Agent cannot modify production; consult the full page and the database skill before acting. A Reserved VM's runtime filesystem is not durable across replacement or republish, so self-hosting PostgreSQL on that VM is not a safe shortcut around the managed Publish diff.
 
+Treat advanced-object omissions as an automatic-Publish capability limit, not a defect awaiting a platform fix.
+
+**Why:** In a support reply supplied by the user, Replit explicitly confirmed that custom roles/grants, functions/triggers, policy predicates and FORCE RLS are outside full automatic synchronization coverage. Support offered a security-preserving compatible redesign or an independent developer, not an automatic repair.
+
+**How to apply:** Do not send the user back to support to request the same missing synchronization fix, promise that another Publish will resolve it, or remove security controls merely to fit automatic coverage. A compatible redesign needs an explicit security-equivalence assessment; an independent operator still needs to establish a supported maintenance procedure.
+
 For catalog comparisons across Publish and a synthetic local cluster, compare columns by **name**, not physical attribute position, and exclude extension-owned function definitions from application-function fingerprints. A local PostgreSQL 16 instance may lack pgvector and therefore omit its optional embedding column and extension functions.
 
 **Why:** The published and development column definitions matched while the disposable migration replay placed audit columns in a different physical order. The local PostgreSQL distribution also lacked pgvector, making an otherwise-correct whole-schema function fingerprint differ by hundreds of extension functions. Neither difference changed the application security contract.
