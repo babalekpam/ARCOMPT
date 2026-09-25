@@ -17,6 +17,12 @@ Treat advanced-object omissions as an automatic-Publish capability limit, not a 
 
 **How to apply:** Do not send the user back to support to request the same missing synchronization fix, promise that another Publish will resolve it, or remove security controls merely to fit automatic coverage. A compatible redesign needs an explicit security-equivalence assessment; an independent operator still needs to establish a supported maintenance procedure.
 
+An application-only authorization rewrite is not equivalent to database-enforced isolation when runtime retains an owner/BYPASSRLS credential.
+
+**Why:** Correct route filters cannot restrict SQL that omits those filters, prohibit owner-level accounting writes, or separate queue capabilities from API capabilities under the same principal. Conditional approval of a security-preserving redesign is not consent to drop these guarantees.
+
+**How to apply:** Assess the threat model before proposing a Publish-compatible rewrite. If the available production principal cannot be restricted and advanced security objects cannot be provisioned, report that constraint conflict rather than repeatedly proposing the same redesign as a likely fix.
+
 For catalog comparisons across Publish and a synthetic local cluster, compare columns by **name**, not physical attribute position, and exclude extension-owned function definitions from application-function fingerprints. A local PostgreSQL 16 instance may lack pgvector and therefore omit its optional embedding column and extension functions.
 
 **Why:** The published and development column definitions matched while the disposable migration replay placed audit columns in a different physical order. The local PostgreSQL distribution also lacked pgvector, making an otherwise-correct whole-schema function fingerprint differ by hundreds of extension functions. Neither difference changed the application security contract.
