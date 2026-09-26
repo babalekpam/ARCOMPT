@@ -33,4 +33,6 @@ export const COOKIES = {
   tenant: "arcompt_tenant",
   locale: "arcompt_locale",
   mfa: "arcompt_mfa",
+  adminMode: "arcompt_admin_mode",
+  customerTenant: "arcompt_customer_tenant",
 } as const;

@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import { databaseSecurityProblems, type DatabaseSecuritySnapshot } from "./database-readiness.js";
 
 function safeSnapshot(): DatabaseSecuritySnapshot {
-  const names = ["onboarding_bootstrap", "platform_admin", "platform_admin_audit", "background_job", "background_job_review", "app_mfa_factor", "app_mfa_proof"];
-  const policies = ["onboarding_bootstrap_access", "platform_admin_internal", "platform_admin_audit_internal", "tenant_isolation", "tenant_isolation", "app_mfa_factor_internal", "app_mfa_proof_internal"];
+  const names = ["onboarding_bootstrap", "platform_admin", "platform_admin_audit", "background_job", "background_job_review", "app_mfa_factor", "app_mfa_proof", "platform_admin_binding", "platform_admin_mode"];
+  const policies = ["onboarding_bootstrap_access", "platform_admin_internal", "platform_admin_audit_internal", "tenant_isolation", "tenant_isolation", "app_mfa_factor_internal", "app_mfa_proof_internal", "platform_admin_binding_internal", "platform_admin_mode_internal"];
   return {
     role: { name: "arcompt_app_login", rolsuper: false, rolbypassrls: false },
     tables: names.map((relname) => ({ relname, relrowsecurity: true, relforcerowsecurity: true, owned_by_app: false })),
@@ -21,6 +21,12 @@ function safeSnapshot(): DatabaseSecuritySnapshot {
       return { tablename, policyname: `${tablename}_owner`, cmd: "ALL", qual: expression, with_check: expression };
     })],
     functions: [
+      "public.platform_mode_eligible(text)",
+      "public.platform_mode_identity(text,text,text,text)",
+      "public.platform_mode_activate(text,text,text,text)",
+      "public.platform_mode_deactivate(text,text,text)",
+      "public.platform_mode_companies(text,text,text,text)",
+      "public.platform_mode_record_access(text,text,text,text,uuid,text,text)",
       "public.app_mfa_attempt(text)",
       "public.app_mfa_enroll(text,text)",
       "public.app_mfa_lock(text)",

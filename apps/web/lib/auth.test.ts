@@ -20,6 +20,16 @@ describe("en-têtes d'authentification", () => {
     });
     expect(buildHeaders({ mode: "dev", userId: "u" })).not.toHaveProperty("X-Arcompt-Mfa");
   });
+  it("forwards admin mode only from the server cookie context", () => {
+    expect(buildHeaders({ mode: "clerk", accessToken: "tok", adminMode: "opaque-mode" })).toEqual({
+      Authorization: "Bearer tok", "X-Arcompt-Admin-Mode": "opaque-mode",
+    });
+  });
+  it("forwards the deny-only tombstone even when the short-lived mode token cookie has expired", () => {
+    expect(buildHeaders({ mode: "clerk", accessToken: "tok", adminModeExpected: true })).toEqual({
+      Authorization: "Bearer tok", "X-Arcompt-Admin-Mode-Expected": "1",
+    });
+  });
 
   it("lit le cookie dev et rejette les valeurs invalides", () => {
     expect(parseDevCookie(JSON.stringify({ userId: "u", tenantId: "t", organizationId: "o" }))).toEqual({ userId: "u", tenantId: "t", organizationId: "o" });

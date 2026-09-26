@@ -22,9 +22,12 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   const auth = await getAuthContext();
   if (!auth) return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Session absente" } }, { status: 401 });
   const { path } = await ctx.params;
+  if (path.some((part) => part === "." || part === ".." || /[/%\\]/.test(part))) {
+    return NextResponse.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
+  }
   // MFA proofs must only flow through /api/session/mfa, which replaces them
   // with an httpOnly cookie. The generic proxy must never expose raw proofs.
-  if (path[0] === "security" && path[1] === "mfa") {
+  if (path[0] === "security" && (path[1] === "mfa" || path[1] === "admin-mode")) {
     return NextResponse.json({ error: { code: "NOT_FOUND", message: "Utilisez /api/session/mfa" } }, { status: 404 });
   }
   const target = new URL(`/v1/${path.map(encodeURIComponent).join("/")}`, config.apiUrl());

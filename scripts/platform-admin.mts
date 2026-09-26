@@ -14,7 +14,7 @@ const arg = (name: string, required = true): string | undefined => {
 };
 
 export async function clerkVerify(sub: string, email: string): Promise<boolean> {
-  const secret = process.env.CLERK_SECRET_KEY?.trim();
+  const secret = (process.env.ARCOMPT_CLERK_ADMIN_SECRET_KEY ?? process.env.CLERK_SECRET_KEY)?.trim();
   if (!secret) throw new Error("CLERK_SECRET_KEY manquant.");
   const response = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(sub)}`, {
     headers: { Authorization: `Bearer ${secret}` },
@@ -24,9 +24,10 @@ export async function clerkVerify(sub: string, email: string): Promise<boolean> 
     id?: string; primary_email_address_id?: string;
     email_addresses?: Array<{ id?: string; email_address?: string; verification?: { status?: string } }>;
     two_factor_enabled?: boolean;
+    banned?: boolean; locked?: boolean;
   };
   const primary = user.email_addresses?.find((x) => x.id === user.primary_email_address_id);
-  if (user.id !== sub || primary?.email_address?.toLowerCase() !== email.toLowerCase() ||
+  if (user.banned || user.locked || user.id !== sub || primary?.email_address?.toLowerCase() !== email.toLowerCase() ||
       primary.verification?.status !== "verified") {
     throw new Error("Sujet Clerk et email primaire vérifié ne correspondent pas.");
   }
@@ -41,6 +42,10 @@ export async function main(): Promise<void> {
   const reason = arg("reason")!.trim();
   const operator = arg("operator")!.trim();
   if (!reason || !operator) throw new Error("--reason et --operator ne peuvent pas être vides.");
+  if (process.argv.includes("--dual-mode")) {
+    await dualMode(action, sub, email, reason, operator);
+    return;
+  }
   const idpMfa = action === "grant" ? await clerkVerify(sub, email!) : false;
 
   const db = createDb({ max: 2 });
@@ -49,6 +54,10 @@ export async function main(): Promise<void> {
     const preview = await db.begin(async (tx) => {
       const [role] = await tx`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`;
       if (!role?.rolsuper && !role?.rolbypassrls) throw new Error("Compte DB privilégié requis (superuser ou BYPASSRLS), jamais arcompt_app.");
+      if (action === "revoke") {
+        const [binding] = await tx`SELECT user_id FROM platform_admin_binding WHERE clerk_sub=${sub}`;
+        if (binding) throw new Error("Identité dual-mode détectée : utilisez --dual-mode pour révoquer le droit et ses sessions.");
+      }
       if (action === "grant") {
         const [factor] = await tx`SELECT enabled_at FROM app_mfa_factor WHERE clerk_sub = ${sub}`;
         if (!idpMfa && !factor?.enabled_at) throw new Error("MFA obligatoire : activez et confirmez un authentificateur ARCOMPT ou Clerk avant la promotion.");
@@ -126,6 +135,60 @@ export async function main(): Promise<void> {
       }
     });
     console.log("Modification appliquée.");
+  } finally { await db.end(); }
+}
+
+/** Explicitly opt-in provisioning; never relocates the customer app_user. */
+async function dualMode(action: string, sub: string, email: string | undefined, reason: string, operator: string) {
+  const apply = process.argv.includes("--apply");
+  const database = new URL(process.env.DATABASE_URL!).pathname.slice(1);
+  if (apply && arg("confirm-db") !== database) throw new Error("Confirmez explicitement la base cible.");
+  if (action === "grant") await clerkVerify(sub, email!);
+  const db = createDb({ max: 2 });
+  try {
+    await db.begin(async (tx) => {
+      const [role] = await tx`SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user`;
+      if (!role?.rolsuper && !role?.rolbypassrls) throw new Error("Compte DB privilégié requis.");
+      await tx`SELECT pg_advisory_xact_lock(19021,18)`;
+      await tx`LOCK TABLE app_user,company IN SHARE ROW EXCLUSIVE MODE`;
+      const [reserved] = await tx`SELECT organization_id FROM platform_admin_reserved_org FOR UPDATE`;
+      let org = reserved?.organization_id as string | undefined;
+      if (org && (await tx`SELECT 1 FROM company WHERE organization_id=${org}`).length) throw new Error("Organisation interne non vide.");
+      const [bound] = await tx`SELECT b.user_id,u.organization_id,u.keycloak_sub,u.suspended_at,u.email
+        FROM platform_admin_binding b JOIN app_user u ON u.id=b.user_id WHERE b.clerk_sub=${sub} FOR UPDATE OF b,u`;
+      if (bound && (bound.organization_id !== org || bound.keycloak_sub !== null)) throw new Error("Identité interne incohérente.");
+      if (action === "grant") {
+        await clerkVerify(sub, email!);
+        const [factor] = await tx`SELECT enabled_at FROM app_mfa_factor WHERE clerk_sub=${sub} FOR UPDATE`;
+        if (!factor?.enabled_at) throw new Error("MFA ARCOMPT confirmée obligatoire pour le mode administrateur.");
+        const [customer] = await tx`SELECT u.id FROM app_user u WHERE keycloak_sub=${sub}
+          AND NOT EXISTS(SELECT 1 FROM platform_admin_reserved_org r WHERE r.organization_id=u.organization_id)`;
+        if (!customer) throw new Error("Identité client existante requise pour --dual-mode.");
+        if (bound && (bound.suspended_at || String(bound.email).toLowerCase() !== email!.toLowerCase())) throw new Error("Identité interne suspendue ou email différent.");
+      }
+      console.log(`Base : ${database} · ${action} dual-mode · ${sub} · ${operator} · ${reason}`);
+      if (!apply) { console.log("Aucun changement (aperçu)."); return; }
+      if (action === "revoke" && !bound) { console.log("Aucun changement (sujet inconnu)."); return; }
+      if (!org) {
+        const [row] = await tx`INSERT INTO organization(name,kind,plan) VALUES(${RESERVED_NAME},'GROUP','TRIAL') RETURNING id`;
+        org = String(row!.id);
+        await tx`INSERT INTO platform_admin_reserved_org(organization_id) VALUES(${org})`;
+      }
+      let user = bound?.user_id as string | undefined;
+      if (!user) {
+        const [row] = await tx`INSERT INTO app_user(organization_id,keycloak_sub,email,display_name)
+          VALUES(${org},NULL,${email!},${operator}) RETURNING id`;
+        user = String(row!.id);
+        await tx`INSERT INTO platform_admin(user_id,active) VALUES(${user},true)`;
+        await tx`INSERT INTO platform_admin_binding(clerk_sub,user_id) VALUES(${sub},${user})`;
+      }
+      await tx`UPDATE platform_admin SET active=${action === "grant"} WHERE user_id=${user}`;
+      // A fresh grant cannot revive a token issued before revocation.
+      await tx`DELETE FROM platform_admin_mode WHERE clerk_sub=${sub}`;
+      await tx`INSERT INTO platform_admin_audit(subject_user_id,organization_id,method,path,event,reason,operator_label,database_role)
+        VALUES(${user},${org},'CLI','/platform-admin/dual-mode',${action === "grant" ? "GRANT" : "REVOKE"},${reason},${operator},current_user)`;
+      console.log("Modification appliquée ; identité client inchangée.");
+    });
   } finally { await db.end(); }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

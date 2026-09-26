@@ -25,7 +25,7 @@
  * états financiers. Les servir depuis un cache ferait lire des chiffres d'hier
  * en croyant lire ceux d'aujourd'hui.
  */
-const VERSION = "v2";
+const VERSION = "v3";
 const STATIC_CACHE = `arcompt-static-${VERSION}`;
 const API_CACHE = `arcompt-api-${VERSION}`;
 const PAGE_CACHE = `arcompt-pages-${VERSION}`;
@@ -78,7 +78,11 @@ async function networkFirst(request, cacheName, fallbackUrl) {
   const cache = await caches.open(cacheName);
   try {
     const res = await fetch(request);
-    if (res.ok) cache.put(request, res.clone());
+    // HttpOnly admin-mode cookies cannot safely partition a browser cache.
+    // Respect the server's private/no-store boundary for authenticated data.
+    const policy = res.headers.get("cache-control") || "";
+    if (res.ok && !/\b(no-store|private)\b/i.test(policy)) cache.put(request, res.clone());
+    else await cache.delete(request);
     return res;
   } catch {
     const hit = await cache.match(request);

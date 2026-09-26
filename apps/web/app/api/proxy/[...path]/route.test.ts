@@ -23,6 +23,14 @@ describe("authenticated API proxy mutation origin", () => {
 });
 
 describe("MFA proof isolation", () => {
+  it("rejects normalized traversal paths which could bypass token endpoint isolation", async () => {
+    const res = await GET(new NextRequest("https://internal.example/api/proxy/anything"), { params: Promise.resolve({ path: ["anything", "..", "security", "admin-mode", "activate"] }) });
+    expect(res.status).toBe(404);
+  });
+  it("blocks raw administrator activation tokens through the generic proxy", async () => {
+    const res = await GET(new NextRequest("https://internal.example/api/proxy/security/admin-mode/activate"), { params: Promise.resolve({ path: ["security", "admin-mode", "activate"] }) });
+    expect(res.status).toBe(404);
+  });
   it("blocks access to MFA responses through the generic proxy", async () => {
     const res = await GET(new NextRequest("https://internal.example/api/proxy/security/mfa/confirm"), { params: Promise.resolve({ path: ["security", "mfa", "confirm"] }) });
     expect(res.status).toBe(404);

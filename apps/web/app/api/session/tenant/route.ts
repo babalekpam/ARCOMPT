@@ -5,8 +5,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getAuthContext, UUID_RE } from "@/lib/auth";
 import { COOKIES } from "@/lib/config";
 import { sessionCookieOptions } from "@/lib/cookies";
+import { acceptsMutationOrigin } from "@/lib/proxy-origin";
 
 export async function POST(req: NextRequest) {
+  if (!acceptsMutationOrigin(req)) return NextResponse.json({ error: { code: "FORBIDDEN", message: "Origine non autorisée" } }, { status: 403 });
   const auth = await getAuthContext();
   if (!auth) return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Session absente" } }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as { tenantId?: string };

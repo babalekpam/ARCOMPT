@@ -14,6 +14,7 @@ import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { getPlatformAdmin } from "@/lib/platform";
 import { getCurrentMemberReference } from "@/lib/member-reference";
 import { ReminderReviewAlert } from "./ReminderReviewAlert";
+import { AdminModeSwitch } from "./AdminModeSwitch";
 
 /** Coque applicative : en-tête, barre latérale (≥ md), barre inférieure (< md). */
 export async function AppShell({ auth, children }: { auth: AuthContext; children: ReactNode }) {
@@ -41,6 +42,7 @@ export async function AppShell({ auth, children }: { auth: AuthContext; children
             <UserMenu displayName={displayName} />
           </div>
         </header>
+        {auth.mode === "clerk" ? <AdminModeSwitch /> : null}
         {auth.tenantId ? <ReminderReviewAlert key={auth.tenantId} tenantId={auth.tenantId} /> : null}
         <OfflineIndicator />
         <main className="flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10">

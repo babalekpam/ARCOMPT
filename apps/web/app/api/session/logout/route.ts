@@ -10,5 +10,7 @@ export async function POST() {
   res.cookies.set(COOKIES.dev, "", sessionCookieOptions(0));
   res.cookies.set(COOKIES.tenant, "", sessionCookieOptions(0));
   res.cookies.set(COOKIES.mfa, "", sessionCookieOptions(0));
+  res.cookies.set(COOKIES.adminMode, "", sessionCookieOptions(0));
+  res.cookies.set(COOKIES.customerTenant, "", sessionCookieOptions(0));
   return res;
 }

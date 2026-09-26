@@ -6,6 +6,7 @@ import { createClerkClient, verifyToken } from "@clerk/backend";
 import type { Identity, PlatformAdminIdentity, PlatformCompany, TokenIdentityHints } from "./identity.js";
 import { log } from "./telemetry.js";
 import { TokenVerificationErrorReason } from "@clerk/backend/errors";
+import { modeEvidence, type AdminModeEvidence } from "./admin-mode.js";
 
 const safeClerkReasons = new Set<string>(Object.values(TokenVerificationErrorReason));
 
@@ -43,6 +44,7 @@ export interface AuthContext {
   platformAdmin?: boolean;
   /** Verified Clerk subject, for platform discovery callbacks only. */
   platformSub?: string;
+  platformMode?: AdminModeEvidence;
   /** Verified Clerk subject/profile for the tenantless bootstrap route only. */
   clerkSub?: string;
   mfaIdentity?: { sub: string; sid: string; email: string };
@@ -189,11 +191,12 @@ export interface AuthOptions {
   touchLastActive?: (userId: string) => Promise<void>;
   /** Platform privilege is resolved independently of ordinary memberships. */
   resolvePlatformAdmin?: (sub: string) => Promise<PlatformAdminIdentity | null>;
-  resolvePlatformCompany?: (sub: string, companyId: string) => Promise<{ companyId: string; organizationId: string } | null>;
+  resolveAdminMode?: (sub: string, evidence: AdminModeEvidence) => Promise<PlatformAdminIdentity | null>;
+  resolvePlatformCompany?: (sub: string, companyId: string, mode?: AdminModeEvidence) => Promise<{ companyId: string; organizationId: string } | null>;
   resolvePlatformCompanies?: (sub: string) => Promise<PlatformCompany[]>;
   resolveBootstrapReplay?: (sub: string) => Promise<string | null>;
   resolveBootstrapEligibility?: (sub: string, email: string) => Promise<string | null>;
-  recordPlatformAccess?: (sub: string, companyId: string | null, method: string, path: string) => Promise<void>;
+  recordPlatformAccess?: (sub: string, companyId: string | null, method: string, path: string, mode?: AdminModeEvidence) => Promise<void>;
 }
 
 /** Trousseau de clés tel que `jose` l'attend. */
@@ -261,7 +264,8 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
   return async (c, next) => {
     const tenantHeader = c.req.header("x-tenant-id");
     const mfaPath = /^\/(?:v1\/)?security\/mfa\/(?:status|enroll|confirm|verify|recovery-codes)$/.test(c.req.path);
-    if (mfaPath && opts.mode !== "clerk") return unauthorized(c, "Session Clerk vérifiée requise");
+    const modePath = /^\/(?:v1\/)?security\/admin-mode\/(?:status|activate|deactivate)$/.test(c.req.path);
+    if ((mfaPath || modePath) && opts.mode !== "clerk") return unauthorized(c, "Session Clerk vérifiée requise");
     if (opts.mode === "dev") {
       const userId = c.req.header("x-user-id");
       if (!userId || !tenantHeader) return unauthorized(c, "X-User-Id et X-Tenant-Id requis en mode dev");
@@ -303,7 +307,7 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
         log("warn", "auth.clerk.rejected", { reason: "session-claims-missing" });
         return unauthorized(c, "Jeton Clerk sans session (sub/sid)");
       }
-      if (mfaPath) {
+      if (mfaPath || modePath) {
         try {
           const account = await clerkLookup!(sub);
           if (!account?.email || !account.emailVerified) return forbidden(c, "Adresse Clerk primaire vérifiée requise");
@@ -312,6 +316,9 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
         } catch {
           return c.json({ error: { code: "IDENTITY_PROVIDER_UNAVAILABLE", message: "Profil Clerk inexploitable" } }, 503);
         }
+      }
+      if (c.req.header("x-arcompt-admin-mode-expected") && !c.req.header("x-arcompt-admin-mode")) {
+        return forbidden(c, "Mode administrateur expiré. Revenez explicitement à votre compte.", "ADMIN_MODE_EXPIRED");
       }
       let secondFactor = hasClerkSecondFactor(payload.fva);
       const appProof = c.req.header("x-arcompt-mfa");
@@ -326,7 +333,14 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
         }
         catch { return c.json({ error: { code: "MFA_UNAVAILABLE", message: "Authentification indisponible" } }, 503); }
       }
-      const platformAdmin = opts.resolvePlatformAdmin ? await opts.resolvePlatformAdmin(sub) : null;
+      // An invalid mode never silently falls back to customer permissions:
+      // callers must explicitly leave the mode and restore their customer tenant.
+      const modeToken = c.req.header("x-arcompt-admin-mode");
+      const mode = modeToken ? modeEvidence(payload.sid, modeToken, appProof) : undefined;
+      const platformAdmin = mode
+        ? await opts.resolveAdminMode?.(sub, mode)
+        : opts.resolvePlatformAdmin ? await opts.resolvePlatformAdmin(sub) : null;
+      if (mode && !platformAdmin) return forbidden(c, "Mode administrateur expiré. Revenez à votre compte.", "ADMIN_MODE_EXPIRED");
       if (platformAdmin) {
         if (platformAdmin.suspendedAt) return forbidden(c, "Compte suspendu : contactez l'administrateur", "ACCOUNT_SUSPENDED");
         if (!secondFactor) return forbidden(c, "Authentification multifacteur requise pour l'administration de la plateforme", "MFA_REQUIRED");
@@ -339,14 +353,14 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
         let organizationId: string | undefined;
         if (tenantHeader) {
           if (!UUID_RE.test(tenantHeader)) return forbidden(c, "X-Tenant-Id doit être un UUID");
-          const company = opts.resolvePlatformCompany ? await opts.resolvePlatformCompany(sub, tenantHeader) : null;
+          const company = opts.resolvePlatformCompany ? await opts.resolvePlatformCompany(sub, tenantHeader, mode) : null;
           if (!company) return forbidden(c, "Dossier non autorisé pour cet administrateur");
           tenantId = company.companyId;
           organizationId = company.organizationId;
         }
         if (!opts.recordPlatformAccess) return c.json({ error: { code: "AUDIT_UNAVAILABLE", message: "Journal d'accès indisponible" } }, 503);
         try {
-          await opts.recordPlatformAccess(sub, tenantId || null, c.req.method, c.req.path);
+          await opts.recordPlatformAccess(sub, tenantId || null, c.req.method, c.req.path, mode);
         } catch {
           return c.json({ error: { code: "AUDIT_UNAVAILABLE", message: "Journal d'accès indisponible" } }, 503);
         }
@@ -356,6 +370,7 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
           roles: tenantId ? ["OWNER"] : [],
           platformAdmin: true,
           platformSub: sub,
+          ...(mode ? { platformMode: mode } : {}),
           ...(organizationId ? { organizationId } : {}),
           ...(platformAdmin.locale ? { locale: platformAdmin.locale } : {}),
         });

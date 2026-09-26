@@ -35,6 +35,7 @@ import { whatsappLinkRoutes } from "./routes/whatsapp-link.js";
 import { platformRoutes } from "./routes/platform.js";
 import { sessionRoutes } from "./routes/session.js";
 import { mfaRoutes, mfaStatus } from "./mfa.js";
+import { adminModeRoutes, resolveAdminMode, modeCompanies, modeAccess, type AdminModeEvidence } from "./admin-mode.js";
 import type { JobQueue } from "@arcompt/jobs";
 import { withTenant } from "@arcompt/db";
 
@@ -96,7 +97,10 @@ export function createApp(deps: AppDeps) {
             resolveAppMfa: (sub: string, sid: string, proof?: string) => mfaStatus(db, sub, sid, proof),
             touchLastActive: (userId: string) => touchLastActive(db, userId),
             resolvePlatformAdmin: (sub: string) => resolvePlatformAdmin(db, sub),
-            resolvePlatformCompany: (sub: string, companyId: string) => resolvePlatformCompany(db, sub, companyId),
+            resolveAdminMode: (sub: string, evidence: AdminModeEvidence) => resolveAdminMode(db, sub, evidence),
+            resolvePlatformCompany: async (sub: string, companyId: string, mode?: AdminModeEvidence) => mode
+              ? (await modeCompanies(db, sub, mode)).find((company) => company.companyId === companyId) ?? null
+              : resolvePlatformCompany(db, sub, companyId),
             resolvePlatformCompanies: (sub: string) => resolvePlatformCompanies(db, sub),
             resolveBootstrapReplay: async (sub: string) => {
               const [row] = await db`SELECT auth_bootstrap_replay(${sub}) AS company_id`;
@@ -106,7 +110,9 @@ export function createApp(deps: AppDeps) {
               const [row] = await db`SELECT state FROM auth_bootstrap_lookup(${sub}, ${email})`;
               return row?.state ? String(row.state) : null;
             },
-            recordPlatformAccess: (sub: string, companyId: string | null, method: string, path: string) => recordPlatformAccess(db, sub, companyId, method, path),
+            recordPlatformAccess: (sub: string, companyId: string | null, method: string, path: string, mode?: AdminModeEvidence) => mode
+              ? modeAccess(db, sub, mode, companyId, method, path)
+              : recordPlatformAccess(db, sub, companyId, method, path),
           }
         : {}),
     }),
@@ -208,9 +214,11 @@ export function createApp(deps: AppDeps) {
       : c.json({ error: { code: "CONFLICT", message: "Relance introuvable ou déjà examinée" } }, 409);
   });
   api.route("/portal", portalRoutes(deps));
-  api.route("/platform", platformRoutes(db ? (sub: string) => resolvePlatformCompanies(db, sub) : undefined));
+  api.route("/platform", platformRoutes(db ? (sub: string, mode?: AdminModeEvidence) => mode
+    ? modeCompanies(db, sub, mode) : resolvePlatformCompanies(db, sub) : undefined));
   api.route("/", sessionRoutes(deps));
   api.route("/security/mfa", mfaRoutes(db));
+  api.route("/security/admin-mode", adminModeRoutes(db));
   app.route("/v1", api);
 
   // Canaux entrants sans jeton : WhatsApp (signature Meta) et webhooks de paiement (HMAC + anti-rejeu).

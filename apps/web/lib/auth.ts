@@ -27,6 +27,7 @@ export interface AuthContext {
   userId: string;
   tenantId: string | null;
   organizationId: string | null;
+  sessionId?: string;
   /** En-têtes à joindre à chaque appel API. */
   headers: Record<string, string>;
   /** Nom affiché (OIDC) ou identifiant (dev). */
@@ -51,7 +52,7 @@ export function parseDevCookie(raw: string | undefined): DevSession | null {
 }
 
 /** Construit les en-têtes API à partir d'un contexte (sans dépendre de Next : testable). */
-export function buildHeaders(input: { mode: AuthMode; userId?: string; tenantId?: string | null; organizationId?: string | null; accessToken?: string; mfaProof?: string }): Record<string, string> {
+export function buildHeaders(input: { mode: AuthMode; userId?: string; tenantId?: string | null; organizationId?: string | null; accessToken?: string; mfaProof?: string; adminMode?: string; adminModeExpected?: boolean }): Record<string, string> {
   const h: Record<string, string> = {};
   if (input.mode === "dev") {
     if (input.userId) h["X-User-Id"] = input.userId;
@@ -61,6 +62,10 @@ export function buildHeaders(input: { mode: AuthMode; userId?: string; tenantId?
   if (input.tenantId) h["X-Tenant-Id"] = input.tenantId;
   if (input.organizationId) h["X-Organization-Id"] = input.organizationId;
   if (input.mfaProof) h["X-Arcompt-Mfa"] = input.mfaProof;
+  if (input.adminMode) h["X-Arcompt-Admin-Mode"] = input.adminMode;
+  // The preserved customer selection is also a deny-only tombstone. It
+  // outlives the 15-minute token cookie and is removed only on explicit exit.
+  if (input.adminModeExpected) h["X-Arcompt-Admin-Mode-Expected"] = "1";
   return h;
 }
 
@@ -98,7 +103,9 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     userId: session.userId,
     tenantId,
     organizationId,
-    headers: buildHeaders({ mode, tenantId, organizationId, accessToken, mfaProof }),
+    sessionId: session.sessionId ?? undefined,
+    headers: buildHeaders({ mode, tenantId, organizationId, accessToken, mfaProof, adminMode: store.get(COOKIES.adminMode)?.value,
+      adminModeExpected: !!store.get(COOKIES.customerTenant)?.value }),
     displayName: session.userId,
   };
 }

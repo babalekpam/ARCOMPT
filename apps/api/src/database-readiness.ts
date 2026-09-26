@@ -3,8 +3,10 @@
 import type { Sql } from "postgres";
 import { describeViolation, verifyAppPrivileges } from "@arcompt/db";
 
-const REQUIRED_TABLES = ["onboarding_bootstrap", "platform_admin", "platform_admin_audit", "background_job", "background_job_review", "app_mfa_factor", "app_mfa_proof"] as const;
+const REQUIRED_TABLES = ["onboarding_bootstrap", "platform_admin", "platform_admin_audit", "background_job", "background_job_review", "app_mfa_factor", "app_mfa_proof", "platform_admin_binding", "platform_admin_mode"] as const;
 const REQUIRED_POLICIES = [
+  ["platform_admin_binding", "platform_admin_binding_internal"],
+  ["platform_admin_mode", "platform_admin_mode_internal"],
   ["app_mfa_factor", "app_mfa_factor_internal"],
   ["app_mfa_proof", "app_mfa_proof_internal"],
   ["onboarding_bootstrap", "onboarding_bootstrap_access"],
@@ -16,6 +18,12 @@ const REQUIRED_POLICIES = [
   ["background_job_review", "background_job_review_owner"],
 ] as const;
 const REQUIRED_FUNCTIONS = [
+  "public.platform_mode_eligible(text)",
+  "public.platform_mode_identity(text,text,text,text)",
+  "public.platform_mode_activate(text,text,text,text)",
+  "public.platform_mode_deactivate(text,text,text)",
+  "public.platform_mode_companies(text,text,text,text)",
+  "public.platform_mode_record_access(text,text,text,text,uuid,text,text)",
   "public.app_mfa_attempt(text)",
   "public.app_mfa_enroll(text,text)",
   "public.app_mfa_lock(text)",
@@ -169,6 +177,12 @@ export async function assertProductionDatabaseSecurity(db: Sql): Promise<void> {
         CASE WHEN EXISTS (SELECT 1 FROM pg_roles qr WHERE qr.rolname = 'arcompt_queue')
           THEN has_function_privilege('arcompt_queue', p.oid, 'EXECUTE') ELSE NULL END AS queue_execute
       FROM (VALUES
+        ('public.platform_mode_eligible(text)'),
+        ('public.platform_mode_identity(text,text,text,text)'),
+        ('public.platform_mode_activate(text,text,text,text)'),
+        ('public.platform_mode_deactivate(text,text,text)'),
+        ('public.platform_mode_companies(text,text,text,text)'),
+        ('public.platform_mode_record_access(text,text,text,text,uuid,text,text)'),
         ('public.app_mfa_attempt(text)'),
         ('public.app_mfa_enroll(text,text)'),
         ('public.app_mfa_lock(text)'),

@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import type { PlatformCompany } from "../identity.js";
 import type { AuthContext } from "../auth.js";
+import type { AdminModeEvidence } from "../admin-mode.js";
 
-export function platformRoutes(resolveCompanies?: (sub: string) => Promise<PlatformCompany[]>) {
+export function platformRoutes(resolveCompanies?: (sub: string, mode?: AdminModeEvidence) => Promise<PlatformCompany[]>) {
   const r = new Hono();
   r.use("*", async (c, next) => {
     const auth = c.get("auth") as AuthContext;
@@ -16,7 +17,7 @@ export function platformRoutes(resolveCompanies?: (sub: string) => Promise<Platf
     // supplied by app.ts with the verified Clerk subject captured per request.
     const list = resolveCompanies;
     if (!list || !auth.platformSub) return c.json({ error: { code: "UNAVAILABLE", message: "Découverte plateforme indisponible" } }, 503);
-    const companies = await list(auth.platformSub);
+    const companies = await list(auth.platformSub, auth.platformMode);
     return c.json({ companies: companies.map((company) => ({
       id: company.companyId,
       name: company.companyName,

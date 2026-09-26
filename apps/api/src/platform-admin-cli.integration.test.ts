@@ -69,4 +69,31 @@ run("platform admin CLI with app-owned MFA (disposable database only)", () => {
     vi.stubEnv("DATABASE_URL", restricted.toString());
     await expect(main()).rejects.toThrow(/privilégié/);
   });
+  it("explicit dual-mode provisions a separate principal without moving the customer, then revokes it", async () => {
+    subject = "dual_customer"; email = "dual@example.test"; idpMfa = false;
+    const [org] = await env!.db`INSERT INTO organization(name) VALUES('Dual customer') RETURNING id`;
+    const [customer] = await env!.db`INSERT INTO app_user(organization_id,keycloak_sub,email,display_name)
+      VALUES(${org!.id},${subject},${email},'Customer') RETURNING id`;
+    await env!.db`INSERT INTO app_mfa_factor(clerk_sub,enabled_at) VALUES(${subject},now())`;
+    args("grant", false); process.argv.push("--dual-mode");
+    await main();
+    expect(await env!.db`SELECT * FROM platform_admin_binding WHERE clerk_sub=${subject}`).toHaveLength(0);
+    args("grant", true); process.argv.push("--dual-mode");
+    await main();
+    const [bound] = await env!.db`SELECT b.user_id,u.keycloak_sub,u.organization_id FROM platform_admin_binding b
+      JOIN app_user u ON u.id=b.user_id WHERE b.clerk_sub=${subject}`;
+    expect(bound!.user_id).not.toBe(customer!.id);
+    expect(bound!.keycloak_sub).toBeNull();
+    expect(bound!.organization_id).not.toBe(org!.id);
+    const [unchanged] = await env!.db`SELECT organization_id,keycloak_sub FROM app_user WHERE id=${customer!.id}`;
+    expect(unchanged).toEqual({ organization_id: org!.id, keycloak_sub: subject });
+    args("revoke", true);
+    await expect(main()).rejects.toThrow(/dual-mode/);
+    const [stillActive] = await env!.db`SELECT active FROM platform_admin WHERE user_id=${bound!.user_id}`;
+    expect(stillActive!.active).toBe(true);
+    args("revoke", true); process.argv.push("--dual-mode");
+    await main();
+    const [grant] = await env!.db`SELECT active FROM platform_admin WHERE user_id=${bound!.user_id}`;
+    expect(grant!.active).toBe(false);
+  });
 });
