@@ -71,7 +71,7 @@ export interface ProvisionAppRoleResult {
 /** Un droit attendu (ou refusé) sur une table, tel que le décrit le schéma. */
 export interface ExpectedPrivilege {
   table: string;
-  privilege: "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "TRUNCATE";
+  privilege: "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "TRUNCATE" | "REFERENCES" | "TRIGGER";
   /** Vrai : le rôle applicatif doit l'avoir. Faux : il ne doit pas l'avoir. */
   granted: boolean;
   why: string;
@@ -130,6 +130,9 @@ export const EXPECTED_APP_PRIVILEGES: readonly ExpectedPrivilege[] = [
   { table: "subscription_plan", privilege: "INSERT", granted: false, why: "catalogue en lecture seule pour l'application" },
   { table: "subscription_plan", privilege: "UPDATE", granted: false, why: "catalogue en lecture seule pour l'application" },
   { table: "subscription_plan", privilege: "DELETE", granted: false, why: "catalogue en lecture seule pour l'application" },
+  ...["app_mfa_factor", "app_mfa_proof"].flatMap((table) =>
+    (["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"] as const).map((privilege) =>
+      ({ table, privilege, granted: false, why: "facteurs MFA : fonctions sécurisées exclusivement" }))),
   { table: "schema_migration", privilege: "SELECT", granted: false, why: "historique des migrations : affaire du compte de migration" },
   { table: "schema_migration", privilege: "INSERT", granted: false, why: "idem" },
   { table: "schema_migration", privilege: "UPDATE", granted: false, why: "idem" },

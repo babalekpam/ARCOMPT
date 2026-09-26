@@ -51,7 +51,7 @@ export function parseDevCookie(raw: string | undefined): DevSession | null {
 }
 
 /** Construit les en-têtes API à partir d'un contexte (sans dépendre de Next : testable). */
-export function buildHeaders(input: { mode: AuthMode; userId?: string; tenantId?: string | null; organizationId?: string | null; accessToken?: string }): Record<string, string> {
+export function buildHeaders(input: { mode: AuthMode; userId?: string; tenantId?: string | null; organizationId?: string | null; accessToken?: string; mfaProof?: string }): Record<string, string> {
   const h: Record<string, string> = {};
   if (input.mode === "dev") {
     if (input.userId) h["X-User-Id"] = input.userId;
@@ -60,6 +60,7 @@ export function buildHeaders(input: { mode: AuthMode; userId?: string; tenantId?
   }
   if (input.tenantId) h["X-Tenant-Id"] = input.tenantId;
   if (input.organizationId) h["X-Organization-Id"] = input.organizationId;
+  if (input.mfaProof) h["X-Arcompt-Mfa"] = input.mfaProof;
   return h;
 }
 
@@ -68,6 +69,7 @@ export async function getAuthContext(): Promise<AuthContext | null> {
   const store = await cookies();
   const mode = config.authMode();
   const tenantOverride = store.get(COOKIES.tenant)?.value;
+  const mfaProof = store.get(COOKIES.mfa)?.value;
 
   if (mode === "dev") {
     const dev = parseDevCookie(store.get(COOKIES.dev)?.value);
@@ -79,7 +81,7 @@ export async function getAuthContext(): Promise<AuthContext | null> {
       userId: dev.userId,
       tenantId,
       organizationId,
-      headers: buildHeaders({ mode, userId: dev.userId, tenantId, organizationId }),
+      headers: buildHeaders({ mode, userId: dev.userId, tenantId, organizationId, mfaProof }),
       displayName: dev.userId,
     };
   }
@@ -96,7 +98,7 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     userId: session.userId,
     tenantId,
     organizationId,
-    headers: buildHeaders({ mode, tenantId, organizationId, accessToken }),
+    headers: buildHeaders({ mode, tenantId, organizationId, accessToken, mfaProof }),
     displayName: session.userId,
   };
 }

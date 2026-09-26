@@ -50,7 +50,7 @@ cp .env.example .env          # puis renseigner les variables ci-dessous
 docker compose up -d          # PostgreSQL + Redis
 
 pnpm db:migrate               # crée le schéma et les contraintes comptables
-pnpm db:seed                  # plan de comptes SYSCOHADA + dossier de démonstration
+NODE_ENV=development ALLOW_DEMO_SEED=1 pnpm db:seed # facultatif : données fictives locales uniquement
 
 pnpm dev                      # web sur http://localhost:3000, API sur :4000
 

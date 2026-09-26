@@ -9,5 +9,6 @@ export async function POST() {
   const res = NextResponse.json({ ok: true });
   res.cookies.set(COOKIES.dev, "", sessionCookieOptions(0));
   res.cookies.set(COOKIES.tenant, "", sessionCookieOptions(0));
+  res.cookies.set(COOKIES.mfa, "", sessionCookieOptions(0));
   return res;
 }

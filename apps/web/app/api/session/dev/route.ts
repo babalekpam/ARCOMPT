@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
   const res = NextResponse.json({ ok: true });
   res.cookies.set(COOKIES.dev, JSON.stringify({ userId, tenantId, ...(organizationId ? { organizationId } : {}) }), sessionCookieOptions());
   res.cookies.set(COOKIES.tenant, tenantId, sessionCookieOptions());
+  res.cookies.set(COOKIES.mfa, "", sessionCookieOptions(0));
   return res;
 }
 
@@ -28,5 +29,6 @@ export async function DELETE() {
   const res = NextResponse.json({ ok: true });
   res.cookies.set(COOKIES.dev, "", { ...sessionCookieOptions(0) });
   res.cookies.set(COOKIES.tenant, "", { ...sessionCookieOptions(0) });
+  res.cookies.set(COOKIES.mfa, "", sessionCookieOptions(0));
   return res;
 }

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { Ledger, PostgresStore } from "@arcompt/ledger";
-import { seedCompany, type Db } from "@arcompt/db";
+import { DEFAULT_JOURNALS, Ledger, PostgresStore } from "@arcompt/ledger";
+import { resolveChart, seedCompany, type Db } from "@arcompt/db";
 import { createTestDatabase } from "../../../packages/db/src/testing.js";
 import { createApp } from "./app.js";
 
@@ -61,6 +61,38 @@ run("session bootstrap against PostgreSQL/RLS", () => {
     const [fy] = await db`SELECT id FROM fiscal_year WHERE tenant_id = ${companyId} AND code = '2025'`;
     const [{ n }] = await db`SELECT count(*)::int AS n FROM period WHERE tenant_id = ${companyId} AND fiscal_year_id = ${fy!.id}` as unknown as [{ n: number }];
     expect(Number(n)).toBe(12);
+    const [reference] = await db`SELECT
+      (SELECT count(*)::int FROM account WHERE tenant_id = ${companyId}) AS accounts,
+      (SELECT count(*)::int FROM journal WHERE tenant_id = ${companyId}) AS journals`;
+    expect(Number(reference!.accounts)).toBeGreaterThanOrEqual(resolveChart().length);
+    expect(Number(reference!.journals)).toBe(DEFAULT_JOURNALS.length);
+    const [business] = await db`SELECT
+      (SELECT count(*)::int FROM partner WHERE tenant_id = ${companyId}) AS partners,
+      (SELECT count(*)::int FROM journal_entry WHERE tenant_id = ${companyId}) AS entries,
+      (SELECT count(*)::int FROM journal_line WHERE tenant_id = ${companyId}) AS lines,
+      (SELECT count(*)::int FROM account_balance WHERE tenant_id = ${companyId}) AS balances,
+      (SELECT count(*)::int FROM document WHERE tenant_id = ${companyId}) AS documents,
+      (SELECT count(*)::int FROM sales_document WHERE tenant_id = ${companyId}) AS sales,
+      (SELECT count(*)::int FROM payment WHERE tenant_id = ${companyId}) AS payments`;
+    expect(Object.values(business!).map(Number)).toEqual(Array(7).fill(0));
+  });
+
+  it("never assigns a demo tenant to a new identity or an existing non-member", async () => {
+    activeSub = "clerk_no_membership";
+    activeEmail = "no.membership@example.test";
+    const unknown = await app.request("/v1/session/memberships", { headers: { authorization: "Bearer session" } });
+    expect(unknown.status).toBe(200);
+    expect((await unknown.json() as { companies: unknown[] }).companies).toEqual([]);
+    const [org] = await db`INSERT INTO organization (name) VALUES ('No Membership Org') RETURNING id`;
+    await db`INSERT INTO app_user (organization_id, keycloak_sub, email, display_name)
+      VALUES (${String(org!.id)}, ${activeSub}, ${activeEmail}, 'No Membership')`;
+    const memberless = await app.request("/v1/session/memberships", { headers: { authorization: "Bearer session" } });
+    expect(memberless.status).toBe(200);
+    expect((await memberless.json() as { companies: unknown[] }).companies).toEqual([]);
+    const rejected = await app.request("/v1/partners", { headers: { authorization: "Bearer session" } });
+    expect(rejected.status).toBe(403);
+    activeSub = sub;
+    activeEmail = email;
   });
 
   it("shows only the signed-in owner's company/exercise reference, not the Clerk subject", async () => {

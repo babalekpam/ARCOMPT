@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import { databaseSecurityProblems, type DatabaseSecuritySnapshot } from "./database-readiness.js";
 
 function safeSnapshot(): DatabaseSecuritySnapshot {
-  const names = ["onboarding_bootstrap", "platform_admin", "platform_admin_audit", "background_job", "background_job_review"];
-  const policies = ["onboarding_bootstrap_access", "platform_admin_internal", "platform_admin_audit_internal", "tenant_isolation", "tenant_isolation"];
+  const names = ["onboarding_bootstrap", "platform_admin", "platform_admin_audit", "background_job", "background_job_review", "app_mfa_factor", "app_mfa_proof"];
+  const policies = ["onboarding_bootstrap_access", "platform_admin_internal", "platform_admin_audit_internal", "tenant_isolation", "tenant_isolation", "app_mfa_factor_internal", "app_mfa_proof_internal"];
   return {
     role: { name: "arcompt_app_login", rolsuper: false, rolbypassrls: false },
     tables: names.map((relname) => ({ relname, relrowsecurity: true, relforcerowsecurity: true, owned_by_app: false })),
@@ -16,11 +16,16 @@ function safeSnapshot(): DatabaseSecuritySnapshot {
         ? "(clerk_sub = current_setting('app.clerk_sub'::text, true))"
         : `(CURRENT_USER = ( SELECT r.rolname FROM (pg_class c JOIN pg_roles r ON ((r.oid = c.relowner))) WHERE (c.oid = ('${tablename}'::regclass)::oid)))`;
       return { tablename, policyname: policies[i]!, cmd: "ALL", qual: expression, with_check: expression };
-    }), ...names.slice(3).map((tablename) => {
+    }), ...names.slice(3, 5).map((tablename) => {
       const expression = `(CURRENT_USER = ( SELECT r.rolname FROM (pg_class c JOIN pg_roles r ON ((r.oid = c.relowner))) WHERE (c.oid = ('${tablename}'::regclass)::oid)))`;
       return { tablename, policyname: `${tablename}_owner`, cmd: "ALL", qual: expression, with_check: expression };
     })],
     functions: [
+      "public.app_mfa_attempt(text)",
+      "public.app_mfa_enroll(text,text)",
+      "public.app_mfa_lock(text)",
+      "public.app_mfa_status(text,text,text)",
+      "public.app_mfa_complete(text,text,text,bigint,text,text,text[],text)",
       "public.auth_bootstrap_lookup(text,text)",
       "public.auth_bootstrap_replay(text)",
       "public.platform_admin_identity(text)",

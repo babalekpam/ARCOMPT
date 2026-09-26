@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Sql } from "postgres";
 import { Ledger, PostgresStore } from "@arcompt/ledger";
-import { seedFirmDemo, withTenant, type Db } from "@arcompt/db";
+import { resolveChart, seedFirmDemo, withTenant, type Db } from "@arcompt/db";
 import { createTestDatabase } from "../../db/src/testing.js";
 import { AccessService, MockNotifier, OrganizationService, PortalError, PortalService, type Organization, type TenantContext } from "./index.js";
 
@@ -98,6 +98,34 @@ afterAll(async () => {
 });
 
 run("organisation et dossiers", () => {
+  it("provisions additional companies with reference data only, without changing existing records", async () => {
+    const organization = await orgs.createOrganization({ name: "Fresh Client Org", kind: "COMPANY" });
+    const first = await orgs.createCompany(organization.id, { name: "Fresh One", countryCode: "CI", fiscalYear: FY });
+    const second = await orgs.createCompany(organization.id, { name: "Fresh Two", countryCode: "CI", fiscalYear: FY });
+    for (const id of [first.id, second.id]) {
+      const [reference] = await db`SELECT
+        (SELECT count(*)::int FROM account WHERE tenant_id = ${id}) AS accounts,
+        (SELECT count(*)::int FROM journal WHERE tenant_id = ${id}) AS journals,
+        (SELECT count(*)::int FROM fiscal_year WHERE tenant_id = ${id}) AS years,
+        (SELECT count(*)::int FROM period WHERE tenant_id = ${id}) AS periods`;
+      expect(Number(reference!.accounts)).toBeGreaterThanOrEqual(resolveChart().length);
+      expect([reference!.journals, reference!.years, reference!.periods].map(Number)).toEqual([7, 1, 12]);
+      const [national] = await db`SELECT label FROM account WHERE tenant_id = ${id} AND number = '4471'`;
+      expect(national?.label).toMatch(/ITS/);
+      const [business] = await db`SELECT
+        (SELECT count(*)::int FROM partner WHERE tenant_id = ${id}) AS partners,
+        (SELECT count(*)::int FROM journal_entry WHERE tenant_id = ${id}) AS entries,
+        (SELECT count(*)::int FROM journal_line WHERE tenant_id = ${id}) AS lines,
+        (SELECT count(*)::int FROM account_balance WHERE tenant_id = ${id}) AS balances,
+        (SELECT count(*)::int FROM document WHERE tenant_id = ${id}) AS documents,
+        (SELECT count(*)::int FROM sales_document WHERE tenant_id = ${id}) AS sales,
+        (SELECT count(*)::int FROM payment WHERE tenant_id = ${id}) AS payments`;
+      expect(Object.values(business!).map(Number)).toEqual(Array(7).fill(0));
+    }
+    const [existing] = await db`SELECT count(*)::int AS n FROM journal_entry WHERE tenant_id = ${companyA}`;
+    expect(Number(existing!.n)).toBe(2);
+  });
+
   it("un cabinet exige la MFA et ne peut pas la désactiver", async () => {
     expect(firm.kind).toBe("FIRM");
     expect(firm.mfaRequired).toBe(true);
@@ -437,7 +465,15 @@ run("file de revue sans module documents", () => {
 
 run("seedFirmDemo", () => {
   it("crée un cabinet de démonstration exploitable par le portail", async () => {
-    const seeded = await seedFirmDemo(db);
+    const previous = process.env.ALLOW_DEMO_SEED;
+    process.env.ALLOW_DEMO_SEED = "1";
+    let seeded: Awaited<ReturnType<typeof seedFirmDemo>>;
+    try {
+      seeded = await seedFirmDemo(db);
+    } finally {
+      if (previous === undefined) delete process.env.ALLOW_DEMO_SEED;
+      else process.env.ALLOW_DEMO_SEED = previous;
+    }
     expect(seeded.companyIds).toHaveLength(3);
     const ctx = { organizationId: seeded.organizationId, userId: seeded.users.owner };
     const rows = await portal.dashboard(ctx);

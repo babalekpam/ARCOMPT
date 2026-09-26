@@ -5,7 +5,7 @@ import { defineConfig } from "@playwright/test";
 
 /**
  * Tests de bout en bout : API + web contre une base PostgreSQL migrée et
- * peuplée (`pnpm db:migrate && SEED_FIRM=1 pnpm db:seed`). Chromium est
+ * peuplée (`pnpm db:migrate && NODE_ENV=development ALLOW_DEMO_SEED=1 SEED_FIRM=1 pnpm db:seed`). Chromium est
  * celui de l'environnement (CHROMIUM_PATH ou /opt/pw-browsers/chromium).
  */
 const apiPort = Number(process.env.E2E_API_PORT ?? 4100);

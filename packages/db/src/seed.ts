@@ -45,7 +45,15 @@ export async function seedCompany(db: Db, input: SeedCompanyInput): Promise<{ co
   return { companyId, fiscalYearId: fy.id };
 }
 
+/** Demo fixtures are never part of account provisioning. Require both a local environment and consent. */
+export function assertDemoSeedAllowed(env: NodeJS.ProcessEnv = process.env): void {
+  if (!["development", "test"].includes(env.NODE_ENV ?? "") || env.ALLOW_DEMO_SEED !== "1") {
+    throw new Error("Demo seeding requires NODE_ENV=development or test AND ALLOW_DEMO_SEED=1");
+  }
+}
+
 export async function seedDemo(db: Db, log: (m: string) => void = () => {}): Promise<void> {
+  assertDemoSeedAllowed();
   const [org] = await db`INSERT INTO organization (name, kind, plan) VALUES ('Cabinet Démo', 'FIRM', 'TRIAL') RETURNING id`;
   const organizationId = org!.id as string;
   const [user] = await db`
@@ -138,6 +146,7 @@ export async function seedFirmDemo(
   db: Db,
   log: (m: string) => void = () => {},
 ): Promise<{ organizationId: string; companyIds: string[]; users: { owner: string; accountant: string; reviewer: string } }> {
+  assertDemoSeedAllowed();
   const [org] = await db`INSERT INTO organization (name, kind, plan, mfa_required) VALUES ('Cabinet Démo Portail', 'FIRM', 'CABINET', true) RETURNING id`;
   const organizationId = org!.id as string;
   const roles = [
@@ -225,6 +234,7 @@ export async function seedFirmDemo(
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
+  assertDemoSeedAllowed();
   const db = createDb();
   seedDemo(db, console.log)
     .then(() => db.end())

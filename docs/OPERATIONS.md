@@ -28,7 +28,7 @@ pnpm db:migrate                 # toutes les migrations, sous le compte proprié
 APP_DB_PASSWORD='<mot de passe fort>' pnpm exec tsx scripts/provision-app-role.mts
 QUEUE_DB_PASSWORD='<autre mot de passe fort>' pnpm exec tsx scripts/provision-queue-role.mts
 
-SEED_FIRM=1 pnpm db:seed        # dossier PME + cabinet de démonstration (développement uniquement)
+NODE_ENV=development ALLOW_DEMO_SEED=1 SEED_FIRM=1 pnpm db:seed # données fictives, développement uniquement
 pnpm preflight                  # contrôle complet : base, RLS, droits, identité, messagerie
 pnpm dev                        # web :3000, API :4000
 pnpm worker                     # dans un second terminal

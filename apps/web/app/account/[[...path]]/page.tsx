@@ -14,7 +14,10 @@ export default async function AccountPage() {
       <Link href="/api/session/landing" className="mb-6 inline-block text-sm font-medium text-sky-700 underline dark:text-sky-300">
         Return to ARCOMPT
       </Link>
-      <h1 className="mb-6 text-2xl font-semibold">Account and sign-in security</h1>
+      <h1 className="mb-6 text-2xl font-semibold">Compte et sécurité</h1>
+      <Link href="/account/security" className="mb-6 block rounded-xl border border-sky-200 bg-sky-50 p-4 font-medium text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200">
+        Configurer ou vérifier la double authentification ARCOMPT →
+      </Link>
       <ClerkUserProfile />
     </main>
   );

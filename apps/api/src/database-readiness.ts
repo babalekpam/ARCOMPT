@@ -3,8 +3,10 @@
 import type { Sql } from "postgres";
 import { describeViolation, verifyAppPrivileges } from "@arcompt/db";
 
-const REQUIRED_TABLES = ["onboarding_bootstrap", "platform_admin", "platform_admin_audit", "background_job", "background_job_review"] as const;
+const REQUIRED_TABLES = ["onboarding_bootstrap", "platform_admin", "platform_admin_audit", "background_job", "background_job_review", "app_mfa_factor", "app_mfa_proof"] as const;
 const REQUIRED_POLICIES = [
+  ["app_mfa_factor", "app_mfa_factor_internal"],
+  ["app_mfa_proof", "app_mfa_proof_internal"],
   ["onboarding_bootstrap", "onboarding_bootstrap_access"],
   ["platform_admin", "platform_admin_internal"],
   ["platform_admin_audit", "platform_admin_audit_internal"],
@@ -14,6 +16,11 @@ const REQUIRED_POLICIES = [
   ["background_job_review", "background_job_review_owner"],
 ] as const;
 const REQUIRED_FUNCTIONS = [
+  "public.app_mfa_attempt(text)",
+  "public.app_mfa_enroll(text,text)",
+  "public.app_mfa_lock(text)",
+  "public.app_mfa_status(text,text,text)",
+  "public.app_mfa_complete(text,text,text,bigint,text,text,text[],text)",
   "public.auth_bootstrap_lookup(text,text)",
   "public.auth_bootstrap_replay(text)",
   "public.platform_admin_identity(text)",
@@ -162,6 +169,11 @@ export async function assertProductionDatabaseSecurity(db: Sql): Promise<void> {
         CASE WHEN EXISTS (SELECT 1 FROM pg_roles qr WHERE qr.rolname = 'arcompt_queue')
           THEN has_function_privilege('arcompt_queue', p.oid, 'EXECUTE') ELSE NULL END AS queue_execute
       FROM (VALUES
+        ('public.app_mfa_attempt(text)'),
+        ('public.app_mfa_enroll(text,text)'),
+        ('public.app_mfa_lock(text)'),
+        ('public.app_mfa_status(text,text,text)'),
+        ('public.app_mfa_complete(text,text,text,bigint,text,text,text[],text)'),
         ('public.auth_bootstrap_lookup(text,text)'),
         ('public.auth_bootstrap_replay(text)'),
         ('public.platform_admin_identity(text)'),

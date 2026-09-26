@@ -15,7 +15,7 @@ export default async function AccessPendingPage({
     : reason === "session"
       ? ["Session expired", "Your sign-in could not be verified. Sign out and sign in again."]
       : reason === "mfa"
-        ? ["Second factor required", "Your account needs multi-factor authentication. Enroll a second factor in your Clerk account, then sign in again."]
+        ? ["Double authentification requise", "Configurez ou vérifiez votre authentificateur dans ARCOMPT. Aucun abonnement MFA payant Clerk n’est nécessaire."]
         : reason === "suspended"
           ? ["Account suspended", "Please contact your organization administrator to restore access."]
           : reason === "denied"
@@ -28,9 +28,9 @@ export default async function AccessPendingPage({
         <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
           {content[1]}
         </p>
-        {reason === "session" || reason === "mfa" ? <RetrySignIn /> : null}
-        {(reason === "mfa" || !reason) ? <Link href="/account" className="mt-5 block text-sm font-medium text-teal-700 underline dark:text-teal-300">
-          Open account settings to set up a second factor
+        {reason === "session" ? <RetrySignIn /> : null}
+        {(reason === "mfa" || !reason) ? <Link href="/account/security" className="mt-5 block text-sm font-medium text-teal-700 underline dark:text-teal-300">
+          Configurer ou vérifier la double authentification ARCOMPT
         </Link> : null}
         {reason === "unavailable" ? <Link href="/api/session/landing" className="mt-5 inline-block text-sm font-medium text-teal-700 underline dark:text-teal-300">Try again</Link> : null}
         <Link href="/" className="mt-5 inline-block text-sm font-medium text-teal-700 underline dark:text-teal-300">

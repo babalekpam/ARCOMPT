@@ -34,6 +34,7 @@ import { whatsappRoutes } from "./routes/whatsapp.js";
 import { whatsappLinkRoutes } from "./routes/whatsapp-link.js";
 import { platformRoutes } from "./routes/platform.js";
 import { sessionRoutes } from "./routes/session.js";
+import { mfaRoutes, mfaStatus } from "./mfa.js";
 import type { JobQueue } from "@arcompt/jobs";
 import { withTenant } from "@arcompt/db";
 
@@ -92,6 +93,7 @@ export function createApp(deps: AppDeps) {
       ...(db
         ? {
             resolveIdentity: (sub: string, hints: TokenIdentityHints) => resolveIdentity(db, sub, hints),
+            resolveAppMfa: (sub: string, sid: string, proof?: string) => mfaStatus(db, sub, sid, proof),
             touchLastActive: (userId: string) => touchLastActive(db, userId),
             resolvePlatformAdmin: (sub: string) => resolvePlatformAdmin(db, sub),
             resolvePlatformCompany: (sub: string, companyId: string) => resolvePlatformCompany(db, sub, companyId),
@@ -208,6 +210,7 @@ export function createApp(deps: AppDeps) {
   api.route("/portal", portalRoutes(deps));
   api.route("/platform", platformRoutes(db ? (sub: string) => resolvePlatformCompanies(db, sub) : undefined));
   api.route("/", sessionRoutes(deps));
+  api.route("/security/mfa", mfaRoutes(db));
   app.route("/v1", api);
 
   // Canaux entrants sans jeton : WhatsApp (signature Meta) et webhooks de paiement (HMAC + anti-rejeu).

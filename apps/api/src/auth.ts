@@ -45,6 +45,7 @@ export interface AuthContext {
   platformSub?: string;
   /** Verified Clerk subject/profile for the tenantless bootstrap route only. */
   clerkSub?: string;
+  mfaIdentity?: { sub: string; sid: string; email: string };
   clerkEmail?: string;
   clerkDisplayName?: string;
   /** Verified primary address and session factor for tenant-free invitation acceptance. */
@@ -163,6 +164,7 @@ declare module "hono" {
 }
 
 export interface AuthOptions {
+  resolveAppMfa?: (sub: string, sid: string, proof?: string) => Promise<{ enabled: boolean; verified: boolean }>;
   mode: "dev" | "oidc" | "clerk";
   issuer?: string;
   audience?: string;
@@ -258,6 +260,8 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
 
   return async (c, next) => {
     const tenantHeader = c.req.header("x-tenant-id");
+    const mfaPath = /^\/(?:v1\/)?security\/mfa\/(?:status|enroll|confirm|verify|recovery-codes)$/.test(c.req.path);
+    if (mfaPath && opts.mode !== "clerk") return unauthorized(c, "Session Clerk vérifiée requise");
     if (opts.mode === "dev") {
       const userId = c.req.header("x-user-id");
       if (!userId || !tenantHeader) return unauthorized(c, "X-User-Id et X-Tenant-Id requis en mode dev");
@@ -299,10 +303,33 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
         log("warn", "auth.clerk.rejected", { reason: "session-claims-missing" });
         return unauthorized(c, "Jeton Clerk sans session (sub/sid)");
       }
+      if (mfaPath) {
+        try {
+          const account = await clerkLookup!(sub);
+          if (!account?.email || !account.emailVerified) return forbidden(c, "Adresse Clerk primaire vérifiée requise");
+          c.set("auth", { userId: "", tenantId: "", roles: [], mfaIdentity: { sub, sid: payload.sid, email: account.email } });
+          return next();
+        } catch {
+          return c.json({ error: { code: "IDENTITY_PROVIDER_UNAVAILABLE", message: "Profil Clerk inexploitable" } }, 503);
+        }
+      }
+      let secondFactor = hasClerkSecondFactor(payload.fva);
+      const appProof = c.req.header("x-arcompt-mfa");
+      if (!secondFactor && opts.resolveAppMfa) {
+        try {
+          // Enrollment is an account-wide opt-in, independent of the selected
+          // organization's policy. Check even when no proof header was sent,
+          // before discovery, linking, invitation or bootstrap can take place.
+          const factor = await opts.resolveAppMfa(sub, payload.sid, appProof);
+          secondFactor = factor.verified;
+          if (factor.enabled && !secondFactor) return forbidden(c, "Authentification multifacteur requise", "MFA_REQUIRED");
+        }
+        catch { return c.json({ error: { code: "MFA_UNAVAILABLE", message: "Authentification indisponible" } }, 503); }
+      }
       const platformAdmin = opts.resolvePlatformAdmin ? await opts.resolvePlatformAdmin(sub) : null;
       if (platformAdmin) {
         if (platformAdmin.suspendedAt) return forbidden(c, "Compte suspendu : contactez l'administrateur", "ACCOUNT_SUSPENDED");
-        if (!hasClerkSecondFactor(payload.fva)) return forbidden(c, "Authentification multifacteur requise pour l'administration de la plateforme", "MFA_REQUIRED");
+        if (!secondFactor) return forbidden(c, "Authentification multifacteur requise pour l'administration de la plateforme", "MFA_REQUIRED");
         if (membershipsPath) return c.json({ companies: [], canBootstrap: false });
         // Hono normally retains the mounted `/v1` prefix; accept the
         // sub-router form as well so this remains correct in isolated tests.
@@ -361,7 +388,7 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
       // before choosing a tenant. No other endpoint may skip tenant selection.
       if (invitationPath) {
         if (identity?.suspendedAt) return forbidden(c, "Compte suspendu", "ACCOUNT_SUSPENDED");
-        if (identity?.mfaRequired && !hasClerkSecondFactor(payload.fva)) return forbidden(c, "Authentification multifacteur requise", "MFA_REQUIRED");
+        if (identity?.mfaRequired && !secondFactor) return forbidden(c, "Authentification multifacteur requise", "MFA_REQUIRED");
         let account: { email?: string; emailVerified: boolean } | null;
         try {
           account = await clerkLookup!(sub);
@@ -373,7 +400,7 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
           userId: identity?.userId ?? "",
           tenantId: "",
           roles: [],
-          invitationIdentity: { sub, email: account.email, secondFactor: hasClerkSecondFactor(payload.fva) },
+          invitationIdentity: { sub, email: account.email, secondFactor },
         });
         return next();
       }
@@ -392,7 +419,7 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
         return forbidden(c, "Compte inconnu dans ARCOMPT : aucun utilisateur ne correspond à ce sujet Clerk");
       }
       if (identity.suspendedAt) return forbidden(c, "Compte suspendu : contactez l'administrateur de votre organisation", "ACCOUNT_SUSPENDED");
-      if (identity.mfaRequired && !hasClerkSecondFactor(payload.fva)) {
+      if (identity.mfaRequired && !secondFactor) {
         return forbidden(c, "Authentification multifacteur requise par votre organisation : reconnectez-vous avec un second facteur", "MFA_REQUIRED");
       }
       if (identity && bootstrapPath && opts.resolveBootstrapReplay) {

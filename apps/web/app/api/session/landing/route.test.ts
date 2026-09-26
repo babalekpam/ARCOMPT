@@ -88,13 +88,18 @@ describe("post-login account routing", () => {
     for (const [error, reason] of [
       [new ApiError(401, "UNAUTHORIZED", "Invalid session"), "session"],
       [new ApiError(403, "ACCOUNT_SUSPENDED", "Suspended"), "suspended"],
-      [new ApiError(403, "MFA_REQUIRED", "Second factor needed"), "mfa"],
     ] as const) {
       apiTry.mockResolvedValueOnce({ ok: false, error });
       const res = await GET(req());
       expect(destination(res)).toBe("/access-pending");
       expect(new URL(res.headers.get("location")!, "https://app.example").searchParams.get("reason")).toBe(reason);
     }
+  });
+
+  it("routes MFA challenges to app-owned security before tenant onboarding", async () => {
+    apiTry.mockResolvedValueOnce({ ok: false, error: new ApiError(403, "MFA_REQUIRED", "Second factor needed") });
+    expect(destination(await GET(req()))).toBe("/account/security");
+    expect(apiTry).toHaveBeenCalledTimes(1);
   });
 
   it("preserves a tenant discovery denial instead of reporting a service outage", async () => {

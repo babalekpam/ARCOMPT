@@ -32,4 +32,5 @@ export const COOKIES = {
   dev: "arcompt_dev",
   tenant: "arcompt_tenant",
   locale: "arcompt_locale",
+  mfa: "arcompt_mfa",
 } as const;

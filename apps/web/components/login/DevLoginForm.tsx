@@ -14,7 +14,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export function DevLoginForm() {
   const t = useT();
   const router = useRouter();
-  const [userId, setUserId] = useState("demo");
+  const [userId, setUserId] = useState("");
   const [tenantId, setTenantId] = useState("");
   const [organizationId, setOrganizationId] = useState("");
   const [error, setError] = useState<string | null>(null);

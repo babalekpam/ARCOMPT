@@ -16,7 +16,7 @@ function rejectedDestination(error: unknown): string {
   if (!(error instanceof ApiError)) return "/access-pending?reason=unavailable";
   if (error.status === 401) return "/access-pending?reason=session";
   if (error.code === "ACCOUNT_SUSPENDED") return "/access-pending?reason=suspended";
-  if (error.code === "MFA_REQUIRED") return "/access-pending?reason=mfa";
+  if (error.code === "MFA_REQUIRED") return "/account/security";
   return error.status === 403 ? "/access-pending?reason=denied" : "/access-pending?reason=unavailable";
 }
 

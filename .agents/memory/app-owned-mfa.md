@@ -1,0 +1,17 @@
+---
+name: App-owned authenticator verification
+description: Why MFA is implemented independently of Clerk's plan and how to preserve administrator safeguards.
+---
+
+Use app-owned authenticator verification rather than requiring a paid Clerk MFA
+upgrade. Do not exempt the designated platform administrator from second-factor
+verification.
+
+**Why:** The user encountered a Pro restriction in Clerk and explicitly chose
+app-owned verification over a lower-security administrator exemption.
+
+**How to apply:** Keep Clerk primary authentication, explicit audited administrator
+provisioning, customer-identity separation, and per-session second-factor checks.
+Enrollment alone is not a privilege grant. Opted-in ordinary accounts must also
+require verification; otherwise the account-security UI promises protection
+that first-factor-only sessions can bypass.

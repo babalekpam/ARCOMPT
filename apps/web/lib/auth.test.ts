@@ -14,6 +14,13 @@ describe("en-têtes d'authentification", () => {
     expect(h).toEqual({ Authorization: "Bearer tok", "X-Tenant-Id": "t1" });
   });
 
+  it("ne transmet la preuve MFA que depuis le contexte serveur", () => {
+    expect(buildHeaders({ mode: "clerk", accessToken: "tok", mfaProof: "opaque" })).toEqual({
+      Authorization: "Bearer tok", "X-Arcompt-Mfa": "opaque",
+    });
+    expect(buildHeaders({ mode: "dev", userId: "u" })).not.toHaveProperty("X-Arcompt-Mfa");
+  });
+
   it("lit le cookie dev et rejette les valeurs invalides", () => {
     expect(parseDevCookie(JSON.stringify({ userId: "u", tenantId: "t", organizationId: "o" }))).toEqual({ userId: "u", tenantId: "t", organizationId: "o" });
     expect(parseDevCookie(JSON.stringify({ tenantId: "t" }))).toBeNull();

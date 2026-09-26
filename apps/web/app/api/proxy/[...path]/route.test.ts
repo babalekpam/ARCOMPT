@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { acceptsMutationOrigin } from "@/lib/proxy-origin";
 
+vi.mock("@/lib/auth", () => ({ getAuthContext: vi.fn().mockResolvedValue({ headers: {} }) }));
+import { GET } from "./route";
 const request = (headers: Record<string, string>) => new NextRequest("https://internal.example/api/proxy/session/bootstrap", { method: "POST", headers });
 
 describe("authenticated API proxy mutation origin", () => {
@@ -17,5 +19,12 @@ describe("authenticated API proxy mutation origin", () => {
   it("checks explicit Origin when a client does not send Fetch Metadata", () => {
     expect(acceptsMutationOrigin(request({ origin: "https://internal.example" }))).toBe(true);
     expect(acceptsMutationOrigin(request({ origin: "https://other.example" }))).toBe(false);
+  });
+});
+
+describe("MFA proof isolation", () => {
+  it("blocks access to MFA responses through the generic proxy", async () => {
+    const res = await GET(new NextRequest("https://internal.example/api/proxy/security/mfa/confirm"), { params: Promise.resolve({ path: ["security", "mfa", "confirm"] }) });
+    expect(res.status).toBe(404);
   });
 });
