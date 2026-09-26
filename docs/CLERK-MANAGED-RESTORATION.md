@@ -2,8 +2,14 @@
 
 ## Scope and changes
 
-No keys, environment settings, Clerk users, domains, databases or administrator
-grants are changed by this restoration. Do not publish until reviewing the
+The code restoration did not change keys, environment settings, Clerk users,
+domains, databases or administrator grants. After separate user approval on
+2026-09-26, Replit's managed setup successfully set `CLERK_SECRET_KEY`,
+`CLERK_PUBLISHABLE_KEY` and `VITE_CLERK_PUBLISHABLE_KEY`. After restarting the
+development workflow, `/login` returned 200 and the branded form with Google
+sign-in rendered without the previous signing-key mismatch. Full password/Google
+login and production verification remain unproved; nothing was published.
+Do not publish until reviewing the
 environment checklist below. The site retains its existing styles, branded
 Clerk screens, customer identities, server-side authorization, app-owned MFA and
 dual administrator mode.

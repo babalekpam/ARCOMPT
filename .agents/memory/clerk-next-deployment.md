@@ -29,3 +29,15 @@ establish the cause of the application's subsequent session rejection.
 **How to apply:** Diagnose application verification from its own safe error
 codes and configured origins. Never replace managed runtime secrets based
 solely on a failed administrative lookup.
+
+Managed dashboard access does not imply permission to reveal secret keys.
+Prefer the approved managed provisioning flow over manual key copying when
+recovering overwritten development configuration.
+
+**Why:** A dashboard-authorized user could not reveal keys; the managed setup
+restored a matching development configuration and cleared a signing-key mismatch
+without requiring the user to expose credentials.
+
+**How to apply:** Obtain approval before provisioning changes secrets, then
+restart and verify preview. Do not infer production identity or connector health
+from a working development sign-in form.
