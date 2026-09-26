@@ -26,3 +26,15 @@ making existing encrypted records unreadable.
 **How to apply:** Keep the exact key bytes and purpose-separated derivation;
 reject missing/wrong-length keys without a fallback. Test equivalent encodings
 with synthetic keys, never log real key material.
+
+Do not assume Clerk dashboard access includes permission to reveal or create
+production secret keys in this Replit-managed tenant.
+
+**Why:** The user's production API-keys screenshot explicitly showed “You need
+additional permissions to view secret keys.” Repeated copy/rotation instructions
+cannot resolve that permission boundary.
+
+**How to apply:** Stop asking for dashboard key copying or rotation when that
+restriction appears. Use a supported managed administrative path or establish
+the needed permission first; never replace working app login keys to repair
+an administrative connector.
