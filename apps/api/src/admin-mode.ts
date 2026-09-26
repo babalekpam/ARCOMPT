@@ -31,16 +31,16 @@ export function adminModeRoutes(db?: Sql) {
     await next();
   });
   app.get("/status", async (c) => {
-    const { sub, sid } = c.get("auth").mfaIdentity!;
-    const [row] = await db!`SELECT platform_mode_eligible(${sub}) AS eligible`;
+    const { sub, sid, email } = c.get("auth").mfaIdentity!;
+    const [row] = await db!`SELECT platform_mode_eligible(${sub}) AS eligible, platform_mode_approved(${sub},${email}) AS approved`;
     const mode = await resolveAdminMode(db!, sub, modeEvidence(sid, c.req.header("x-arcompt-admin-mode"), c.req.header("x-arcompt-mfa")));
-    return c.json({ eligible: row?.eligible === true, active: !!mode, expiresAt: mode?.expiresAt ?? null });
+    return c.json({ eligible: row?.eligible === true || row?.approved === true, approvedPending: row?.approved === true, active: !!mode, expiresAt: mode?.expiresAt ?? null });
   });
   app.post("/activate", async (c) => {
-    const { sub, sid } = c.get("auth").mfaIdentity!;
+    const { sub, sid, email } = c.get("auth").mfaIdentity!;
     const token = randomBytes(32).toString("base64url");
     const e = modeEvidence(sid, token, c.req.header("x-arcompt-mfa"));
-    const [row] = await db!`SELECT platform_mode_activate(${sub},${sid},${e.proofHash},${e.tokenHash}) AS expires_at`;
+    const [row] = await db!`SELECT platform_mode_activate_approved(${sub},${email},${sid},${e.proofHash},${e.tokenHash}) AS expires_at`;
     if (!row?.expires_at) return c.json({ error: { code: "MFA_REQUIRED", message: "Autorisation administrateur et vérification MFA récente requises" } }, 403);
     return c.json({ token, expiresAt: new Date(row.expires_at).toISOString() });
   });

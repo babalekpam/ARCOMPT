@@ -55,7 +55,8 @@ export async function main(): Promise<void> {
       const [role] = await tx`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`;
       if (!role?.rolsuper && !role?.rolbypassrls) throw new Error("Compte DB privilégié requis (superuser ou BYPASSRLS), jamais arcompt_app.");
       if (action === "revoke") {
-        const [binding] = await tx`SELECT user_id FROM platform_admin_binding WHERE clerk_sub=${sub}`;
+        const [binding] = await tx`SELECT user_id FROM platform_admin_binding WHERE clerk_sub=${sub}
+          UNION ALL SELECT NULL::uuid FROM platform_admin_preapproval WHERE clerk_sub=${sub}`;
         if (binding) throw new Error("Identité dual-mode détectée : utilisez --dual-mode pour révoquer le droit et ses sessions.");
       }
       if (action === "grant") {
@@ -168,7 +169,16 @@ async function dualMode(action: string, sub: string, email: string | undefined, 
       }
       console.log(`Base : ${database} · ${action} dual-mode · ${sub} · ${operator} · ${reason}`);
       if (!apply) { console.log("Aucun changement (aperçu)."); return; }
-      if (action === "revoke" && !bound) { console.log("Aucun changement (sujet inconnu)."); return; }
+      if (action === "revoke") {
+        const revoked = await tx`UPDATE platform_admin_preapproval SET revoked_at=clock_timestamp()
+          WHERE clerk_sub=${sub} AND revoked_at IS NULL RETURNING clerk_sub`;
+        await tx`DELETE FROM platform_admin_mode WHERE clerk_sub=${sub}`;
+        if (!bound) {
+          if (revoked.length) await tx`INSERT INTO platform_admin_audit(method,path,event,reason,operator_label,database_role)
+            VALUES('CLI','/platform-admin/dual-mode/preapproval','REVOKE',${`${reason} (subject: ${sub})`},${operator},current_user)`;
+          console.log("Approbation éventuelle révoquée ; aucun droit actif."); return;
+        }
+      }
       if (!org) {
         const [row] = await tx`INSERT INTO organization(name,kind,plan) VALUES(${RESERVED_NAME},'GROUP','TRIAL') RETURNING id`;
         org = String(row!.id);

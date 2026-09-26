@@ -71,7 +71,7 @@ describe("server-only administrator mode cookie", () => {
   });
   it("returns status without exposing proof/token material", async () => {
     apiFetch.mockResolvedValue({ eligible: true, active: false, expiresAt: null });
-    expect(await (await GET(new NextRequest(url))).json()).toEqual({ eligible: true, active: false, expiresAt: null, canReturn: false });
+    expect(await (await GET(new NextRequest(url))).json()).toEqual({ eligible: true, active: false, expiresAt: null, approvedPending: false, canReturn: false });
     getAuthContext.mockResolvedValue(null);
     expect((await GET(new NextRequest(url))).status).toBe(401);
   });

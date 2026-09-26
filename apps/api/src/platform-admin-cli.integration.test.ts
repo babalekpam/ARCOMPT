@@ -27,6 +27,17 @@ function args(action = "grant", apply = false) {
     ...(apply ? ["--apply", "--confirm-db", new URL(env!.url).pathname.slice(1)] : [])];
 }
 run("platform admin CLI with app-owned MFA (disposable database only)", () => {
+  it("revokes a pending approval without a binding or Clerk lookup", async () => {
+    await env!.db`INSERT INTO platform_admin_preapproval(clerk_sub,expected_email,expires_at,operator_label,reason)
+      VALUES('pending_cli','pending@example.test',now()+interval '1 day','operator','approved')`;
+    process.argv = ["node", "/test/platform-admin.mts", "--action", "revoke", "--sub", "pending_cli",
+      "--dual-mode", "--reason", "cancelled approval", "--operator", "test", "--apply",
+      "--confirm-db", new URL(env!.url).pathname.slice(1)];
+    await main();
+    const [approval] = await env!.db`SELECT revoked_at FROM platform_admin_preapproval WHERE clerk_sub='pending_cli'`;
+    expect(approval!.revoked_at).not.toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it("checks exact subject, primary email and verified address independently of IdP MFA", async () => {
     expect(await clerkVerify(subject, email)).toBe(false);
     await expect(clerkVerify("different", email)).rejects.toThrow(/correspondent/);
@@ -47,11 +58,11 @@ run("platform admin CLI with app-owned MFA (disposable database only)", () => {
     args("grant", true);
     await main();
     expect(await env!.db`SELECT * FROM platform_admin WHERE active`).toHaveLength(1);
-    expect(await env!.db`SELECT event, reason FROM platform_admin_audit`).toEqual([{ event: "GRANT", reason: "isolated integration test" }]);
+    expect(await env!.db`SELECT event, reason FROM platform_admin_audit WHERE path='/platform-admin'`).toEqual([{ event: "GRANT", reason: "isolated integration test" }]);
     args("revoke", true);
     await main();
     expect(await env!.db`SELECT * FROM platform_admin WHERE active`).toHaveLength(0);
-    expect(await env!.db`SELECT event FROM platform_admin_audit ORDER BY id`).toEqual([{ event: "GRANT" }, { event: "REVOKE" }]);
+    expect(await env!.db`SELECT event FROM platform_admin_audit WHERE path='/platform-admin' ORDER BY id`).toEqual([{ event: "GRANT" }, { event: "REVOKE" }]);
     const [factor] = await env!.db`SELECT enabled_at FROM app_mfa_factor WHERE clerk_sub = ${subject}`;
     expect(factor?.enabled_at).toBeTruthy();
   });

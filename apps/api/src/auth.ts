@@ -251,6 +251,7 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
   const clerkLookup = opts.clerkUserLookup ?? (opts.clerkSecretKey
     ? async (userId: string) => {
         const user = await createClerkClient({ secretKey: opts.clerkSecretKey! }).users.getUser(userId);
+        if (user.id !== userId || user.banned || user.locked) return null;
         const address = user.emailAddresses.find((entry) => entry.id === user.primaryEmailAddressId);
         return address
           ? { email: address.emailAddress, emailVerified: address.verification?.status === "verified", displayName: user.firstName ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ""}` : undefined }

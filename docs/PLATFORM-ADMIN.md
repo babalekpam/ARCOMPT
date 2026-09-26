@@ -19,6 +19,41 @@ append-only. Ce journal enregistre la tentative, pas le résultat HTTP ; les
 
 ## Création et révocation
 
+### Préapprobation du même login client (migration 0032)
+
+Un opérateur privilégié peut préparer un octroi sans secret Clerk de maintenance.
+Dans la **base cible vérifiée**, exécuter cette requête paramétrée avec le rôle
+de maintenance (jamais le rôle HTTP) :
+
+```sql
+INSERT INTO public.platform_admin_preapproval
+  (clerk_sub, expected_email, expires_at, operator_label, reason)
+VALUES ($1, lower(btrim($2)), clock_timestamp() + interval '24 hours', $3, $4);
+```
+
+Paramètres : sujet Clerk exact, adresse primaire attendue, opérateur responsable,
+motif approuvé. Ne pas utiliser `ON CONFLICT UPDATE` : une approbation expirée,
+consommée ou révoquée n'est jamais réactivée implicitement. Aucun identifiant
+réel n'est embarqué dans les migrations.
+
+Cette ligne **n'accorde aucun droit**. Le GET de statut ne fait que la lire.
+Le titulaire voit « Passer en super-admin » ; la MFA manquante le renvoie vers
+la sécurité du compte. Le POST d'activation utilise uniquement le sujet/session
+du jeton Clerk vérifié et l'adresse primaire vérifiée relue au backend Clerk,
+qui refuse les comptes bannis/verrouillés. La transaction SQL exige une preuve
+MFA ARCOMPT fraîche liée à ce sujet et cette session, un facteur confirmé, un
+client existant non suspendu et une organisation interne sans dossier. Elle
+crée un principal distinct, conserve tous les dossiers/appartenances client,
+consomme l'approbation une seule fois, journalise opérateur/motif/session et
+active le mode dans la même transaction. Un échec d'activation annule l'octroi.
+
+Aucun endpoint public ne permet de créer/modifier une approbation. Le rôle
+HTTP n'a aucun accès direct à cette table FORCE RLS ; ses fonctions restreintes
+ne permettent que la lecture de statut et la consommation contrôlée.
+Une révocation `--dual-mode --action revoke` invalide aussi les approbations
+non consommées, même sans principal créé. La révocation d'un administrateur
+invalide ses sessions ; une approbation ne réactive jamais un droit révoqué.
+
 1. Configurez la MFA dans l'instance Clerk correspondante (Développement ou
    Production). Le titulaire crée son propre compte Clerk dédié, confirme son
    **adresse primaire** et enrôle un second facteur. Le mot de passe est géré

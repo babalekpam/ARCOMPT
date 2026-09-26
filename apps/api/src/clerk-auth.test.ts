@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { verifyToken, log } = vi.hoisted(() => ({ verifyToken: vi.fn(), log: vi.fn() }));
+const { verifyToken, log, getUser } = vi.hoisted(() => ({ verifyToken: vi.fn(), log: vi.fn(), getUser: vi.fn() }));
 vi.mock("./telemetry.js", () => ({ log }));
 vi.mock("@clerk/backend", () => ({
   verifyToken,
-  createClerkClient: vi.fn(),
+  createClerkClient: () => ({ users: { getUser } }),
 }));
 
 import { authMiddleware } from "./auth.js";
@@ -67,6 +67,22 @@ describe("Clerk API authentication", () => {
   it("rejects a verified non-session token without sid", async () => {
     verifyToken.mockResolvedValueOnce({ sub: "user_clerk", fva: [0, null] });
     expect((await request(app(async () => identity()))).status).toBe(401);
+  });
+
+  it("refreshes primary identity for admin mode and rejects banned, locked or mismatched Clerk profiles", async () => {
+    const hono = new Hono();
+    hono.use("*", authMiddleware({ mode: "clerk", clerkSecretKey: "test",
+      authorizedParties: ["https://app.example"], resolveIdentity: async () => identity() }));
+    hono.get("/v1/security/admin-mode/status", (c) => c.json(c.get("auth").mfaIdentity));
+    const profile = { id: "user_clerk", primaryEmailAddressId: "primary", banned: false, locked: false,
+      emailAddresses: [{ id: "primary", emailAddress: "verified@example.test", verification: { status: "verified" } }] };
+    for (const extra of [{ banned: true }, { locked: true }, { id: "other" }]) {
+      getUser.mockResolvedValueOnce({ ...profile, ...extra });
+      expect((await hono.request("/v1/security/admin-mode/status", { headers: { authorization: "Bearer session" } })).status).toBe(403);
+    }
+    getUser.mockResolvedValueOnce(profile);
+    const response = await hono.request("/v1/security/admin-mode/status", { headers: { authorization: "Bearer session" } });
+    expect(await response.json()).toEqual({ sub: "user_clerk", sid: "sess_1", email: "verified@example.test" });
   });
 
   it.each(["token-invalid-authorized-parties", "token-expired", "not-a-safe-code private-token"])(

@@ -16,9 +16,9 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await getAuthContext();
     if (!auth) return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401, headers: noStore });
-    const status = await apiFetch<{ eligible: boolean; active: boolean; expiresAt: string | null }>("/security/admin-mode/status", { headers: { "X-Tenant-Id": "" } });
+    const status = await apiFetch<{ eligible: boolean; approvedPending?: boolean; active: boolean; expiresAt: string | null }>("/security/admin-mode/status", { headers: { "X-Tenant-Id": "" } });
     return NextResponse.json({ eligible: status.eligible === true, active: status.active === true, expiresAt: status.expiresAt,
-      canReturn: !!req.cookies.get(COOKIES.customerTenant)?.value }, { headers: noStore });
+      approvedPending: status.approvedPending === true, canReturn: !!req.cookies.get(COOKIES.customerTenant)?.value }, { headers: noStore });
   } catch (error) { return failure(error); }
 }
 export async function POST(req: NextRequest) {
