@@ -5,10 +5,11 @@ import { I18nProvider } from "@/lib/i18n-client";
 import { getMessages, translate } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
 import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar";
-import { ClerkProvider } from "@clerk/nextjs";
+import { ManagedClerkProvider } from "@/components/login/ManagedClerkProvider";
+import { headers } from "next/headers";
 import { enUS, frFR } from "@clerk/localizations";
 import { shadcn } from "@clerk/themes";
-import { parseClerkHosting } from "@/lib/clerk-hosting";
+import { clerkHostname, clerkPublishableKey, clerkProxyUrl, parseClerkHosting } from "@/lib/clerk-hosting";
 import "./globals.css";
 
 /**
@@ -45,13 +46,15 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale();
-  const clerkHosting = parseClerkHosting(process.env.NEXT_PUBLIC_CLERK_HOSTING);
-  const clerkProxyUrl = process.env.NEXT_PUBLIC_CLERK_PROXY_URL?.trim();
+  const clerkHosting = parseClerkHosting(process.env.CLERK_HOSTING);
+  const publishableKey = clerkPublishableKey(clerkHostname(await headers()), process.env);
   return (
     <html lang={locale}>
       <body suppressHydrationWarning className="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
-        <ClerkProvider
-          {...(clerkHosting === "managed" && clerkProxyUrl ? { proxyUrl: clerkProxyUrl } : {})}
+        <ManagedClerkProvider
+          hosting={clerkHosting}
+          publishableKey={publishableKey}
+          proxyUrl={clerkProxyUrl(process.env)}
           localization={locale === "fr" ? frFR : enUS}
           appearance={{
             theme: shadcn,
@@ -82,7 +85,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {children}
             <ServiceWorkerRegistrar />
           </I18nProvider>
-        </ClerkProvider>
+        </ManagedClerkProvider>
       </body>
     </html>
   );

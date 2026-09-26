@@ -16,9 +16,9 @@ const nextConfig: NextConfig = {
   // secrets expose it under VITE_*, while Next client components use NEXT_PUBLIC_*.
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000",
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.VITE_CLERK_PUBLISHABLE_KEY ?? "",
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.CLERK_PUBLISHABLE_KEY ?? process.env.VITE_CLERK_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "",
     // External tenants use the Frontend API encoded in their publishable key.
-    // Managed builds retain Replit's proxy and same-origin production default.
+    // Managed builds forward only the provisioned proxy (empty in development).
     NEXT_PUBLIC_CLERK_HOSTING: clerkHosting,
     NEXT_PUBLIC_CLERK_PROXY_URL: resolvedClerkProxyUrl ?? "",
     NEXT_PUBLIC_AUTH_MODE: process.env.AUTH_MODE ?? "dev",
