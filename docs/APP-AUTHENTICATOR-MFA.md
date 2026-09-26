@@ -51,7 +51,7 @@ grant or user enrollment was performed during this implementation.
   NaviMed or substitute an owner connection for the runtime app login.
 - Publish the matching API and web code together. Only then direct production
   users to the enrollment page.
-- Preserve `PAYROLL_ENCRYPTION_KEY` (canonical base64 encoding of 32 random bytes)
+- Preserve `PAYROLL_ENCRYPTION_KEY` (base64 encoding of 32 random bytes)
   across restarts and publishes. MFA uses purpose-separated key derivation, not
   the payroll encryption context. No additional secret is required.
   Changing it without a planned migration can make enrolled factors unreadable.

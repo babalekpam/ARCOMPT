@@ -35,7 +35,9 @@ function key(): Buffer {
   // after restarts and must never depend on a public/dev signing key.
   const encoded = process.env.PAYROLL_ENCRYPTION_KEY;
   const master = Buffer.from(encoded ?? "", "base64");
-  if (master.length !== 32 || master.toString("base64") !== encoded) throw new Error("MFA_KEY_UNAVAILABLE");
+  // Match the existing payroll key decoder: alternate base64 representations
+  // must derive the same key bytes. Never rotate a shared key to fix formatting.
+  if (master.length !== 32) throw new Error("MFA_KEY_UNAVAILABLE");
   return Buffer.from(hkdfSync("sha256", master, "ARCOMPT", "authenticator-mfa:v1", 32));
 }
 export function encryptMfa(secret: Buffer, sub: string): string {

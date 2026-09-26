@@ -3,6 +3,28 @@ import { base32, decryptMfa, encryptMfa, matchingStep, totp } from "./mfa.js";
 
 afterEach(() => vi.unstubAllEnvs());
 describe("authenticator cryptography", () => {
+  it("preserves key bytes for legacy base64 representations", () => {
+    const canonical = Buffer.alloc(32, 7).toString("base64");
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const alternatePadBits = canonical.slice(0, -2) +
+      alphabet[alphabet.indexOf(canonical.at(-2)!) + 1] + "=";
+    vi.stubEnv("PAYROLL_ENCRYPTION_KEY", canonical);
+    const secret = Buffer.alloc(20, 3);
+    const ciphertext = encryptMfa(secret, "user_a");
+    for (const encoded of [canonical.replace(/=+$/, ""), ` ${canonical}\n`, alternatePadBits]) {
+      vi.stubEnv("PAYROLL_ENCRYPTION_KEY", encoded);
+      expect(decryptMfa(ciphertext, "user_a")).toEqual(secret);
+      const encrypted = encryptMfa(secret, "user_a");
+      vi.stubEnv("PAYROLL_ENCRYPTION_KEY", canonical);
+      expect(decryptMfa(encrypted, "user_a")).toEqual(secret);
+    }
+  });
+  it("rejects missing or wrong-length master keys without a development fallback", () => {
+    for (const encoded of ["", "invalid", Buffer.alloc(31).toString("base64"), Buffer.alloc(33).toString("base64")]) {
+      vi.stubEnv("PAYROLL_ENCRYPTION_KEY", encoded);
+      expect(() => encryptMfa(Buffer.alloc(20), "user_a")).toThrow("MFA_KEY_UNAVAILABLE");
+    }
+  });
   it("matches RFC4226/RFC6238 SHA1 vectors truncated to six digits", () => {
     const secret = Buffer.from("12345678901234567890");
     expect(base32(secret)).toBe("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");

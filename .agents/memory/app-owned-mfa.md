@@ -15,3 +15,14 @@ provisioning, customer-identity separation, and per-session second-factor checks
 Enrollment alone is not a privilege grant. Opted-in ordinary accounts must also
 require verification; otherwise the account-security UI promises protection
 that first-factor-only sessions can bypass.
+
+When reusing an existing encryption master key for a new purpose, preserve the
+existing decoder's byte semantics, not a stricter textual encoding requirement.
+
+**Why:** Requiring canonical base64 in MFA rejected an existing 32-byte master
+key accepted by payroll. Replacing the key to satisfy formatting would risk
+making existing encrypted records unreadable.
+
+**How to apply:** Keep the exact key bytes and purpose-separated derivation;
+reject missing/wrong-length keys without a fallback. Test equivalent encodings
+with synthetic keys, never log real key material.
