@@ -39,20 +39,20 @@ export async function AppShell({ auth, children }: { auth: AuthContext; children
           <div className="ml-auto flex items-center gap-2">
             <CompanySwitcher tenantId={auth.tenantId} platformAdmin={platformAdmin} />
             <LocaleSwitcher compact />
-            <UserMenu displayName={displayName} />
+            <UserMenu displayName={displayName} platformAdmin={platformAdmin} />
           </div>
         </header>
         {auth.mode === "clerk" ? <AdminModeSwitch /> : null}
         {auth.tenantId ? <ReminderReviewAlert key={auth.tenantId} tenantId={auth.tenantId} /> : null}
         <OfflineIndicator />
         <main className="flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10">
-          {platformAdmin && !auth.tenantId ? <Link href="/platform" className="mb-4 block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Select a company to continue with platform administration.</Link> : null}
+          {platformAdmin && !auth.tenantId ? <Link href="/platform" className="mb-4 block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">Administration plateforme : vue d’ensemble et sélection d’un dossier.</Link> : null}
           {children}
         </main>
         {/* Signature de l'éditeur, discrète et présente sur chaque écran. */}
         <footer className="px-4 pb-24 text-center text-xs text-slate-400 md:px-8 md:pb-6 dark:text-slate-600">{t("brand.signature")}</footer>
       </div>
-      <BottomNav />
+      <BottomNav platformAdmin={platformAdmin} />
     </div>
   );
 }

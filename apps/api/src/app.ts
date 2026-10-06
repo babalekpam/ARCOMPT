@@ -215,7 +215,11 @@ export function createApp(deps: AppDeps) {
   });
   api.route("/portal", portalRoutes(deps));
   api.route("/platform", platformRoutes(db ? (sub: string, mode?: AdminModeEvidence) => mode
-    ? modeCompanies(db, sub, mode) : resolvePlatformCompanies(db, sub) : undefined));
+    ? modeCompanies(db, sub, mode) : resolvePlatformCompanies(db, sub) : undefined,
+    db ? async (sub, mode) => {
+      const [row] = await db`SELECT platform_overview(${sub},${mode?.sid ?? null},${mode?.tokenHash ?? null},${mode?.proofHash ?? null}) AS data`;
+      return row?.data;
+    } : undefined));
   api.route("/", sessionRoutes(deps));
   api.route("/security/mfa", mfaRoutes(db));
   api.route("/security/admin-mode", adminModeRoutes(db));

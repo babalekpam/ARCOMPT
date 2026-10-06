@@ -8,18 +8,20 @@ import { useT } from "@/lib/i18n-client";
 import { BOTTOM_NAV, isActivePath, MAIN_NAV, SOON_NAV } from "@/lib/nav";
 
 /** Barre de navigation inférieure (mobile) : quatre sections + menu « Plus ». */
-export function BottomNav() {
+export function BottomNav({ platformAdmin = false }: { platformAdmin?: boolean }) {
   const pathname = usePathname();
   const t = useT();
   const [moreOpen, setMoreOpen] = useState(false);
   const more = [...MAIN_NAV.slice(4), ...SOON_NAV];
-  const moreActive = more.some((i) => isActivePath(pathname, i.href));
+  const moreActive = more.some((i) => isActivePath(pathname, i.href)) || pathname === "/account/security" || (platformAdmin && pathname === "/platform");
   return (
     <>
       {moreOpen ? (
         <div className="fixed inset-0 z-30 bg-slate-900/40 md:hidden" onClick={() => setMoreOpen(false)}>
           <div className="absolute inset-x-0 bottom-16 rounded-t-2xl bg-white p-3 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
             <ul className="grid grid-cols-2 gap-1">
+              <li><Link href="/account/security" onClick={() => setMoreOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">Sécurité du compte</Link></li>
+              {platformAdmin && <li><Link href="/platform" onClick={() => setMoreOpen(false)} className="block rounded-lg px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 dark:text-amber-200 dark:hover:bg-amber-950/30">Vue d’ensemble admin</Link></li>}
               {more.map((item) => (
                 <li key={item.href}>
                   <Link href={item.href} onClick={() => setMoreOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">

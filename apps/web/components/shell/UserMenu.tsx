@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 "use client";
 import { useClerk } from "@clerk/nextjs";
+import Link from "next/link";
 import { useTransition } from "react";
 import { useT } from "@/lib/i18n-client";
 import { resetOfflineServices } from "@/lib/offline-browser";
 import { Button } from "@/components/ui/Button";
 
-export function UserMenu({ displayName }: { displayName: string }) {
+export function UserMenu({ displayName, platformAdmin = false }: { displayName: string; platformAdmin?: boolean }) {
   const t = useT();
   const { signOut } = useClerk();
   const [pending, start] = useTransition();
@@ -21,6 +22,14 @@ export function UserMenu({ displayName }: { displayName: string }) {
     });
   return (
     <div className="flex items-center gap-2">
+      <details className="relative">
+        <summary className="cursor-pointer rounded-lg px-2 py-1.5 text-xs font-medium text-slate-700 focus-visible:outline dark:text-slate-200">Compte</summary>
+        <nav aria-label="Menu du compte" className="absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-slate-200 bg-[#F7F5F0] p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+          <Link href="/account" className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">Mon compte</Link>
+          <Link href="/account/security" className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">Sécurité · double authentification</Link>
+          {platformAdmin && <Link href="/platform" className="block rounded-lg px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 dark:text-amber-200 dark:hover:bg-amber-950/30">Vue d’ensemble admin</Link>}
+        </nav>
+      </details>
       <span className="hidden max-w-[10rem] truncate text-xs text-slate-500 sm:inline" title={displayName}>
         {displayName}
       </span>

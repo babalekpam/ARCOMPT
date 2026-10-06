@@ -22,3 +22,14 @@ expected verified primary email. Approval alone is not a grant. Consumption must
 atomically verify the live identity and fresh session-bound MFA, provision the
 separate principal, record the audit, and activate mode. Do not claim access is
 active while approval is pending or its supporting code is not yet published.
+
+The user expects super-admin to be a platform-wide tenant overview with real
+statistics, not merely an MFA settings page or company picker.
+
+**Why:** Sending the user to Security without a clear onward action made the MFA
+gate look like the complete administrator dashboard.
+
+**How to apply:** Keep Security distinct from the platform overview; make
+verification, explicit activation, and dashboard navigation clear on phones.
+Include empty customer organizations in tenant discovery and exclude the
+reserved internal organization from customer statistics.

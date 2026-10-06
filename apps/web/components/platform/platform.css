@@ -1,0 +1,19 @@
+.platform-overview {
+  --overview-ink: #0f2a43;
+  --overview-surface: #f0f5f3;
+  --overview-border: #d8e4df;
+}
+.platform-stat {
+  border: 1px solid var(--overview-border);
+  background: var(--overview-surface);
+  color: var(--overview-ink);
+}
+.dark .platform-overview {
+  --overview-ink: #deede6;
+  --overview-surface: #142a30;
+  --overview-border: #2c454a;
+}
+.platform-overview :is(button, a, input):focus-visible {
+  outline: 2px solid #0e9f6e;
+  outline-offset: 3px;
+}

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useClerk } from "@clerk/nextjs";
+import { isAdminActivationContinuation } from "@/lib/admin-mode-ui";
 
 type Status = { enabled: boolean; verified: boolean; expiresAt?: string };
 type Enrollment = { secret: string; otpauthUri: string; expiresAt: string };
@@ -33,7 +34,7 @@ function codesFrom(data: Record<string, unknown>): string[] {
   return Array.isArray(data.recoveryCodes) ? data.recoveryCodes.filter((code): code is string => typeof code === "string") : [];
 }
 
-export function MfaSecurity() {
+export function MfaSecurity({ onRecoveryCodesChange }: { onRecoveryCodesChange?: (pending: boolean) => void }) {
   const { signOut } = useClerk();
   const [status, setStatus] = useState<Status | null>(null);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
@@ -44,6 +45,13 @@ export function MfaSecurity() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [adminContinuation, setAdminContinuation] = useState(false);
+  const recoveryCallback = useRef(onRecoveryCodesChange);
+  recoveryCallback.current = onRecoveryCodesChange;
+  useEffect(() => { recoveryCallback.current?.(recoveryCodes.length > 0); }, [recoveryCodes.length]);
+  useEffect(() => {
+    setAdminContinuation(isAdminActivationContinuation(window.location.pathname, window.location.search));
+  }, []);
 
   const refresh = useCallback(async () => {
     const data = await request();
@@ -78,8 +86,7 @@ export function MfaSecurity() {
           setNotice(action === "confirm" ? "Authentificateur activé. Enregistrez vos codes de secours maintenant." : "Nouveaux codes créés. Les anciens codes et votre vérification précédente ne sont plus valables. Vérifiez-vous à nouveau.");
           if (action === "recovery-codes") setStatus((current) => current ? { ...current, verified: false, expiresAt: undefined } : null);
         } else {
-          setRecoveryCodes([]);
-          setNotice("Vérification réussie. Votre accès est actif pour cette session.");
+          setNotice(adminContinuation ? "Vérification réussie. Vous pouvez maintenant activer le mode super-admin en haut de cette page." : "Vérification MFA réussie pour cette session. Les autorisations d’accès restent vérifiées séparément.");
         }
         setCode("");
         setRotationCode("");
@@ -103,8 +110,9 @@ export function MfaSecurity() {
   }
 
   return (
-    <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <h1 className="text-2xl font-semibold">Sécurité du compte · double authentification</h1>
+    <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 dark:border-slate-700 dark:bg-slate-900">
+      <h2 className="text-xl font-semibold">Double authentification</h2>
+      {adminContinuation && <p role="status" className="mt-3 rounded-lg bg-sky-50 p-3 text-sm text-sky-900 dark:bg-sky-950 dark:text-sky-200">Vérifiez cette session, puis activez le mode super-admin en haut de cette page. Aucune activation automatique : votre compte reste inchangé.</p>}
       <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">ARCOMPT gère son propre second facteur. Aucun abonnement MFA payant de Clerk n’est nécessaire. Votre connexion Clerk reste inchangée.</p>
       {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">{error}</p>}
       {notice && <p role="status" className="mt-5 rounded-lg bg-teal-50 p-3 text-sm text-teal-800 dark:bg-teal-950 dark:text-teal-200">{notice}</p>}
@@ -139,7 +147,7 @@ export function MfaSecurity() {
         {recoveryCodes.length > 0 && <div className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:bg-amber-950">
           <h2 className="font-semibold">Codes de secours · affichage unique</h2>
           <p className="mt-2 text-sm">Enregistrez-les maintenant dans un lieu sûr, hors de cet appareil. Chaque code ne sert qu’une fois. Ils ne seront plus affichés après avoir quitté cette page.</p>
-          <ul className="mt-3 grid grid-cols-2 gap-2 font-mono text-sm">{recoveryCodes.map((item) => <li key={item}>{item}</li>)}</ul>
+          <ul className="mt-3 grid grid-cols-1 gap-2 font-mono text-sm sm:grid-cols-2">{recoveryCodes.map((item) => <li key={item} className="break-all">{item}</li>)}</ul>
           <button type="button" onClick={() => copy(recoveryCodes.join("\n"))} className="mt-3 text-sm text-sky-700 underline">Copier tous les codes</button>
           <button type="button" onClick={() => setRecoveryCodes([])} className="ml-4 text-sm text-slate-600 underline">J’ai sauvegardé mes codes</button>
         </div>}
@@ -154,8 +162,8 @@ export function MfaSecurity() {
         </div>}
       </>}
       <div className="mt-8 flex flex-wrap gap-5 border-t border-slate-200 pt-5 text-sm dark:border-slate-700">
-        {status?.verified && <Link href="/api/session/landing" className="font-medium text-sky-700 underline dark:text-sky-300">Continuer vers ARCOMPT</Link>}
-        <Link href="/account" className="font-medium text-sky-700 underline dark:text-sky-300">Retour au compte</Link>
+        {status?.verified && !recoveryCodes.length && (adminContinuation ? <a href="#admin-mode" className="font-medium text-sky-700 underline dark:text-sky-300">Continuer : activer le mode super-admin</a> : <Link href="/api/session/landing" className="font-medium text-sky-700 underline dark:text-sky-300">Continuer vers ARCOMPT</Link>)}
+        {!recoveryCodes.length && <Link href="/account" className="font-medium text-sky-700 underline dark:text-sky-300">Retour au compte</Link>}
         <button type="button" onClick={() => { void logout(); }} className="text-slate-600 underline dark:text-slate-300">Se déconnecter</button>
       </div>
       <p className="mt-4 text-xs text-slate-500">L’activation seule n’accorde aucun rôle administrateur ni accès à un dossier. ARCOMPT vérifie les autorisations séparément.</p>
