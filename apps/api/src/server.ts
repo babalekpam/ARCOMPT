@@ -14,6 +14,7 @@ import { beginDraining } from "./health.js";
 import { initTelemetry, log } from "./telemetry.js";
 import { PostgresQueue } from "./postgres-queue.js";
 import { registerJobHandlers } from "./job-handlers.js";
+import { runtimeAiEnv, enableStoredAiSettings } from "@arcompt/documents";
 
 /**
  * La validation passe avant tout le reste : en production elle lève en listant
@@ -21,13 +22,14 @@ import { registerJobHandlers } from "./job-handlers.js";
  * un simulateur (extraction IA inventée, antivirus neutre, stockage éphémère,
  * encaissement fictif, certification fiscale fabriquée).
  */
-const cfg = loadConfig();
+const appDatabaseUrl = applicationDatabaseUrl();
+const db = appDatabaseUrl ? createDb({ url: appDatabaseUrl }) : createDb();
+const cfg = loadConfig(await runtimeAiEnv(db as unknown as Sql));
+enableStoredAiSettings();
 for (const d of cfg.degraded) log("warn", "api.degraded", { detail: d });
 
 await initTelemetry();
 
-const appDatabaseUrl = applicationDatabaseUrl();
-const db = appDatabaseUrl ? createDb({ url: appDatabaseUrl }) : createDb();
 const queueUrl = process.env.REDIS_URL ? undefined : queueDatabaseUrl();
 if (cfg.isProduction) assertDistinctDatabaseUrls(appDatabaseUrl, queueUrl);
 const queueDb = queueUrl ? createDb({ url: queueUrl }) : db;

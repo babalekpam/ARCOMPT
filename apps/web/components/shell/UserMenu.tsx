@@ -28,6 +28,7 @@ export function UserMenu({ displayName, platformAdmin = false }: { displayName: 
           <Link href="/account" className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">Mon compte</Link>
           <Link href="/account/security" className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">Sécurité · double authentification</Link>
           {platformAdmin && <Link href="/platform" className="block rounded-lg px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 dark:text-amber-200 dark:hover:bg-amber-950/30">Vue d’ensemble admin</Link>}
+          {platformAdmin && <Link href="/platform/ai" className="block rounded-lg px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 dark:text-amber-200 dark:hover:bg-amber-950/30">Fournisseurs IA</Link>}
         </nav>
       </details>
       <span className="hidden max-w-[10rem] truncate text-xs text-slate-500 sm:inline" title={displayName}>

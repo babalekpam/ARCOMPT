@@ -11,5 +11,6 @@ export * from "./service.js";
 export * from "./assistant.js";
 export * from "./anomalies.js";
 export * from "./factory.js";
+export * from "./ai-settings.js";
 export { AiGatewayError, MockProvider as MockModelProvider, MemoryCallLogger } from "@arcompt/ai-gateway";
 export { resolveAiProviderSelection, AI_PROVIDER_KEYS, type AiProviderSelection, type AiProviderName } from "@arcompt/ai-gateway";

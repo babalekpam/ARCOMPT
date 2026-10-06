@@ -33,6 +33,7 @@ import { treasuryRoutes } from "./routes/treasury.js";
 import { whatsappRoutes } from "./routes/whatsapp.js";
 import { whatsappLinkRoutes } from "./routes/whatsapp-link.js";
 import { platformRoutes } from "./routes/platform.js";
+import { platformAiRoutes } from "./routes/platform-ai.js";
 import { sessionRoutes } from "./routes/session.js";
 import { mfaRoutes, mfaStatus } from "./mfa.js";
 import { adminModeRoutes, resolveAdminMode, modeCompanies, modeAccess, type AdminModeEvidence } from "./admin-mode.js";
@@ -214,6 +215,7 @@ export function createApp(deps: AppDeps) {
       : c.json({ error: { code: "CONFLICT", message: "Relance introuvable ou déjà examinée" } }, 409);
   });
   api.route("/portal", portalRoutes(deps));
+  api.route("/platform/ai", platformAiRoutes(db));
   api.route("/platform", platformRoutes(db ? (sub: string, mode?: AdminModeEvidence) => mode
     ? modeCompanies(db, sub, mode) : resolvePlatformCompanies(db, sub) : undefined,
     db ? async (sub, mode) => {

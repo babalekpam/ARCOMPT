@@ -79,6 +79,7 @@ export function AdminModeSwitch({ prominent = false, recoveryPending = false }: 
          <p className="mt-1 text-xs leading-relaxed opacity-90">{mode.active ? "Accès aux dossiers journalisé. Votre compte utilisateur reste inchangé." : mode.canReturn ? "Revenez à votre compte, puis réactivez le mode si vous êtes autorisé." : mode.approvedPending ? "L’approbation n’est pas un accès actif. Une vérification MFA récente reste obligatoire." : mode.eligible ? "Activez explicitement le mode avec une vérification MFA récente, puis ouvrez la vue d’ensemble." : "Cette page sécurise votre connexion. La MFA seule ne donne aucun droit administrateur."}</p>
        </div>
        {mode.active && !recoveryPending && !error && <Link href="/platform" className="rounded-lg bg-brand px-3 py-2 font-semibold text-slate-50 dark:bg-amber-100 dark:text-amber-950">Vue d’ensemble admin</Link>}
+       {mode.active && !recoveryPending && !error && <Link href="/platform/ai" className="rounded-lg border border-current px-3 py-2 font-semibold">Fournisseurs IA</Link>}
        {(returning || mode.eligible) && <button type="button" disabled={busy || recoveryPending} onClick={() => void change(returning ? "deactivate" : "activate")} className="rounded-lg border border-current px-3 py-2 font-semibold disabled:opacity-50">
         {busy ? "Veuillez patienter…" : returning ? "Revenir à mon compte" : "Passer en super-admin"}
        </button>}

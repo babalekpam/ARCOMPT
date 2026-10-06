@@ -4,6 +4,7 @@ import { acceptsMutationOrigin } from "@/lib/proxy-origin";
 
 vi.mock("@/lib/auth", () => ({ getAuthContext: vi.fn().mockResolvedValue({ headers: {} }) }));
 import { GET } from "./route";
+import { getAuthContext } from "@/lib/auth";
 const request = (headers: Record<string, string>) => new NextRequest("https://internal.example/api/proxy/session/bootstrap", { method: "POST", headers });
 
 describe("authenticated API proxy mutation origin", () => {
@@ -23,6 +24,16 @@ describe("authenticated API proxy mutation origin", () => {
 });
 
 describe("MFA proof isolation", () => {
+  it("clears stale company selection for platform routes while retaining server auth", async () => {
+    vi.mocked(getAuthContext).mockResolvedValueOnce({headers:{"X-Tenant-Id":"stale-company",Authorization:"Bearer test-server-token"}} as never);
+    const upstream=vi.fn(async()=>new Response("{}",{status:200}));
+    vi.stubGlobal("fetch",upstream);
+    try {
+      const res=await GET(new NextRequest("https://internal.example/api/proxy/platform/ai"),{params:Promise.resolve({path:["platform","ai"]})});
+      expect(res.status).toBe(200);
+      expect(upstream).toHaveBeenCalledWith(expect.any(URL),expect.objectContaining({headers:expect.objectContaining({"X-Tenant-Id":"",Authorization:"Bearer test-server-token"})}));
+    } finally {vi.unstubAllGlobals();}
+  });
   it("rejects normalized traversal paths which could bypass token endpoint isolation", async () => {
     const res = await GET(new NextRequest("https://internal.example/api/proxy/anything"), { params: Promise.resolve({ path: ["anything", "..", "security", "admin-mode", "activate"] }) });
     expect(res.status).toBe(404);

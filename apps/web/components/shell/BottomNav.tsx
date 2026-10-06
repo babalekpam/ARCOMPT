@@ -13,7 +13,7 @@ export function BottomNav({ platformAdmin = false }: { platformAdmin?: boolean }
   const t = useT();
   const [moreOpen, setMoreOpen] = useState(false);
   const more = [...MAIN_NAV.slice(4), ...SOON_NAV];
-  const moreActive = more.some((i) => isActivePath(pathname, i.href)) || pathname === "/account/security" || (platformAdmin && pathname === "/platform");
+  const moreActive = more.some((i) => isActivePath(pathname, i.href)) || pathname === "/account/security" || (platformAdmin && isActivePath(pathname, "/platform"));
   return (
     <>
       {moreOpen ? (
@@ -22,6 +22,7 @@ export function BottomNav({ platformAdmin = false }: { platformAdmin?: boolean }
             <ul className="grid grid-cols-2 gap-1">
               <li><Link href="/account/security" onClick={() => setMoreOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">Sécurité du compte</Link></li>
               {platformAdmin && <li><Link href="/platform" onClick={() => setMoreOpen(false)} className="block rounded-lg px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 dark:text-amber-200 dark:hover:bg-amber-950/30">Vue d’ensemble admin</Link></li>}
+              {platformAdmin && <li><Link href="/platform/ai" aria-current={isActivePath(pathname, "/platform/ai") ? "page" : undefined} onClick={() => setMoreOpen(false)} className="block rounded-lg px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 dark:text-amber-200 dark:hover:bg-amber-950/30">Fournisseurs IA</Link></li>}
               {more.map((item) => (
                 <li key={item.href}>
                   <Link href={item.href} onClick={() => setMoreOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">

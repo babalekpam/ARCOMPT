@@ -34,6 +34,12 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   target.search = req.nextUrl.search;
 
   const headers: Record<string, string> = { accept: "application/json", ...auth.headers };
+  // Platform settings are global; a stale company cookie must not block them.
+  // Privilege and MFA are still verified by the API for every platform route.
+  if (path[0] === "platform") {
+    for (const name of Object.keys(headers)) if (name.toLowerCase() === "x-tenant-id") delete headers[name];
+    headers["X-Tenant-Id"] = "";
+  }
   const contentType = req.headers.get("content-type");
   if (contentType) headers["content-type"] = contentType;
 

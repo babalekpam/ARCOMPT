@@ -46,7 +46,7 @@ export async function AppShell({ auth, children }: { auth: AuthContext; children
         {auth.tenantId ? <ReminderReviewAlert key={auth.tenantId} tenantId={auth.tenantId} /> : null}
         <OfflineIndicator />
         <main className="flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10">
-          {platformAdmin && !auth.tenantId ? <Link href="/platform" className="mb-4 block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">Administration plateforme : vue d’ensemble et sélection d’un dossier.</Link> : null}
+          {platformAdmin && !auth.tenantId ? <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100"><Link href="/platform">Administration plateforme : vue d’ensemble et sélection d’un dossier.</Link><Link href="/platform/ai" className="font-semibold underline">Fournisseurs IA</Link></div> : null}
           {children}
         </main>
         {/* Signature de l'éditeur, discrète et présente sur chaque écran. */}

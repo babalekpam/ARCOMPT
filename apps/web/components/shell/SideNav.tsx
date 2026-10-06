@@ -37,6 +37,7 @@ export function SideNav({ platformAdmin = false }: { platformAdmin?: boolean }) 
       ))}
       <Link href="/account/security" aria-current={pathname === "/account/security" ? "page" : undefined} className="mt-3 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">Sécurité du compte</Link>
       {platformAdmin ? <Link href="/platform" aria-current={pathname === "/platform" ? "page" : undefined} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-amber-800 hover:bg-amber-50 dark:text-amber-200 dark:hover:bg-amber-950/30"><span>Vue d’ensemble admin</span></Link> : null}
+      {platformAdmin ? <Link href="/platform/ai" aria-current={isActivePath(pathname, "/platform/ai") ? "page" : undefined} className={`rounded-lg px-3 py-2 text-sm text-amber-800 dark:text-amber-200 ${isActivePath(pathname, "/platform/ai") ? "bg-amber-50 font-semibold dark:bg-amber-950/30" : "hover:bg-amber-50 dark:hover:bg-amber-950/30"}`}>Fournisseurs IA</Link> : null}
       <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t("nav.sectionSoon")}</p>
       {SOON_NAV.map((item) => (
         <NavLink key={item.href} item={item} active={isActivePath(pathname, item.href)} />

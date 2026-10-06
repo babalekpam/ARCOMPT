@@ -11,6 +11,7 @@ import { PgCallLogger } from "./call-log.js";
 import { DocumentsService } from "./service.js";
 import { createScannerFromEnv, guardSimulatedDependency, maxDocumentBytesFromEnv, type AntivirusScanner } from "./security.js";
 import type { TenantContext } from "./types.js";
+import { configuredAiProvider, runtimeAiEnv } from "./ai-settings.js";
 
 /**
  * Fournisseur hors ligne : renvoie une extraction et une catégorisation
@@ -68,6 +69,12 @@ export interface DocumentsInfra {
 }
 
 let cached: DocumentsInfra | null = null;
+let storedAiSettingsEnabled = false;
+/** Enable persistent server-side settings in API and worker entrypoints. */
+export function enableStoredAiSettings(): void {
+  storedAiSettingsEnabled = true;
+  cached = null;
+}
 
 /** Repli hors ligne : autorisé hors production, refusé en production sans opt-out explicite. */
 function offlineProvider(env: NodeJS.ProcessEnv): ModelProvider {
@@ -88,6 +95,33 @@ function offlineProvider(env: NodeJS.ProcessEnv): ModelProvider {
  */
 export function createDocumentsInfraFromEnv(db: Sql, env: NodeJS.ProcessEnv = process.env): DocumentsInfra {
   if (cached) return cached;
+  const provider = storedAiSettingsEnabled ? {
+    async complete(req: ModelRequest): Promise<ModelResponse> {
+      const effective = await runtimeAiEnv(db, env);
+      const selection = resolveAiProviderSelection(effective);
+      if (selection.issues.length) throw new Error("Configuration IA persistée invalide");
+      if (selection.simulated) return offlineProvider(effective).complete(req);
+      return configuredAiProvider(selection.routes[req.capability], effective).complete(req);
+    },
+  } : createEnvironmentAiProvider(env);
+  cached = {
+    gateway: new AiGateway({
+      provider, logger: new PgCallLogger(db),
+      ...(storedAiSettingsEnabled ? {} : { providerLabel: (req: ModelRequest) => {
+        const selection=resolveAiProviderSelection(env);
+        return selection.simulated ? "offline" : selection.routes[req.capability];
+      } }),
+    }),
+    storage: createStorageFromEnv(env),
+    scanner: createScannerFromEnv(env),
+    supportsPdf: env.AI_PDF_SUPPORT === "1" || env.AI_PDF_SUPPORT === "true",
+    maxBytes: maxDocumentBytesFromEnv(env),
+    baseCurrency: env.DEFAULT_CURRENCY ?? "XOF",
+  };
+  return cached;
+}
+
+function createEnvironmentAiProvider(env: NodeJS.ProcessEnv): ModelProvider {
   const selection = resolveAiProviderSelection(env);
   if (selection.issues.length) throw new Error(`Configuration IA invalide : ${selection.issues.join(" ")}`);
   const providers: Partial<Record<AiProviderName, ModelProvider>> = {};
@@ -106,24 +140,13 @@ export function createDocumentsInfraFromEnv(db: Sql, env: NodeJS.ProcessEnv = pr
       ...(env.AI_GEMINI_MODEL ? { model: env.AI_GEMINI_MODEL } : {}),
     });
   }
-  const provider: ModelProvider = selection.simulated ? offlineProvider(env) : createRoutedProvider(selection, providers);
-  cached = {
-    gateway: new AiGateway({
-      provider, logger: new PgCallLogger(db),
-      providerLabel: (req) => selection.simulated ? "offline" : selection.routes[req.capability],
-    }),
-    storage: createStorageFromEnv(env),
-    scanner: createScannerFromEnv(env),
-    supportsPdf: env.AI_PDF_SUPPORT === "1" || env.AI_PDF_SUPPORT === "true",
-    maxBytes: maxDocumentBytesFromEnv(env),
-    baseCurrency: env.DEFAULT_CURRENCY ?? "XOF",
-  };
-  return cached;
+  return selection.simulated ? offlineProvider(env) : createRoutedProvider(selection, providers);
 }
 
 /** Réinitialise le cache (tests). */
 export function resetDocumentsInfra(): void {
   cached = null;
+  storedAiSettingsEnabled = false;
 }
 
 export function createDocumentsServiceFromEnv(db: Sql, ctx: TenantContext, env: NodeJS.ProcessEnv = process.env): DocumentsService {

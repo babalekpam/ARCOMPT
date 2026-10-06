@@ -24,7 +24,8 @@ import { redirect } from "next/navigation";
 export default async function DashboardPage({ searchParams }: { searchParams: SearchParams }) {
   const { t } = await getT();
   const auth = await requireAuthContext();
-  if (shouldShowPlatformPicker(await getPlatformAdmin(), auth.tenantId)) redirect("/platform");
+  const platformAdmin = await getPlatformAdmin();
+  if (shouldShowPlatformPicker(platformAdmin, auth.tenantId)) redirect("/platform");
   if (auth.mode === "clerk" && !auth.tenantId) redirect("/api/session/landing");
   const { fiscalYear, previousFiscalYear } = resolveFiscalYear(await searchParams);
   const currency = config.defaultCurrency();
@@ -38,6 +39,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   return (
     <>
       <PageHeader title={t("dashboard.title")} subtitle={t("dashboard.subtitle", { fy: fiscalYear })} actions={<FiscalYearPicker value={fiscalYear} />} />
+      {platformAdmin && <div className="mb-4"><LinkButton href="/platform/ai" variant="secondary">Fournisseurs IA · plateforme</LinkButton></div>}
       {!auth.tenantId ? <EmptyState title={t("company.none")} body={t("company.manualHint")} /> : null}
       {!tb.ok ? <ApiErrorNotice error={tb.error} /> : null}
       {tb.ok && tb.data.rows.length === 0 ? (

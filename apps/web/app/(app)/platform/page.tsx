@@ -7,6 +7,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Alert } from "@/components/ui/Alert";
 import { PlatformOverview } from "@/components/platform/PlatformOverview";
+import { LinkButton } from "@/components/ui/Button";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export default async function PlatformPage() {
   const result = await apiTry<Overview>("/platform/overview", { headers: { "X-Tenant-Id": "" } });
   return (
     <>
-      <PageHeader title="Administration plateforme" subtitle="Vue d’ensemble des organisations clientes et de leurs dossiers." />
+      <PageHeader title="Administration plateforme" subtitle="Vue d’ensemble des organisations clientes et de leurs dossiers." actions={<LinkButton href="/platform/ai" variant="secondary">Fournisseurs IA</LinkButton>} />
       <Alert tone="warning" className="mb-5">
         Accès super-admin journalisé. Sélectionner un dossier ouvre son espace avec les droits administrateur ; les opérations restent limitées à ce dossier.
       </Alert>

@@ -5,11 +5,13 @@ import { createQueueFromEnv } from "@arcompt/jobs";
 import { createProviderFromEnv } from "@arcompt/whatsapp";
 import { registerJobHandlers } from "./job-handlers.js";
 import { initTelemetry, log } from "./telemetry.js";
+import { enableStoredAiSettings } from "@arcompt/documents";
 
 if (!process.env.REDIS_URL) throw new Error("Worker séparé impossible sans REDIS_URL : démarrer l'API qui consomme la file PostgreSQL");
 await initTelemetry();
 const appDatabaseUrl = applicationDatabaseUrl();
 const db = appDatabaseUrl ? createDb({ url: appDatabaseUrl }) : createDb();
+enableStoredAiSettings();
 if (process.env.NODE_ENV === "production") {
   try {
     await assertProductionDatabaseSecurity(db);
