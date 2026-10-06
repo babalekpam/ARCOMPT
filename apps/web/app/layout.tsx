@@ -50,7 +50,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const publishableKey = clerkPublishableKey(clerkHostname(await headers()), process.env);
   return (
     <html lang={locale}>
-      <body suppressHydrationWarning className="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+      <body suppressHydrationWarning className="min-h-screen bg-[#F7F5F0] text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
         <ManagedClerkProvider
           hosting={clerkHosting}
           publishableKey={publishableKey}
@@ -62,7 +62,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               logoImageUrl: "/brand/arcompt-mark-128.png",
             },
             variables: {
-              colorPrimary: "#0369a1",
+              colorPrimary: "#0E9F6E",
               colorForeground: "#0f172a",
               colorMutedForeground: "#64748b",
               colorBackground: "#ffffff",
@@ -76,7 +76,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               card: "shadow-none border border-slate-200",
               cardBox: "bg-white rounded-2xl",
               logoImage: "h-12 w-12 object-contain",
-              formButtonPrimary: "bg-sky-700 hover:bg-sky-800",
+              formButtonPrimary: "bg-[#0E9F6E] hover:bg-sky-800",
               footerActionLink: "text-sky-700 hover:text-sky-900",
             },
           }}

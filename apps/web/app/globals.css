@@ -1,9 +1,8 @@
-/* SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com) */
-/* SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-:root {
-  color-scheme: light dark;
-}
+:root { color-scheme: light; }
+body { background: #F7F5F0; color: #0F2A43; font-family: Inter, system-ui, sans-serif; }
+thead th { background: #F7F5F0; }
+tbody tr:nth-child(even) { background: rgba(248,250,252,.65); }
+tbody tr:hover { background: #ECFDF5; }

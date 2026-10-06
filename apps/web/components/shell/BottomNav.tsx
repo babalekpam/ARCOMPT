@@ -37,7 +37,7 @@ export function BottomNav() {
         {BOTTOM_NAV.map((item) => {
           const active = isActivePath(pathname, item.href);
           return (
-            <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`flex flex-col items-center justify-center gap-0.5 text-[11px] ${active ? "text-slate-900 dark:text-white" : "text-slate-500"}`}>
+            <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`flex flex-col items-center justify-center gap-0.5 text-[11px] ${active ? "text-[#0E9F6E] dark:text-white" : "text-slate-500"}`}>
               <span className="text-lg leading-none" aria-hidden>
                 {item.icon}
               </span>
@@ -45,7 +45,7 @@ export function BottomNav() {
             </Link>
           );
         })}
-        <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen} className={`flex flex-col items-center justify-center gap-0.5 text-[11px] ${moreActive || moreOpen ? "text-slate-900 dark:text-white" : "text-slate-500"}`}>
+        <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen} className={`flex flex-col items-center justify-center gap-0.5 text-[11px] ${moreActive || moreOpen ? "text-[#0E9F6E] dark:text-white" : "text-slate-500"}`}>
           <span className="text-lg leading-none" aria-hidden>
             ⋯
           </span>

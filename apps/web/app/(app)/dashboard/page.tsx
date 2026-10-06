@@ -93,7 +93,7 @@ function Kpi({ label, hint, value, currency, badge }: { label: string; hint: str
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
         {badge}
       </div>
-      <p className="mt-2 text-2xl font-semibold">
+      <p className="mt-2 text-3xl font-semibold">
         <Money value={value} currency={currency} showCurrency colorSign />
       </p>
       <p className="mt-1 text-xs text-slate-500">{hint}</p>

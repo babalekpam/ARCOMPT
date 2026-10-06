@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 
 export function Card({ children, className = "", as: Tag = "section" }: { children: ReactNode; className?: string; as?: "section" | "div" | "article" }) {
-  return <Tag className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}>{children}</Tag>;
+  return <Tag className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}>{children}</Tag>;
 }
 
 export function CardTitle({ children, hint, action }: { children: ReactNode; hint?: string; action?: ReactNode }) {

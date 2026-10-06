@@ -1,6 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap");
 
-.page { --ink: #14324e; --petrol: #0a7693; --teal: #1bad9a; --paper: #f5f7f5; --line: #d6dfdc; --muted: #5f706f; color: var(--ink); background: var(--paper); font-family: "DM Sans", sans-serif; overflow: hidden; }
+.page { --ink: #0F2A43; --petrol: #1B4F72; --teal: #0E9F6E; --paper: #f5f7f5; --line: #d6dfdc; --muted: #5f706f; color: var(--ink); background: var(--paper); font-family: "DM Sans", sans-serif; overflow: hidden; }
 .page :global(*) { box-sizing: border-box; }
 .shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
 .nav { display: flex; height: 82px; align-items: center; justify-content: space-between; }

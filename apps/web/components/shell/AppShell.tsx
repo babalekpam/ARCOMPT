@@ -24,7 +24,7 @@ export async function AppShell({ auth, children }: { auth: AuthContext; children
   const displayName = platformAdmin ? t("settings.platformAdmin") : reference ?? t("firm.members.referenceUnavailable");
   return (
     <div className="min-h-screen md:grid md:grid-cols-[15rem_1fr]">
-      <aside className="hidden border-r border-slate-200 bg-slate-50 p-3 md:flex md:flex-col dark:border-slate-800 dark:bg-slate-900/50">
+      <aside className="hidden border-r border-slate-200 bg-[#F7F5F0] p-3 md:flex md:flex-col dark:border-slate-800 dark:bg-slate-900/50">
         <Link href="/dashboard" className="mb-4 flex items-center gap-2 px-3 py-2">
           <BrandLockup name={t("app.name")} size="md" />
         </Link>

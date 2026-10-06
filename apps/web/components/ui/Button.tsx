@@ -6,8 +6,8 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white",
-  secondary: "border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800",
+  primary: "bg-[#0E9F6E] text-white hover:bg-[#0B855E] dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white",
+  secondary: "border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#0E9F6E] dark:text-slate-100 dark:hover:bg-slate-800",
   danger: "bg-red-600 text-white hover:bg-red-500",
   ghost: "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800",
 };
