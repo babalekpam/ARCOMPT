@@ -4,11 +4,12 @@ import { UserMenu } from "./UserMenu";
 import { SideNav } from "./SideNav";
 import { AdminModeSwitch } from "./AdminModeSwitch";
 import { BottomNav } from "./BottomNav";
+import { ShellHeader, WorkspaceOnly } from "./ShellRouteScope";
 
 vi.mock("@clerk/nextjs", () => ({ useClerk: () => ({ signOut: vi.fn() }) }));
-vi.mock("@/lib/i18n-client", () => ({ useT: () => (key: string) => key }));
+vi.mock("@/lib/i18n-client", () => ({ useT: () => (key: string) => key, useI18n: () => ({ locale: "fr", t: (key: string) => key }) }));
 const route = vi.hoisted(() => ({ pathname: "/platform" }));
-vi.mock("next/navigation", () => ({ usePathname: () => route.pathname }));
+vi.mock("next/navigation", () => ({ usePathname: () => route.pathname, useRouter: () => ({ refresh: vi.fn() }) }));
 describe("security and platform navigation", () => {
   it("always exposes security in the account menu but exposes the overview only for verified admins", () => {
     const ordinary = renderToStaticMarkup(<UserMenu displayName="Membre" />);
@@ -32,14 +33,42 @@ describe("security and platform navigation", () => {
     expect(html).not.toContain('href="/platform"');
     expect(html).not.toContain('href="/platform/ai"');
   });
-  it("marks the AI route active on desktop and activates mobile More only for admins", () => {
+  it("marks the AI route active in dedicated desktop and mobile admin navigation", () => {
     route.pathname = "/platform/ai";
     const desktop = renderToStaticMarkup(<SideNav platformAdmin />);
     expect(desktop).toMatch(/href="\/platform\/ai"[^>]*aria-current="page"|aria-current="page"[^>]*href="\/platform\/ai"/);
     expect(renderToStaticMarkup(<SideNav />)).not.toContain('href="/platform/ai"');
     const mobile = renderToStaticMarkup(<BottomNav platformAdmin />);
-    expect(mobile).toMatch(/aria-expanded="false"[^>]*text-\[#0E9F6E\]/);
+    expect(mobile).toMatch(/aria-current="page"[^>]*href="\/platform\/ai"/);
+    expect(mobile).toContain('href="/platform#organizations"');
+    expect(mobile).toContain('href="/account"');
+    expect(mobile).not.toContain('href="/entries"');
+    expect(mobile).not.toContain("aria-expanded");
     expect(renderToStaticMarkup(<BottomNav />)).not.toMatch(/aria-expanded="false"[^>]*text-\[#0E9F6E\]/);
+    route.pathname = "/platform";
+  });
+  it("keeps customer navigation in company workspaces, including for admins", () => {
+    route.pathname = "/entries";
+    const desktop = renderToStaticMarkup(<SideNav platformAdmin />);
+    const mobile = renderToStaticMarkup(<BottomNav platformAdmin />);
+    expect(desktop).toContain('href="/entries"');
+    expect(mobile).toContain('href="/entries"');
+    expect(mobile).not.toContain("Navigation mobile plateforme");
+    expect(renderToStaticMarkup(<WorkspaceOnly platformAdmin><p>Rappel dossier</p></WorkspaceOnly>)).toContain("Rappel dossier");
+    route.pathname = "/platform";
+  });
+  it("suppresses the tenant selector and tenant reminders only on global platform pages", () => {
+    for (const pathname of ["/platform", "/platform/ai"]) {
+      route.pathname = pathname;
+      const html = renderToStaticMarkup(<ShellHeader name="ARCOMPT" platformAdmin tenantId="selected-company" displayName="Super-admin" />);
+      expect(html).not.toContain("company-switcher");
+      expect(html).toContain('href="/platform"');
+      expect(html).toContain("locale.label");
+      expect(html).toContain("common.logout");
+      expect(renderToStaticMarkup(<WorkspaceOnly platformAdmin><p>Rappel dossier</p></WorkspaceOnly>)).not.toContain("Rappel dossier");
+    }
+    route.pathname = "/dashboard";
+    expect(renderToStaticMarkup(<ShellHeader name="ARCOMPT" platformAdmin tenantId="selected-company" displayName="Super-admin" />)).toContain("company-switcher");
     route.pathname = "/platform";
   });
 });

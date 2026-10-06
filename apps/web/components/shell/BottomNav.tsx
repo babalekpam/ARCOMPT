@@ -6,12 +6,14 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useT } from "@/lib/i18n-client";
 import { BOTTOM_NAV, isActivePath, MAIN_NAV, SOON_NAV } from "@/lib/nav";
+import { isPlatformPath, PlatformNav } from "./PlatformNav";
 
 /** Barre de navigation inférieure (mobile) : quatre sections + menu « Plus ». */
 export function BottomNav({ platformAdmin = false }: { platformAdmin?: boolean }) {
   const pathname = usePathname();
   const t = useT();
   const [moreOpen, setMoreOpen] = useState(false);
+  if (platformAdmin && isPlatformPath(pathname)) return <PlatformNav mobile />;
   const more = [...MAIN_NAV.slice(4), ...SOON_NAV];
   const moreActive = more.some((i) => isActivePath(pathname, i.href)) || pathname === "/account/security" || (platformAdmin && isActivePath(pathname, "/platform"));
   return (

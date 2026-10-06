@@ -2,11 +2,37 @@
   --overview-ink: #0f2a43;
   --overview-surface: #f0f5f3;
   --overview-border: #d8e4df;
+  min-width: 0;
 }
+.platform-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; }
 .platform-stat {
   border: 1px solid var(--overview-border);
   background: var(--overview-surface);
   color: var(--overview-ink);
+  padding: .875rem 1rem;
+  min-width: 0;
+}
+.platform-stat dt { font-size: .75rem; line-height: 1.4; }
+.platform-stat dd { margin-top: .4rem; font-size: 1.75rem; line-height: 1.2; }
+.platform-stat:last-child { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.platform-stat:last-child dd { margin: 0; font-size: 1.375rem; }
+.platform-directory { scroll-margin-top: 5rem; }
+.platform-organization { min-width: 0; border-color: var(--overview-border); }
+.platform-organization-header { background: var(--overview-surface); border-color: var(--overview-border); }
+.platform-organization h3 { overflow-wrap: anywhere; }
+.platform-organization [aria-label="Dossiers comptables"] > div > div > div { border-color: var(--overview-border); }
+@media (min-width: 1280px) {
+  .platform-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1rem; }
+  .platform-stat { padding: 1.25rem; }
+  .platform-stat:last-child { grid-column: auto; display: block; }
+  .platform-stat dd, .platform-stat:last-child dd { font-size: 2rem; margin-top: .75rem; }
+}
+@media (prefers-color-scheme: dark) {
+  .platform-overview {
+    --overview-ink: #deede6;
+    --overview-surface: #142a30;
+    --overview-border: #2c454a;
+  }
 }
 .dark .platform-overview {
   --overview-ink: #deede6;

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useT } from "@/lib/i18n-client";
 import { isActivePath, MAIN_NAV, SOON_NAV, type NavItem } from "@/lib/nav";
+import { isPlatformPath, PlatformNav } from "./PlatformNav";
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const t = useT();
@@ -29,6 +30,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 export function SideNav({ platformAdmin = false }: { platformAdmin?: boolean }) {
   const pathname = usePathname();
   const t = useT();
+  if (platformAdmin && isPlatformPath(pathname)) return <PlatformNav />;
   return (
     <nav aria-label="Navigation principale" className="flex flex-col gap-1">
       <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t("nav.sectionMain")}</p>

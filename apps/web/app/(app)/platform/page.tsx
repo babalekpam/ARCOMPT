@@ -7,7 +7,6 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Alert } from "@/components/ui/Alert";
 import { PlatformOverview } from "@/components/platform/PlatformOverview";
-import { LinkButton } from "@/components/ui/Button";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +16,11 @@ export default async function PlatformPage() {
   const result = await apiTry<Overview>("/platform/overview", { headers: { "X-Tenant-Id": "" } });
   return (
     <>
-      <PageHeader title="Administration plateforme" subtitle="Vue d’ensemble des organisations clientes et de leurs dossiers." actions={<LinkButton href="/platform/ai" variant="secondary">Fournisseurs IA</LinkButton>} />
-      <Alert tone="warning" className="mb-5">
-        Accès super-admin journalisé. Sélectionner un dossier ouvre son espace avec les droits administrateur ; les opérations restent limitées à ce dossier.
-      </Alert>
+      <PageHeader title="Vue d’ensemble" subtitle="Administration plateforme · organisations clientes et dossiers" />
+      <details className="mb-4 text-xs text-slate-600 dark:text-slate-400">
+        <summary className="cursor-pointer py-1 font-medium">Accès super-admin journalisé · périmètre des droits</summary>
+        <p className="mt-2 max-w-2xl leading-relaxed">Sélectionner un dossier ouvre son espace avec les droits administrateur ; les opérations restent limitées à ce dossier.</p>
+      </details>
       {!result.ok ? (
         <Alert tone="danger">
           La vue d’ensemble est indisponible. Aucun total n’a été estimé.

@@ -1,15 +1,11 @@
 // SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
-import Link from "next/link";
 import type { ReactNode } from "react";
 import type { AuthContext } from "@/lib/auth";
 import { getT } from "@/lib/i18n-server";
-import { BrandLockup } from "@/components/brand/BrandMark";
 import { BottomNav } from "./BottomNav";
-import { CompanySwitcher } from "./CompanySwitcher";
-import { LocaleSwitcher } from "./LocaleSwitcher";
 import { SideNav } from "./SideNav";
-import { UserMenu } from "./UserMenu";
+import { BrandHomeLink, ShellHeader, ShellRouteScope, WorkspaceOnly } from "./ShellRouteScope";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { getPlatformAdmin } from "@/lib/platform";
 import { getCurrentMemberReference } from "@/lib/member-reference";
@@ -23,36 +19,24 @@ export async function AppShell({ auth, children }: { auth: AuthContext; children
   const reference = !platformAdmin && auth.tenantId ? await getCurrentMemberReference() : null;
   const displayName = platformAdmin ? t("settings.platformAdmin") : reference ?? t("firm.members.referenceUnavailable");
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[15rem_1fr]">
+    <ShellRouteScope platformAdmin={platformAdmin}>
       <aside className="hidden border-r border-slate-200 bg-[#F7F5F0] p-3 md:flex md:flex-col dark:border-slate-800 dark:bg-slate-900/50">
-        <Link href="/dashboard" className="mb-4 flex items-center gap-2 px-3 py-2">
-          <BrandLockup name={t("app.name")} size="md" />
-        </Link>
+        <BrandHomeLink name={t("app.name")} platformAdmin={platformAdmin} desktop />
         <SideNav platformAdmin={platformAdmin} />
         <p className="mt-auto px-3 pt-4 text-[11px] text-slate-400">{t("app.tagline")}</p>
       </aside>
-      <div className="flex min-h-screen flex-col">
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b border-slate-200 bg-white/90 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
-          <Link href="/dashboard" className="flex items-center gap-2 md:hidden">
-            <BrandLockup name={t("app.name")} size="sm" />
-          </Link>
-          <div className="ml-auto flex items-center gap-2">
-            <CompanySwitcher tenantId={auth.tenantId} platformAdmin={platformAdmin} />
-            <LocaleSwitcher compact />
-            <UserMenu displayName={displayName} platformAdmin={platformAdmin} />
-          </div>
-        </header>
-        {auth.mode === "clerk" ? <AdminModeSwitch /> : null}
-        {auth.tenantId ? <ReminderReviewAlert key={auth.tenantId} tenantId={auth.tenantId} /> : null}
+      <div className="shell-content flex flex-col">
+        <ShellHeader name={t("app.name")} platformAdmin={platformAdmin} tenantId={auth.tenantId} displayName={displayName} />
+        {auth.mode === "clerk" ? <AdminModeSwitch routeAware /> : null}
+        {auth.tenantId ? <WorkspaceOnly platformAdmin={platformAdmin}><ReminderReviewAlert key={auth.tenantId} tenantId={auth.tenantId} /></WorkspaceOnly> : null}
         <OfflineIndicator />
-        <main className="flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10">
-          {platformAdmin && !auth.tenantId ? <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100"><Link href="/platform">Administration plateforme : vue d’ensemble et sélection d’un dossier.</Link><Link href="/platform/ai" className="font-semibold underline">Fournisseurs IA</Link></div> : null}
+        <main className="shell-main flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10">
           {children}
         </main>
         {/* Signature de l'éditeur, discrète et présente sur chaque écran. */}
         <footer className="px-4 pb-24 text-center text-xs text-slate-400 md:px-8 md:pb-6 dark:text-slate-600">{t("brand.signature")}</footer>
       </div>
       <BottomNav platformAdmin={platformAdmin} />
-    </div>
+    </ShellRouteScope>
   );
 }

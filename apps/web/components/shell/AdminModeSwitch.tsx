@@ -1,11 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { isPlatformPath } from "./PlatformNav";
 import { resetOfflineServices } from "@/lib/offline-browser";
 import { adminModeLabel, ADMIN_MFA_CONTINUATION, type AdminModeStatus } from "@/lib/admin-mode-ui";
 
 /** UI state never grants access; the API validates the opaque server cookie. */
-export function AdminModeSwitch({ prominent = false, recoveryPending = false }: { prominent?: boolean; recoveryPending?: boolean }) {
+export function AdminModeSwitch({ prominent = false, recoveryPending = false, routeAware = false }: { prominent?: boolean; recoveryPending?: boolean; routeAware?: boolean }) {
+  const pathname = usePathname();
+  const compact = routeAware && isPlatformPath(pathname);
   const [mode, setMode] = useState<AdminModeStatus | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -67,21 +71,21 @@ export function AdminModeSwitch({ prominent = false, recoveryPending = false }: 
       window.location.assign(action === "activate" ? "/platform" : "/dashboard");
     } catch (e) { setError(e instanceof Error ? e.message : "Changement de mode impossible."); setBusy(false); }
   }
-   if (!mode) return <section aria-label="Mode d’accès" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm dark:border-slate-700 dark:bg-slate-900">
+   if (!mode) return <section aria-label="Mode d’accès" className={`border border-slate-200 bg-slate-50 px-4 text-sm dark:border-slate-700 dark:bg-slate-900 ${compact ? "py-2 text-xs" : "rounded-xl py-4"}`}>
      {error ? <><p role="alert" className="text-red-700 dark:text-red-300">{error}</p><button type="button" onClick={() => { setError(""); setRetry((n) => n + 1); }} className="mt-2 font-semibold underline">Réessayer</button></> : <p role="status" className="animate-pulse text-slate-600 dark:text-slate-300">Vérification de l’accès administrateur…</p>}
    </section>;
    if (!mode.eligible && !mode.canReturn && !mode.active && !prominent) return null;
   const returning = mode.active || mode.canReturn;
   return (
-     <section aria-label="Mode d’accès" className={`flex flex-wrap items-center justify-between gap-3 border px-4 py-4 text-sm ${prominent ? "rounded-xl" : "border-x-0"} ${mode.active ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100" : "border-slate-200 bg-slate-50 text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"}`}>
+     <section aria-label="Mode d’accès" className={`flex flex-wrap items-center justify-between border px-4 ${compact ? "gap-2 py-2 text-xs" : "gap-3 py-4 text-sm"} ${prominent ? "rounded-xl" : "border-x-0"} ${mode.active ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100" : "border-slate-200 bg-slate-50 text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"}`}>
        <div className="min-w-0 flex-1">
          <p role="status" className="font-semibold">{error ? "État administrateur non confirmé" : adminModeLabel(mode)}</p>
-         <p className="mt-1 text-xs leading-relaxed opacity-90">{mode.active ? "Accès aux dossiers journalisé. Votre compte utilisateur reste inchangé." : mode.canReturn ? "Revenez à votre compte, puis réactivez le mode si vous êtes autorisé." : mode.approvedPending ? "L’approbation n’est pas un accès actif. Une vérification MFA récente reste obligatoire." : mode.eligible ? "Activez explicitement le mode avec une vérification MFA récente, puis ouvrez la vue d’ensemble." : "Cette page sécurise votre connexion. La MFA seule ne donne aucun droit administrateur."}</p>
+         <p className="mt-1 text-xs leading-relaxed opacity-90">{mode.active ? compact ? "Accès journalisé" : "Accès aux dossiers journalisé. Votre compte utilisateur reste inchangé." : mode.canReturn ? "Revenez à votre compte, puis réactivez le mode si vous êtes autorisé." : mode.approvedPending ? "L’approbation n’est pas un accès actif. Une vérification MFA récente reste obligatoire." : mode.eligible ? "Activez explicitement le mode avec une vérification MFA récente, puis ouvrez la vue d’ensemble." : "Cette page sécurise votre connexion. La MFA seule ne donne aucun droit administrateur."}</p>
        </div>
-       {mode.active && !recoveryPending && !error && <Link href="/platform" className="rounded-lg bg-brand px-3 py-2 font-semibold text-slate-50 dark:bg-amber-100 dark:text-amber-950">Vue d’ensemble admin</Link>}
-       {mode.active && !recoveryPending && !error && <Link href="/platform/ai" className="rounded-lg border border-current px-3 py-2 font-semibold">Fournisseurs IA</Link>}
+       {mode.active && !compact && !recoveryPending && !error && <Link href="/platform" className="rounded-lg bg-brand px-3 py-2 font-semibold text-slate-50 dark:bg-amber-100 dark:text-amber-950">Vue d’ensemble admin</Link>}
+       {mode.active && !compact && !recoveryPending && !error && <Link href="/platform/ai" className="rounded-lg border border-current px-3 py-2 font-semibold">Fournisseurs IA</Link>}
        {(returning || mode.eligible) && <button type="button" disabled={busy || recoveryPending} onClick={() => void change(returning ? "deactivate" : "activate")} className="rounded-lg border border-current px-3 py-2 font-semibold disabled:opacity-50">
-        {busy ? "Veuillez patienter…" : returning ? "Revenir à mon compte" : "Passer en super-admin"}
+        {busy ? "Veuillez patienter…" : returning ? compact ? "Quitter le mode admin" : "Revenir à mon compte" : "Passer en super-admin"}
        </button>}
        {recoveryPending && <p className="w-full text-xs">Sauvegardez les codes de secours ci-dessous avant de changer de mode.</p>}
        {error ? <p role="alert" className="w-full text-red-700 dark:text-red-300">{error}</p> : null}

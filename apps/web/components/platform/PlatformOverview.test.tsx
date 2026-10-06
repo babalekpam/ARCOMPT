@@ -21,6 +21,9 @@ describe("platform overview rendering", () => {
     expect(html).toContain("Atelier Dakar");
     expect(html).toContain("Ouvrir");
     expect(html).toContain("Offre");
+    expect(html).toContain('id="organizations"');
+    expect(html).toContain('class="platform-stats"');
+    expect(html).not.toContain("grid-cols-1");
     expect(html).not.toContain("revenue");
   });
   it("renders a composed empty state rather than inventing data", () => {

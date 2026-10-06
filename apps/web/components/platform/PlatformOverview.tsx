@@ -21,11 +21,11 @@ export function PlatformOverview({ overview }: { overview: Overview }) {
     ["Utilisateurs suspendus", overview.totals.suspendedUsers],
   ] as const;
   return (
-    <div className="platform-overview space-y-8">
+    <div className="platform-overview space-y-6">
       <section aria-label="Statistiques opérationnelles">
-        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <dl className="platform-stats">
           {stats.map(([label, value]) => (
-            <div key={label} className="platform-stat rounded-xl px-5 py-4">
+            <div key={label} className="platform-stat rounded-xl">
               <dt className="text-sm">{label}</dt>
               <dd className="mt-2 text-3xl font-semibold tabular-nums tracking-tight">{number(value)}</dd>
             </div>
@@ -36,7 +36,7 @@ export function PlatformOverview({ overview }: { overview: Overview }) {
           Aucun montant comptable ni revenu n’est agrégé entre dossiers.
         </p>
       </section>
-      <section aria-labelledby="platform-directory">
+      <section id="organizations" className="platform-directory" aria-labelledby="platform-directory">
         <div className="mb-4">
           <h2 id="platform-directory" className="text-xl font-semibold">Organisations et dossiers</h2>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Toutes les organisations clientes, y compris celles sans dossier.</p>
@@ -45,8 +45,8 @@ export function PlatformOverview({ overview }: { overview: Overview }) {
         <p role="status" className="mt-3 text-xs text-slate-600 dark:text-slate-400">{number(organizations.length)} organisation(s) affichée(s)</p>
         <div className="mt-4 space-y-5">
           {organizations.map((org) => (
-            <article key={org.id} className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-              <div className="border-b border-slate-200 bg-[#F0F5F3] p-4 dark:border-slate-700 dark:bg-slate-900">
+            <article key={org.id} className="platform-organization overflow-hidden rounded-xl border">
+              <div className="platform-organization-header border-b p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="break-words font-semibold">{org.name}</h3>
                   <p className="text-xs text-slate-600 dark:text-slate-300">{kinds[org.kind] ?? org.kind} · Offre {org.plan}</p>

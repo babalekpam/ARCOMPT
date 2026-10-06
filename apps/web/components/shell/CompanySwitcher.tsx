@@ -51,19 +51,19 @@ export function CompanySwitcher({ tenantId, platformAdmin = false }: { tenantId:
 
   const current = companies?.find((c) => c.id === tenantId);
   return (
-    <div className="relative">
+    <div className="company-switcher relative">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex max-w-[14rem] items-center gap-2 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800" title={t("company.switch")}>
         <span aria-hidden>◫</span>
         <span className="truncate font-mono">{current?.name ?? (tenantId ? `${tenantId.slice(0, 8)}…` : t("company.none"))}</span>
         <span aria-hidden>▾</span>
       </button>
       {open ? (
-        <div className="absolute right-0 z-50 mt-1 w-80 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-lg dark:border-slate-700 dark:bg-slate-900">
+        <div className="fixed inset-x-4 top-16 z-50 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-1 sm:w-80 dark:border-slate-700 dark:bg-slate-900">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("company.list")}</p>
           {companies === null ? (
             <p className="text-xs text-slate-500">{t("common.loading")}</p>
           ) : companies.length === 0 ? (
-            <p className="text-xs text-slate-500">{platformAdmin ? "No companies available." : t("company.manualHint")}</p>
+            <p className="text-xs text-slate-500">{platformAdmin ? "Aucun dossier disponible." : t("company.manualHint")}</p>
           ) : (
             <ul className="mb-2 max-h-48 overflow-auto">
               {companies.map((c) => (
