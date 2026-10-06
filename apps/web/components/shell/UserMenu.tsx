@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 "use client";
-import { useRouter } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
 import { useTransition } from "react";
 import { useT } from "@/lib/i18n-client";
@@ -10,16 +9,15 @@ import { Button } from "@/components/ui/Button";
 
 export function UserMenu({ displayName }: { displayName: string }) {
   const t = useT();
-  const router = useRouter();
   const { signOut } = useClerk();
   const [pending, start] = useTransition();
   const logout = () =>
     start(async () => {
-      await fetch("/api/session/logout", { method: "POST" });
-      if (process.env.NEXT_PUBLIC_AUTH_MODE !== "dev") await signOut({ redirectUrl: "/login" });
+      await fetch("/api/session/logout", { method: "POST" }).catch(() => undefined);
       resetOfflineServices();
-      router.push("/login");
-      router.refresh();
+    try { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } catch { void 0; }
+    if (process.env.NEXT_PUBLIC_AUTH_MODE !== "dev") await signOut({ redirectUrl: "/login" });
+    else window.location.replace("/login");
     });
   return (
     <div className="flex items-center gap-2">
