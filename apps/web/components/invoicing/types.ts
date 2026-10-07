@@ -287,7 +287,7 @@ export interface PackVatRate {
 
 export interface PdfData {
   document: SalesDocument;
-  company: { name: string; countryCode: string; currency: string; taxIds: Record<string, string> };
+  company: { name: string; countryCode: string; currency: string; taxIds: Record<string, string>; address?: string|null; city?: string|null; phone?: string|null; logoDataUri?: string|null };
   partner: { id: string; name: string; type: string; collectiveAccount: string; contact: Record<string, unknown>; taxId: string | null };
   vatSummary: Array<{ vatCode: string; rate: string; base: string; vat: string }>;
   source: { number: string; kind: SalesKind } | null;

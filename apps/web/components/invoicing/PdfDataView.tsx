@@ -36,10 +36,10 @@ export function PdfDataView({ id }: { id: string }) {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("invoicing.pdf.issuer")}</p>
-          <p className="font-medium">{d.company.name}</p>
+          <p className="font-medium">{d.company.name}</p> {d.company.logoDataUri ? <img src={d.company.logoDataUri} alt="Logo" className="mt-1 h-10 object-contain" /> : null}
           <p className="text-xs text-slate-500">
             {d.company.countryCode} · {d.company.currency}
-            {Object.entries(d.company.taxIds).map(([k, v]) => ` · ${k} ${v}`)}
+            {(d.company.address || d.company.city || d.company.phone) ? <span>{d.company.address ?? ""} {d.company.city ?? ""} {d.company.phone ?? ""} · </span> : null} {Object.entries(d.company.taxIds).map(([k, v]) => ` · ${k} ${v}`)}
           </p>
         </div>
         <div>

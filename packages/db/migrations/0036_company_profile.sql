@@ -1,0 +1,5 @@
+ALTER TABLE company ADD COLUMN IF NOT EXISTS address text;
+ALTER TABLE company ADD COLUMN IF NOT EXISTS city text;
+ALTER TABLE company ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE company ADD COLUMN IF NOT EXISTS logo_key text;
+ALTER TABLE company ADD COLUMN IF NOT EXISTS logo_mime text;

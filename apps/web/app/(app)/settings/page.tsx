@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
-import Link from "next/link";
+import Link from "next/link"; import { CompanyProfileForm } from "@/components/settings/CompanyProfileForm";
 import { apiTry } from "@/lib/api";
 import { requireAuthContext } from "@/lib/auth";
 import { config } from "@/lib/config";
@@ -19,6 +19,7 @@ function Row({ label, value, mono = false }: { label: string; value: React.React
     <div className="flex flex-col gap-0.5 py-2 sm:flex-row sm:items-center sm:justify-between">
       <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
       <dd className={`text-sm ${mono ? "font-mono text-xs" : ""}`}>{value ?? "—"}</dd>
+    <CompanyProfileForm />
     </div>
   );
 }

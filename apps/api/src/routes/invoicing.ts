@@ -294,7 +294,7 @@ export function invoicingRoutes(deps: InvoicingRouteDeps) {
     if (!parsed.success) return invalid(c, parsed.error.issues);
     return c.json(await (await servicesFor(c)).invoicing.createCreditNote(c.req.param("id"), strip(parsed.data)), 201);
   });
-  r.get("/sales/:id/pdf-data", async (c) => c.json(await (await servicesFor(c)).invoicing.getPdfData(c.req.param("id"))));
+  r.get("/sales/:id/pdf-data", async (c) => { const d:any = await (await servicesFor(c)).invoicing.getPdfData(c.req.param("id")); try { if (d?.company?.logoKey && d?.company?.logoMime) { const { createStorageFromEnv } = await import("@arcompt/storage"); const obj = await createStorageFromEnv().get(d.company.logoKey); if (obj) d.company.logoDataUri = "data:" + d.company.logoMime + ";base64," + Buffer.from(obj.bytes).toString("base64"); } } catch {} return c.json(d); });
   r.post("/sales/:id/payment-link", write, async (c) => {
     const parsed = z.object({ provider: z.string().min(1).max(40).default("mock") }).safeParse((await c.req.json().catch(() => ({}))) ?? {});
     if (!parsed.success) return invalid(c, parsed.error.issues);

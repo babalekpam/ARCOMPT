@@ -19,6 +19,7 @@ import { assetsRoutes } from "./routes/assets.js";
 import { closingRoutes } from "./routes/closing.js";
 import { documentsRoutes } from "./routes/documents.js";
 import { entriesRoutes } from "./routes/entries.js";
+import { companyRoutes } from "./routes/company.js";
 import { invoicingRoutes } from "./routes/invoicing.js";
 import { packsRoutes } from "./routes/packs.js";
 import { partnersRoutes } from "./routes/partners.js";
@@ -222,6 +223,7 @@ export function createApp(deps: AppDeps) {
       const [row] = await db`SELECT platform_overview(${sub},${mode?.sid ?? null},${mode?.tokenHash ?? null},${mode?.proofHash ?? null}) AS data`;
       return row?.data;
     } : undefined));
+  api.route("/company", companyRoutes(deps));
   api.route("/", sessionRoutes(deps));
   api.route("/security/mfa", mfaRoutes(db));
   api.route("/security/admin-mode", adminModeRoutes(db));
