@@ -7,6 +7,7 @@ import { LocaleSwitcher } from "@/components/shell/LocaleSwitcher";
 import type { Locale } from "@/lib/i18n";
 import { getLandingCopy } from "./content";
 import styles from "./landing.module.css";
+import DashboardVisual from "./DashboardVisual";
 
 function Arrow() {
   return <span aria-hidden="true">↗</span>;
@@ -57,6 +58,7 @@ export function LandingPage({ locale }: { locale: Locale }) {
             </div>
           </div>
         </div>
+      <div className={styles.shell}><DashboardVisual /></div>
       </section>
 
       <section className={styles.proof}><div className={`${styles.shell} ${styles.proofRow}`}><span className={styles.proofLabel}>{copy.proof.label}</span><div className={styles.proofItems}>{copy.proof.items.map((item) => <span key={item}>{item}</span>)}</div></div></section>
