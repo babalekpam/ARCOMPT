@@ -6,3 +6,12 @@ body { background: #F7F5F0; color: #0F2A43; font-family: Inter, system-ui, sans-
 thead th { background: #F7F5F0; }
 tbody tr:nth-child(even) { background: rgba(248,250,252,.65); }
 tbody tr:hover { background: #ECFDF5; }
+
+/* Mobile safety: wide tables scroll horizontally instead of crushing or overflowing the page */
+@media (max-width: 767px) {
+  table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+/* Mobile safety: keep form controls at 16px on small screens so iOS does not auto-zoom on focus */
+@media (max-width: 640px) {
+  input, select, textarea { font-size: 16px; }
+}

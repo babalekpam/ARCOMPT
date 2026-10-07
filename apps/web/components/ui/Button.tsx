@@ -13,7 +13,7 @@ const variants: Record<ButtonVariant, string> = {
 };
 
 export const buttonClass = (variant: ButtonVariant = "primary", size: "sm" | "md" = "md") =>
-  `inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-3.5 py-2 text-sm"} ${variants[variant]}`;
+  `inline-flex min-h-[44px] sm:min-h-0 items-center justify-center gap-1.5 rounded-lg font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-3.5 py-2 text-sm"} ${variants[variant]}`;
 
 export function Button({ variant = "primary", size = "md", className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: "sm" | "md" }) {
   return <button type="button" {...props} className={`${buttonClass(variant, size)} ${className}`} />;

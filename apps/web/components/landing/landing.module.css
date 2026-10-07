@@ -105,6 +105,6 @@
 }
 @media (max-width: 480px) {
   .navActions { gap: 6px; }
-  .signIn { display: none; }
+.signIn { padding: 8px 10px; font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .reveal, .delay { animation: none; } .primary, .secondary, .navLinks a, .footer a { transition: none; } }
