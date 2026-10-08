@@ -229,5 +229,14 @@
   "invoicing.purchaseStatus.PARTIALLY_PAID": "Partiellement payé",
   "invoicing.purchaseStatus.PAID": "Payé",
   "invoicing.purchaseStatus.CANCELLED": "Annulé",
-  "invoicing.form.packDraft": "Taux du pack {pack}, en cours de validation : indicatifs."
+  "invoicing.form.packDraft": "Taux du pack {pack}, en cours de validation : indicatifs.",
+  "invoicing.actions.downloadPdf": "Télécharger le PDF",
+  "invoicing.actions.sendToClient": "Envoyer au client",
+  "invoicing.actions.sendTitle": "Envoyer le document au client",
+  "invoicing.actions.sendRecipient": "E-mail du client",
+  "invoicing.actions.sendNoEmail": "Aucun e-mail enregistré pour ce client. Saisissez une adresse pour envoyer.",
+  "invoicing.actions.sendSubmit": "Envoyer",
+  "invoicing.actions.sendCancel": "Annuler",
+  "invoicing.actions.sendSuccess": "Document envoyé au client.",
+  "invoicing.actions.downloadError": "Téléchargement impossible."
 }

@@ -16,6 +16,8 @@
  */
 
 /** Message sortant, indépendant du transport. */
+export interface MailAttachment { filename: string; contentType: string; contentBase64: string; }
+
 export interface MailMessage {
   /** Destinataire unique (une adresse par message : la traçabilité est par destinataire). */
   to: string;
@@ -26,6 +28,7 @@ export interface MailMessage {
   html?: string;
   /** Adresse de réponse, quand elle diffère de l'expéditeur configuré. */
   replyTo?: string;
+  attachments?: MailAttachment[];
 }
 
 /** Résultat d'une remise réussie au serveur de messagerie. */

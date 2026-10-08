@@ -3,7 +3,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { apiClient, ApiError, errorMessage } from "@/lib/api-client";
+import { apiClient, ApiError, errorMessage, downloadSalesPdf } from "@/lib/api-client";
 import { useT } from "@/lib/i18n-client";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -33,7 +33,7 @@ export function SalesDocumentActions({ doc, certifiedSystem, suggestedDunningLev
   const [level, setLevel] = useState(suggestedDunningLevel ?? 1);
   const [channel, setChannel] = useState<DunningChannel>("WHATSAPP");
   const [message, setMessage] = useState("");
-  const [provider, setProvider] = useState("mock");
+  const [provider, setProvider] = useState("mock"); const [sendOpen, setSendOpen] = useState(false); const [recipient, setRecipient] = useState(""); const [hasEmail, setHasEmail] = useState<boolean | null>(null); const [pdfBusy, setPdfBusy] = useState(false);
 
   const isQuote = doc.kind === "QUOTE";
   const isInvoice = doc.kind === "INVOICE";
@@ -92,7 +92,7 @@ export function SalesDocumentActions({ doc, certifiedSystem, suggestedDunningLev
     }
   };
 
-  const titles: Record<Action, string> = {
+  async function openSend() { setError(null); try { const d = await apiClient<{ partner?: { contact?: { email?: string }; email?: string } }>("/sales/" + doc.id + "/pdf-data"); const em = (d?.partner?.contact?.email ?? d?.partner?.email ?? "") as string; setRecipient(em); setHasEmail(Boolean(em)); setSendOpen(true); } catch { setRecipient(""); setHasEmail(false); setSendOpen(true); } } async function doDownload() { setPdfBusy(true); setError(null); try { const r = await downloadSalesPdf(doc.id); const url = URL.createObjectURL(r.blob); const a = document.createElement("a"); a.href = url; a.download = r.filename; a.click(); URL.revokeObjectURL(url); } catch { setError({ text: t("invoicing.actions.downloadError") }); } finally { setPdfBusy(false); } } async function doSend() { setPdfBusy(true); setError(null); try { await apiClient("/sales/" + doc.id + "/send-email", { method: "POST", body: JSON.stringify({ email: recipient }) }); setSendOpen(false); setNotice(t("invoicing.actions.sendSuccess")); } catch (e) { setError({ text: errorMessage(e) }); } finally { setPdfBusy(false); } } const titles: Record<Action, string> = {
     issue: t("invoicing.actions.issue"),
     convert: t("invoicing.actions.convert"),
     creditNote: t("invoicing.actions.creditNote"),
@@ -105,7 +105,7 @@ export function SalesDocumentActions({ doc, certifiedSystem, suggestedDunningLev
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2"> <Button type="button" variant="secondary" className="min-h-11" disabled={pdfBusy} onClick={doDownload}>{t("invoicing.actions.downloadPdf")}</Button> <Button type="button" variant="secondary" className="min-h-11" disabled={pdfBusy} onClick={openSend}>{t("invoicing.actions.sendToClient")}</Button>
         {draft ? <Button onClick={() => setAction("issue")}>{titles.issue}</Button> : null}
         {isQuote && (doc.status === "SENT" || doc.status === "ACCEPTED") ? <Button onClick={() => setAction("convert")}>{titles.convert}</Button> : null}
         {isQuote && doc.status === "SENT" ? (
@@ -200,6 +200,6 @@ export function SalesDocumentActions({ doc, certifiedSystem, suggestedDunningLev
           </div>
         ) : null}
       </ConfirmDialog>
-    </div>
+    {sendOpen ? (<div className="space-y-3 rounded-md border p-3"><p className="text-sm font-medium">{t("invoicing.actions.sendTitle")}</p><Field label={t("invoicing.actions.sendRecipient")}><Input type="email" value={recipient} onChange={(e) => setRecipient(e.target.value)} className="min-h-11" /></Field>{hasEmail === false ? (<p className="text-sm text-muted-foreground">{t("invoicing.actions.sendNoEmail")}</p>) : null}<div className="flex flex-wrap gap-2"><Button type="button" className="min-h-11" disabled={pdfBusy || !recipient.includes("@")} onClick={doSend}>{t("invoicing.actions.sendSubmit")}</Button><Button type="button" variant="secondary" className="min-h-11" onClick={() => setSendOpen(false)}>{t("invoicing.actions.sendCancel")}</Button></div></div>) : null} </div>
   );
 }

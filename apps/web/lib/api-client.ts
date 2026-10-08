@@ -87,3 +87,5 @@ export function errorMessage(err: unknown, t?: Translator): string {
   if (err instanceof Error) return err.message;
   return String(err);
 }
+
+export async function downloadSalesPdf(id: string): Promise<{ blob: Blob; filename: string }> { const res = await fetch(proxyUrl("/sales/" + id + "/pdf"), { credentials: "include" }); if (!res.ok) throw new Error("pdf_download_failed"); const blob = await res.blob(); const cd = res.headers.get("content-disposition") ?? ""; const m = cd.match(/filename="?([^";]+)"?/); return { blob, filename: m ? m[1] : "document.pdf" }; }

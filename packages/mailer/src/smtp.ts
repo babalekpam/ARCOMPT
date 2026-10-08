@@ -130,6 +130,7 @@ export class SmtpMailer implements Mailer {
         text: message.text,
         ...(message.html ? { html: message.html } : {}),
         ...(replyTo ? { replyTo } : {}),
+        ...(message.attachments?.length ? { attachments: message.attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.contentBase64, 'base64'), contentType: a.contentType })) } : {}),
       });
     } catch (e) {
       // L'erreur remonte toujours : c'est l'appelant qui décide quoi faire de

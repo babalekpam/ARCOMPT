@@ -229,5 +229,14 @@
   "invoicing.purchaseStatus.PARTIALLY_PAID": "Partially paid",
   "invoicing.purchaseStatus.PAID": "Paid",
   "invoicing.purchaseStatus.CANCELLED": "Cancelled",
-  "invoicing.form.packDraft": "Rates from pack {pack}, awaiting validation: indicative."
+  "invoicing.form.packDraft": "Rates from pack {pack}, awaiting validation: indicative.",
+  "invoicing.actions.downloadPdf": "Download PDF",
+  "invoicing.actions.sendToClient": "Send to client",
+  "invoicing.actions.sendTitle": "Send document to client",
+  "invoicing.actions.sendRecipient": "Client email",
+  "invoicing.actions.sendNoEmail": "No email on file for this client. Enter an address to send.",
+  "invoicing.actions.sendSubmit": "Send",
+  "invoicing.actions.sendCancel": "Cancel",
+  "invoicing.actions.sendSuccess": "Document sent to client.",
+  "invoicing.actions.downloadError": "Download failed."
 }
