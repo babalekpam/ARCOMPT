@@ -18,6 +18,7 @@ import {
 } from "@arcompt/documents";
 import { requireRole } from "../auth.js";
 import type { AppDeps } from "../app.js";
+import { entitlementsForAuth, upgradeRequiredBody } from "../entitlements.js";
 
 /**
  * Pièces, capture IA, file de revue, assistant et anomalies.
@@ -161,6 +162,11 @@ export function documentsRoutes(deps: AppDeps) {
     const body = z.object({ question: z.string().min(2).max(2000) }).safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: { code: "VALIDATION", message: "{ question } attendu" } }, 400);
     const auth = c.get("auth");
+    // Droit fonctionnel : l'assistant IA n'existe que dans les offres qui l'incluent.
+    const ent = await entitlementsForAuth(deps.db!, auth).catch(() => null);
+    if (ent && !ent.features.aiAssistant) {
+      return c.json(upgradeRequiredBody(ent, "aiAssistant", "L'assistant IA", "Pro"), 403);
+    }
     const infra = createDocumentsInfraFromEnv(deps.db!);
     const tools = new AssistantTools({ db: deps.db!, ctx: auth, ledger: deps.ledgerFor(auth), baseCurrency: infra.baseCurrency });
     return c.json(await askAssistant(infra.gateway, tools, auth, body.data.question));

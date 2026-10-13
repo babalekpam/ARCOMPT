@@ -61,6 +61,7 @@ export function sessionRoutes(deps: AppDeps) {
         const companyId = randomUUID();
         await sql`select set_config('app.organization_id', ${orgId}, true)`;
         await sql`INSERT INTO organization (id, name, kind, plan) VALUES (${orgId}, ${input.name}, 'COMPANY', 'TRIAL')`;
+        await sql`INSERT INTO organization_subscription (organization_id, plan_code, started_at, ended_at) VALUES (${orgId}, 'TRIAL', current_date, current_date + 14)`;
         await sql`INSERT INTO app_user (id, organization_id, keycloak_sub, email, display_name) VALUES (${userId}, ${orgId}, ${auth.clerkSub!}, ${auth.clerkEmail!}, ${auth.clerkDisplayName ?? auth.clerkEmail!})`;
         await sql`INSERT INTO company (id, organization_id, name, country_code, currency, accounting_system, pack_version) VALUES (${companyId}, ${orgId}, ${input.name}, ${input.countryCode}, ${pack.identity.currency}, ${system}, ${pack.code + "@" + pack.version})`;
         await sql`select set_config('app.tenant_id', ${companyId}, true), set_config('app.organization_id', ${orgId}, true), set_config('app.user_id', ${userId}, true)`;

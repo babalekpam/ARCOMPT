@@ -33,7 +33,7 @@ import { taxRoutes } from "./routes/tax.js";
 import { treasuryRoutes } from "./routes/treasury.js";
 import { whatsappRoutes } from "./routes/whatsapp.js";
 import { whatsappLinkRoutes } from "./routes/whatsapp-link.js";
-import { platformRoutes } from "./routes/platform.js";
+import { platformRoutes, type SetSubscriptionInput } from "./routes/platform.js";
 import { platformAiRoutes } from "./routes/platform-ai.js";
 import { sessionRoutes } from "./routes/session.js";
 import { mfaRoutes, mfaStatus } from "./mfa.js";
@@ -222,6 +222,10 @@ export function createApp(deps: AppDeps) {
     db ? async (sub, mode) => {
       const [row] = await db`SELECT platform_overview(${sub},${mode?.sid ?? null},${mode?.tokenHash ?? null},${mode?.proofHash ?? null}) AS data`;
       return row?.data;
+    } : undefined,
+    db ? async (sub: string, mode: AdminModeEvidence | undefined, organizationId: string, input: SetSubscriptionInput) => {
+      const [row] = await db`SELECT platform_set_subscription(${sub},${mode?.sid ?? null},${mode?.tokenHash ?? null},${mode?.proofHash ?? null},${organizationId},${input.planCode},${input.startedAt ?? null},${input.endedAt ?? null},${input.pricePerDossier ?? null}) AS result`;
+      return (row?.result ?? { ok: false, code: "ERROR", message: "Aucune réponse de la base" }) as Record<string, unknown>;
     } : undefined));
   api.route("/company", companyRoutes(deps));
   api.route("/", sessionRoutes(deps));

@@ -78,7 +78,7 @@ export function LandingPage({ locale }: { locale: Locale }) {
 
       <section className={styles.closeSection}><div className={styles.shell}><p className={styles.kicker}>{copy.nav.product}</p><h2>{copy.close.title}</h2><p className={styles.bodyCopy}>{copy.close.body}</p><div className={styles.actions} style={{ marginTop: 29 }}><Link className={styles.primary} href="/sign-up">{copy.close.primary}<span style={{ marginLeft: 10 }}><Arrow /></span></Link><a className={styles.secondary} href="mailto:info@arcompt.com">{copy.close.secondary}</a></div></div></section>
 
-      <footer className={`${styles.footer} ${styles.shell}`}><div className={styles.footerRow}><span>{copy.footer.line}</span><span><a href="#platform">{copy.nav.product}</a><a href="#method">{copy.nav.method}</a><a href="mailto:info@arcompt.com">{copy.nav.contact}</a></span></div><div className={styles.footerBottom}><span>{copy.footer.built}</span><span>{copy.footer.legal}</span></div></footer>
+      <footer className={`${styles.footer} ${styles.shell}`}><div className={styles.footerRow}><span>{copy.footer.line}</span><span><a href="#platform">{copy.nav.product}</a><a href="#method">{copy.nav.method}</a><a href="mailto:info@arcompt.com">{copy.nav.contact}</a><a href="/pricing">{copy.nav.pricing}</a><a href="/privacy">{copy.nav.privacy}</a></span></div><div className={styles.footerBottom}><span>{copy.footer.built}</span><span>{copy.footer.legal}</span></div></footer>
     </main>
   );
 }

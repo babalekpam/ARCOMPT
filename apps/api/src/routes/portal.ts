@@ -268,6 +268,7 @@ export function portalRoutes(deps: AppDeps, opts: PortalRouteOptions = {}) {
     return c.json(await orgs.suspendInactiveAccounts(await orgCtx(c), days));
   }));
   r.get("/org/entitlement-review", ownerRole, h(async (c) => c.json(await orgs.entitlementReview(await orgCtx(c)))));
+  r.get("/org/entitlements", orgRole, h(async (c) => c.json(await orgs.entitlements(await orgCtx(c)))));
 
   r.get("/org/dashboard", orgRole, h(async (c) => c.json(await portal.dashboard(await orgCtx(c)))));
   r.get("/org/review-queue", orgRole, h(async (c) => c.json(await portal.reviewQueue(await orgCtx(c)))));

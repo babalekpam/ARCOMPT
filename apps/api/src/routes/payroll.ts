@@ -5,6 +5,7 @@ import { z } from "zod";
 import { maskSensitive, PayrollError, PayrollService, type Employee, type EmployeeInput, type EmployeePatch, type PayslipInputs, type PayslipView } from "@arcompt/payroll";
 import { requireRole, type AuthContext, type Role } from "../auth.js";
 import type { AppDeps } from "../app.js";
+import { entitlementsForAuth, upgradeRequiredBody } from "../entitlements.js";
 
 /**
  * Routes du module paie. Le dossier vient du jeton (auth.tenantId) : un OWNER
@@ -53,6 +54,12 @@ export function payrollRoutes(deps: AppDeps) {
 
   r.use("*", async (c, next) => {
     if (!deps.db) return c.json({ error: { code: "UNAVAILABLE", message: "Module paie indisponible : aucune base de données configurée" } }, 503);
+    // Droit fonctionnel : la paie n'existe que dans les offres qui l'incluent.
+    const auth = c.get("auth") as AuthContext;
+    const ent = await entitlementsForAuth(deps.db, auth).catch(() => null);
+    if (ent && !ent.features.payroll) {
+      return c.json(upgradeRequiredBody(ent, "payroll", "La paie", "Pro"), 403);
+    }
     return next();
   });
 

@@ -19,7 +19,6 @@ function Row({ label, value, mono = false }: { label: string; value: React.React
     <div className="flex flex-col gap-0.5 py-2 sm:flex-row sm:items-center sm:justify-between">
       <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
       <dd className={`text-sm ${mono ? "font-mono text-xs" : ""}`}>{value ?? "—"}</dd>
-    <CompanyProfileForm />
     </div>
   );
 }
@@ -35,11 +34,46 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   const packCode = (typeof sp.pack === "string" && /^[a-z]{2}$/i.test(sp.pack) ? sp.pack : (company?.countryCode ?? process.env.DEFAULT_COUNTRY_PACK ?? "ci")).toLowerCase();
   const [packs, pack] = await Promise.all([apiTry<{ packs: PackSummary[] }>("/packs"), apiTry<CountryPack>(`/packs/${packCode}`)]);
   const memberReference = auth.tenantId ? await getCurrentMemberReference() : null;
+  const entitlements = await apiTry<{
+    planCode: string; label: string; currency: string; pricePerDossier: string;
+    status: "TRIAL" | "TRIAL_EXPIRED" | "ACTIVE" | "ENDED";
+    trialEndsAt: string | null; endedAt: string | null;
+    features: { payroll: boolean; aiAssistant: boolean; whiteLabel: boolean; firmDashboard: boolean; maxUsers: number | null; maxDossiers: number | null };
+    usage: { users: number; dossiers: number };
+  }>("/portal/org/entitlements");
 
   return (
     <>
       <PageHeader title={t("settings.title")} subtitle={t("settings.subtitle")} />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="lg:col-span-2">
+          <CompanyProfileForm />
+        </div>
+        <Card>
+          <CardTitle>Votre forfait</CardTitle>
+          {entitlements.ok ? (
+            <dl className="divide-y divide-slate-100 dark:divide-slate-800">
+              <Row label="Offre" value={<span className="font-medium">{entitlements.data.label}</span>} />
+              <Row label="Statut" value={
+                entitlements.data.status === "TRIAL" ? `Essai — jusqu’au ${entitlements.data.trialEndsAt ?? ""}` :
+                entitlements.data.status === "TRIAL_EXPIRED" ? "Essai terminé — droits réduits à l’Essentiel" :
+                entitlements.data.status === "ENDED" ? "Abonnement terminé — droits réduits à l’Essentiel" : "Actif"
+              } />
+              <Row label="Prix" value={Number(entitlements.data.pricePerDossier) > 0 ? `${Number(entitlements.data.pricePerDossier).toLocaleString("fr-FR")} ${entitlements.data.currency} / dossier / mois` : "Gratuit"} />
+              <Row label="Utilisateurs" value={`${entitlements.data.usage.users} / ${entitlements.data.features.maxUsers ?? "∞"}`} />
+              <Row label="Dossiers" value={`${entitlements.data.usage.dossiers} / ${entitlements.data.features.maxDossiers ?? "∞"}`} />
+              <Row label="Paie" value={entitlements.data.features.payroll ? "Incluse" : "Non incluse (offre Pro)"} />
+              <Row label="Assistant IA" value={entitlements.data.features.aiAssistant ? "Inclus" : "Non inclus (offre Pro)"} />
+              <Row label="Marque blanche" value={entitlements.data.features.whiteLabel ? "Incluse" : "Non incluse (offre Cabinet)"} />
+            </dl>
+          ) : (
+            <p className="py-2 text-sm text-slate-500">Forfait indisponible pour le moment.</p>
+          )}
+          <p className="mt-3 text-sm text-slate-500">
+            Pour changer d’offre, écrivez à <a href="mailto:info@arcompt.com" className="underline underline-offset-4">info@arcompt.com</a> —{" "}
+            <Link href="/pricing" className="underline underline-offset-4">voir les offres</Link>.
+          </p>
+        </Card>
         <Card>
           <CardTitle hint={t("settings.companyHint")} action={<Link href="/firm/members" className="text-sm font-medium text-teal-700 underline hover:text-teal-900 dark:text-teal-300">{t("nav.invitations")}</Link>}>{t("settings.company")}</CardTitle>
           <dl className="divide-y divide-slate-100 dark:divide-slate-800">
