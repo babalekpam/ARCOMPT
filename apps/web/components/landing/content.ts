@@ -1,7 +1,7 @@
 import type { Locale } from "@/lib/i18n";
 
 export type LandingCopy = {
-  nav: { product: string; method: string; forFirms: string; signIn: string; contact: string; menu: string; navigation: string; home: string };
+  nav: { product: string; method: string; forFirms: string; signIn: string; signUp: string; contact: string; menu: string; navigation: string; home: string };
   hero: {
     eyebrow: string;
     title: string;
@@ -27,7 +27,7 @@ export type LandingCopy = {
 };
 
 const fr: LandingCopy = {
-  nav: { product: "La plateforme", method: "Notre méthode", forFirms: "Pour les cabinets", signIn: "Se connecter", contact: "Parler à l’équipe", menu: "Menu", navigation: "Navigation principale", home: "Accueil ARCOMPT" },
+  nav: { product: "La plateforme", method: "Notre méthode", forFirms: "Pour les cabinets", signIn: "Se connecter", signUp: "Créer un compte", contact: "Parler à l’équipe", menu: "Menu", navigation: "Navigation principale", home: "Accueil ARCOMPT" },
   hero: {
     eyebrow: "Comptabilité OHADA, avec discernement",
     title: "Les chiffres importants méritent plus qu’un bouton « valider ».",
@@ -93,7 +93,7 @@ const fr: LandingCopy = {
 };
 
 const en: LandingCopy = {
-  nav: { product: "The platform", method: "Our method", forFirms: "For firms", signIn: "Sign in", contact: "Talk to the team", menu: "Menu", navigation: "Main navigation", home: "ARCOMPT home" },
+  nav: { product: "The platform", method: "Our method", forFirms: "For firms", signIn: "Sign in", signUp: "Create account", contact: "Talk to the team", menu: "Menu", navigation: "Main navigation", home: "ARCOMPT home" },
   hero: {
     eyebrow: "OHADA accounting, with judgment",
     title: "Important numbers deserve more than a “confirm” button.",

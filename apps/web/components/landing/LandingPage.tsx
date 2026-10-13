@@ -29,10 +29,11 @@ export function LandingPage({ locale }: { locale: Locale }) {
           <div className={styles.navActions}>
             <LocaleSwitcher compact />
             <Link className={styles.signIn} href="/login">{copy.nav.signIn}</Link>
+            <Link className={styles.signUp} href="/sign-up">{copy.nav.signUp}</Link>
             <button className={styles.menuButton} type="button" aria-expanded={menuOpen} aria-controls="landing-mobile-nav" onClick={() => setMenuOpen((open) => !open)}>{copy.nav.menu}</button>
           </div>
         </nav>
-        {menuOpen && <div id="landing-mobile-nav" className={styles.mobileNav}><a href="#platform" onClick={() => setMenuOpen(false)}>{copy.nav.product}</a><a href="#method" onClick={() => setMenuOpen(false)}>{copy.nav.method}</a><a href="#firms" onClick={() => setMenuOpen(false)}>{copy.nav.forFirms}</a></div>}
+        {menuOpen && <div id="landing-mobile-nav" className={styles.mobileNav}><a href="#platform" onClick={() => setMenuOpen(false)}>{copy.nav.product}</a><a href="#method" onClick={() => setMenuOpen(false)}>{copy.nav.method}</a><a href="#firms" onClick={() => setMenuOpen(false)}>{copy.nav.forFirms}</a><Link href="/login" onClick={() => setMenuOpen(false)}>{copy.nav.signIn}</Link><Link href="/sign-up" onClick={() => setMenuOpen(false)}>{copy.nav.signUp}</Link></div>}
       </header>
 
       <section className={styles.hero}>
@@ -42,7 +43,7 @@ export function LandingPage({ locale }: { locale: Locale }) {
             <h1>{copy.hero.title}</h1>
             <p className={styles.heroBody}>{copy.hero.body}</p>
             <div className={styles.actions}>
-              <Link className={styles.primary} href="/login">{copy.hero.primary} <span style={{ marginLeft: 10 }}><Arrow /></span></Link>
+              <Link className={styles.primary} href="/sign-up">{copy.hero.primary} <span style={{ marginLeft: 10 }}><Arrow /></span></Link>
               <a className={styles.secondary} href="#method">{copy.hero.secondary}</a>
             </div>
             <p className={styles.heroNote}>{copy.hero.note}</p>
@@ -71,11 +72,11 @@ export function LandingPage({ locale }: { locale: Locale }) {
 
       <section id="method" className={`${styles.section} ${styles.methodSection}`}><div className={styles.shell}><div className={styles.methodHead}><div><p className={styles.kicker}>{copy.method.kicker}</p><h2>{copy.method.title}</h2></div><p className={styles.bodyCopy}>{copy.method.body}</p></div><div className={styles.steps}>{copy.method.steps.map((step) => <article className={styles.step} key={step.no}><span className={styles.stepNo}>{step.no}</span><h3>{step.title}</h3><p>{step.body}</p></article>)}</div></div></section>
 
-      <section id="firms" className={`${styles.section} ${styles.shell}`}><div className={styles.firmsGrid}><div><p className={styles.kicker}>{copy.firms.kicker}</p><h2>{copy.firms.title}</h2><p className={styles.bodyCopy}>{copy.firms.body}</p><Link className={`${styles.primary}`} href="/login" style={{ marginTop: 30 }}>{copy.firms.cta}<span style={{ marginLeft: 10 }}><Arrow /></span></Link></div><ul className={styles.checkList}>{copy.firms.items.map((item) => <li key={item}>{item}</li>)}</ul></div></section>
+      <section id="firms" className={`${styles.section} ${styles.shell}`}><div className={styles.firmsGrid}><div><p className={styles.kicker}>{copy.firms.kicker}</p><h2>{copy.firms.title}</h2><p className={styles.bodyCopy}>{copy.firms.body}</p><Link className={`${styles.primary}`} href="/sign-up" style={{ marginTop: 30 }}>{copy.firms.cta}<span style={{ marginLeft: 10 }}><Arrow /></span></Link></div><ul className={styles.checkList}>{copy.firms.items.map((item) => <li key={item}>{item}</li>)}</ul></div></section>
 
       <section className={`${styles.section} ${styles.guardrailSection}`}><div className={`${styles.shell} ${styles.guardrailGrid}`}><div><p className={styles.kicker}>{copy.guardrails.kicker}</p><h2>{copy.guardrails.title}</h2><p className={styles.bodyCopy}>{copy.guardrails.body}</p></div><ul className={styles.guardrailList}>{copy.guardrails.items.map((item) => <li key={item}>{item}</li>)}</ul></div></section>
 
-      <section className={styles.closeSection}><div className={styles.shell}><p className={styles.kicker}>{copy.nav.product}</p><h2>{copy.close.title}</h2><p className={styles.bodyCopy}>{copy.close.body}</p><div className={styles.actions} style={{ marginTop: 29 }}><Link className={styles.primary} href="/login">{copy.close.primary}<span style={{ marginLeft: 10 }}><Arrow /></span></Link><a className={styles.secondary} href="mailto:info@arcompt.com">{copy.close.secondary}</a></div></div></section>
+      <section className={styles.closeSection}><div className={styles.shell}><p className={styles.kicker}>{copy.nav.product}</p><h2>{copy.close.title}</h2><p className={styles.bodyCopy}>{copy.close.body}</p><div className={styles.actions} style={{ marginTop: 29 }}><Link className={styles.primary} href="/sign-up">{copy.close.primary}<span style={{ marginLeft: 10 }}><Arrow /></span></Link><a className={styles.secondary} href="mailto:info@arcompt.com">{copy.close.secondary}</a></div></div></section>
 
       <footer className={`${styles.footer} ${styles.shell}`}><div className={styles.footerRow}><span>{copy.footer.line}</span><span><a href="#platform">{copy.nav.product}</a><a href="#method">{copy.nav.method}</a><a href="mailto:info@arcompt.com">{copy.nav.contact}</a></span></div><div className={styles.footerBottom}><span>{copy.footer.built}</span><span>{copy.footer.legal}</span></div></footer>
     </main>
