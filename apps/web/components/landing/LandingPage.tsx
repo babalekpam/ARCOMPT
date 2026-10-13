@@ -25,6 +25,7 @@ export function LandingPage({ locale }: { locale: Locale }) {
             <a href="#platform">{copy.nav.product}</a>
             <a href="#method">{copy.nav.method}</a>
             <a href="#firms">{copy.nav.forFirms}</a>
+            <a href="/pricing">{copy.nav.pricing}</a>
           </div>
           <div className={styles.navActions}>
             <LocaleSwitcher compact />
@@ -33,7 +34,7 @@ export function LandingPage({ locale }: { locale: Locale }) {
             <button className={styles.menuButton} type="button" aria-expanded={menuOpen} aria-controls="landing-mobile-nav" onClick={() => setMenuOpen((open) => !open)}>{copy.nav.menu}</button>
           </div>
         </nav>
-        {menuOpen && <div id="landing-mobile-nav" className={styles.mobileNav}><a href="#platform" onClick={() => setMenuOpen(false)}>{copy.nav.product}</a><a href="#method" onClick={() => setMenuOpen(false)}>{copy.nav.method}</a><a href="#firms" onClick={() => setMenuOpen(false)}>{copy.nav.forFirms}</a><Link href="/login" onClick={() => setMenuOpen(false)}>{copy.nav.signIn}</Link><Link href="/sign-up" onClick={() => setMenuOpen(false)}>{copy.nav.signUp}</Link></div>}
+        {menuOpen && <div id="landing-mobile-nav" className={styles.mobileNav}><a href="#platform" onClick={() => setMenuOpen(false)}>{copy.nav.product}</a><a href="#method" onClick={() => setMenuOpen(false)}>{copy.nav.method}</a><a href="#firms" onClick={() => setMenuOpen(false)}>{copy.nav.forFirms}</a><a href="/pricing" onClick={() => setMenuOpen(false)}>{copy.nav.pricing}</a><Link href="/login" onClick={() => setMenuOpen(false)}>{copy.nav.signIn}</Link><Link href="/sign-up" onClick={() => setMenuOpen(false)}>{copy.nav.signUp}</Link></div>}
       </header>
 
       <section className={styles.hero}>
