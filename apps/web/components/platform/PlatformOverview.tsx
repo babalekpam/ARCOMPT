@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { PlatformOverview as Overview } from "@/lib/platform-overview";
 import { filterPlatformOrganizations } from "@/lib/platform-overview";
 import { PlatformCompanyList } from "@/components/platform/PlatformCompanyList";
+import { PlanChanger } from "@/components/platform/PlanChanger";
 import { Input } from "@/components/ui/Field";
 import "./platform.css";
 
@@ -53,6 +54,7 @@ export function PlatformOverview({ overview }: { overview: Overview }) {
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400">{number(org.users)} utilisateur(s) · {number(org.activeUsers)} actif(s) · {number(org.suspendedUsers)} suspendu(s)</p>
                 <p className="mt-1 break-all font-mono text-[11px] text-slate-500 dark:text-slate-400">{org.id}</p>
+                <PlanChanger organizationId={org.id} currentPlan={org.plan} />
               </div>
               <div className="p-4">
                 {org.companies.length ? <PlatformCompanyList companies={org.companies} compact /> : <p className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-400">Aucun dossier comptable dans cette organisation.</p>}

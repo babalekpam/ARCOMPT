@@ -6,7 +6,8 @@ import { z } from "zod";
 import { decryptTaxIds, encryptTaxIds, seedCompany, tenantCipherIn, withTenant, type Db } from "@arcompt/db";
 import { loadPack as defaultLoadPack, type CountryPack } from "@arcompt/country-packs";
 import { PortalError } from "./errors.js";
-import { audit, iso, isoOrNull, str, strOrNull, type Row } from "./sql.js";
+import { assertDossierSlotAvailable, assertSeatAvailable, resolveEntitlements, seatsUsed, type Entitlements } from "./entitlements.js";
+import { audit, int, iso, isoOrNull, str, strOrNull, type Row } from "./sql.js";
 import { generateInvitationToken, hashInvitationToken } from "./tokens.js";
 import {
   MEMBER_ROLES,
@@ -178,6 +179,8 @@ export class OrganizationService {
     if (!pack.identity.accounting_systems.includes(accountingSystem)) {
       throw new PortalError("VALIDATION", `Système ${accountingSystem} non prévu par le pack ${pack.code}`);
     }
+    // Plafond de dossiers de l'offre (essai : 1) — vérifié avant tout semis.
+    await withTenant(this.db, { tenantId: "", organizationId }, (tx) => assertDossierSlotAvailable(tx, organizationId));
     const { companyId } = await seedCompany(this.db, {
       organizationId,
       name: input.name,
@@ -225,6 +228,16 @@ export class OrganizationService {
     return rows.map(mapCompany);
   }
 
+  /** Offre de l'organisation, droits effectifs et consommation (sièges, dossiers). */
+  async entitlements(ctx: OrganizationContext): Promise<Entitlements & { usage: { users: number; dossiers: number } }> {
+    return withTenant(this.db, orgCtx(ctx), async (tx) => {
+      const ent = await resolveEntitlements(tx, ctx.organizationId);
+      const users = await seatsUsed(tx, ctx.organizationId);
+      const [row] = await tx`SELECT count(*)::int AS n FROM company WHERE organization_id = ${ctx.organizationId}`;
+      return { ...ent, usage: { users, dossiers: int((row as Row | undefined)?.n) } };
+    });
+  }
+
   // ---------------------------------------------------------------- invitations
 
   /** Crée une invitation ; le jeton en clair n'est renvoyé qu'ici, la base ne garde que son hash. */
@@ -238,6 +251,8 @@ export class OrganizationService {
     const row = await withTenant(this.db, orgCtx(ctx), async (tx) => {
       const known = await tx`SELECT id FROM company WHERE organization_id = ${ctx.organizationId} AND id = ANY(${input.companyIds}::uuid[])`;
       if (known.length !== new Set(input.companyIds).size) throw new PortalError("NOT_FOUND", "Un des dossiers n'appartient pas à l'organisation");
+      // Plafond de sièges de l'offre (membres + invitations en attente).
+      await assertSeatAvailable(tx, ctx.organizationId);
       const [inserted] = await tx`
         INSERT INTO invitation (organization_id, email, role, company_ids, token_hash, invited_by, expires_at)
         VALUES (${ctx.organizationId}, ${input.email.trim().toLowerCase()}, ${input.role}, ${tx.json(input.companyIds)}, ${tokenHash}, ${ctx.userId ?? null},
@@ -305,6 +320,10 @@ export class OrganizationService {
           RETURNING id`;
       }
       const uid = str(user!.id);
+      // Plafond de sièges : un membre déjà compté ne consomme pas de nouveau siège.
+      const [alreadyMember] = await tx`SELECT 1 AS x FROM company_member m JOIN company c ON c.id = m.company_id
+        WHERE c.organization_id = ${organizationId} AND m.user_id = ${uid} LIMIT 1`;
+      if (!alreadyMember) await assertSeatAvailable(tx, organizationId);
       const [updated] = await tx`UPDATE invitation SET accepted_at = now(), accepted_by = ${uid}
         WHERE id = ${inv.id} AND accepted_at IS NULL AND expires_at > now() RETURNING id`;
       if (!updated) throw new PortalError("INVITATION_ACCEPTED", "Invitation déjà acceptée ou expirée");

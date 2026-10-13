@@ -13,6 +13,7 @@ export type PortalErrorCode =
   | "MFA_REQUIRED_FOR_FIRM"
   | "PACK_UNAVAILABLE"
   | "FILING_STATE"
+  | "PLAN_UPGRADE_REQUIRED"
   | "NOTIFY_FAILED";
 
 /** Erreur métier du portail : l'API la traduit en 400/403/404/409/422. */
@@ -32,6 +33,7 @@ export class PortalError extends Error {
         return 400;
       case "FORBIDDEN":
       case "MFA_REQUIRED":
+      case "PLAN_UPGRADE_REQUIRED":
         return 403;
       case "NOT_FOUND":
       case "INVITATION_INVALID":

@@ -19,5 +19,6 @@ export * from "./billing.js";
 export * from "./deadlines.js";
 export * from "./notifier.js";
 export * from "./organization-service.js";
+export * from "./entitlements.js";
 export * from "./portal-service.js";
 export * from "./access-service.js";

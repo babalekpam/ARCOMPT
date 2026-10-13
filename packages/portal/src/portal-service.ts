@@ -8,6 +8,7 @@ import { legalFooterFromEnv, missingDocumentMail, resolveLocale } from "@arcompt
 import { computeDegressiveInvoice, type DegressiveInvoice, type PricingMode } from "./billing.js";
 import { nextDeadlines } from "./deadlines.js";
 import { PortalError } from "./errors.js";
+import { assertFeature, resolveEntitlements } from "./entitlements.js";
 import type { Notifier } from "./notifier.js";
 import { audit, int, iso, isoOrNull, str, strOrNull, type Row } from "./sql.js";
 import type {
@@ -402,6 +403,7 @@ export class PortalService {
     if (!parsed.success) throw new PortalError("VALIDATION", "Réglages de marque blanche invalides", parsed.error.issues);
     return withTenant(this.db, orgCtx(ctx), async (tx) => {
       await this.subscription(tx, ctx.organizationId);
+      assertFeature(await resolveEntitlements(tx, ctx.organizationId), "whiteLabel", "La marque blanche", "Cabinet");
       if (parsed.data.logoDocumentId) {
         // Le logo est une pièce d'un des dossiers de l'organisation.
         const [doc] = await tx`SELECT d.id FROM document d JOIN company c ON c.id = d.tenant_id WHERE d.id = ${parsed.data.logoDocumentId} AND c.organization_id = ${ctx.organizationId}`;
