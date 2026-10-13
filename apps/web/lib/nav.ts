@@ -12,6 +12,7 @@ export const MAIN_NAV: NavItem[] = [
   { href: "/dashboard", labelKey: "nav.dashboard", icon: "▦" },
   { href: "/entries", labelKey: "nav.entries", icon: "✎" },
   { href: "/invoices", labelKey: "nav.invoices", icon: "▣" },
+  { href: "/payments", labelKey: "nav.payments", icon: "¤" },
   { href: "/expenses", labelKey: "nav.expenses", icon: "▧" },
   { href: "/treasury", labelKey: "nav.treasury", icon: "◈" },
   { href: "/payroll", labelKey: "nav.payroll", icon: "☺" },

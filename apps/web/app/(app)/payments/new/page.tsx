@@ -15,7 +15,7 @@ export default async function NewPaymentPage({ searchParams }: { searchParams: S
     <>
       <PageHeader title={t("invoicing.payments.new")} subtitle={t("invoicing.payments.newSubtitle")} />
       <Card>
-        <PaymentForm currency={ctx.currency} initialKind={sp.kind === "DISBURSEMENT" ? "DISBURSEMENT" : "RECEIPT"} />
+        <PaymentForm currency={ctx.currency} initialKind={sp.kind === "DISBURSEMENT" ? "DISBURSEMENT" : "RECEIPT"} initialPartnerId={typeof sp.partnerId === "string" ? sp.partnerId : undefined} initialDocumentId={typeof sp.documentId === "string" ? sp.documentId : undefined} />
       </Card>
     </>
   );

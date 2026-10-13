@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 "use client";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { apiClient, errorMessage } from "@/lib/api-client";
 import { formatDate } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n-client";
@@ -34,7 +34,7 @@ const DEFAULT_ACCOUNT: Record<PaymentMethod, string> = { BANK: "521", CHEQUE: "5
  * affectations aux documents ouverts du tiers. Au-delà du seuil du dossier,
  * l'API met le règlement en attente d'approbation par un autre utilisateur.
  */
-export function PaymentForm({ currency, initialKind = "RECEIPT" }: { currency: string; initialKind?: PaymentKind }) {
+export function PaymentForm({ currency, initialKind = "RECEIPT", initialPartnerId, initialDocumentId }: { currency: string; initialKind?: PaymentKind; initialPartnerId?: string; initialDocumentId?: string }) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const [kind, setKind] = useState<PaymentKind>(initialKind);
@@ -51,6 +51,15 @@ export function PaymentForm({ currency, initialKind = "RECEIPT" }: { currency: s
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Payment | null>(null);
 
+  const preselectDone = useRef(false);
+  useEffect(() => {
+    if (preselectDone.current || !initialPartnerId) return;
+    preselectDone.current = true;
+    apiClient<Partner>(`/partners/${initialPartnerId}`)
+      .then((p) => setPartner(p))
+      .catch(() => {});
+  }, [initialPartnerId]);
+
   useEffect(() => {
     apiClient<TreasuryAccount[]>("/treasury/accounts")
       .then((a) => setAccounts(a))
@@ -63,9 +72,19 @@ export function PaymentForm({ currency, initialKind = "RECEIPT" }: { currency: s
     if (!partner) return;
     const load = kind === "RECEIPT" ? apiClient<SalesDocument[]>("/sales", { query: { partnerId: partner.id, kind: "INVOICE", limit: 200 } }) : apiClient<PurchaseDocument[]>("/purchases", { query: { partnerId: partner.id, limit: 200 } });
     load
-      .then((docs) => setOpenDocs((docs as Array<SalesDocument | PurchaseDocument>).filter((d) => (kind === "RECEIPT" ? d.status === "SENT" || d.status === "PARTIALLY_PAID" : (d.status === "POSTED" || d.status === "PARTIALLY_PAID") && d.kind !== "SUPPLIER_CREDIT_NOTE")).map((d) => ({ id: d.id, number: d.number, issueDate: d.issueDate, dueDate: d.dueDate, outstanding: d.outstanding, currency: d.currency }))))
+      .then((docs) => {
+        const mapped = (docs as Array<SalesDocument | PurchaseDocument>).filter((d) => (kind === "RECEIPT" ? d.status === "SENT" || d.status === "PARTIALLY_PAID" : (d.status === "POSTED" || d.status === "PARTIALLY_PAID") && d.kind !== "SUPPLIER_CREDIT_NOTE")).map((d) => ({ id: d.id, number: d.number, issueDate: d.issueDate, dueDate: d.dueDate, outstanding: d.outstanding, currency: d.currency }));
+        setOpenDocs(mapped);
+        if (initialDocumentId) {
+          const target = mapped.find((d) => d.id === initialDocumentId);
+          if (target) {
+            setAlloc({ [target.id]: target.outstanding });
+            setAmount((prev) => (prev ? prev : target.outstanding));
+          }
+        }
+      })
       .catch(() => setOpenDocs([]));
-  }, [partner, kind]);
+  }, [partner, kind, initialDocumentId]);
 
   const allocated = useMemo(() => sumAllocations(Object.values(alloc)), [alloc]);
   const amountNorm = normalizeInput(amount);

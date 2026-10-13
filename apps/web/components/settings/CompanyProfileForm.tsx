@@ -6,17 +6,18 @@ import { Field, Input } from "@/components/ui/Field";
 import { Button, buttonClass } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 type Profile = { name: string; address: string | null; city: string | null; phone: string | null; logoDataUri: string | null };
+function errText(e: unknown, fallback: string): string { if (typeof e === "string" && e) return e; if (e && typeof e === "object") { const o = e as { message?: unknown; error?: unknown }; if (typeof o.message === "string" && o.message) return o.message; if (o.error && o.error !== e) return errText(o.error, fallback); } return fallback; }
 export function CompanyProfileForm() {
 const [p, setP] = useState<Profile | null>(null);
 const [msg, setMsg] = useState("");
 const [busy, setBusy] = useState(false);
 const fileRef = useRef<HTMLInputElement>(null);
 useEffect(() => { apiClient("/company/profile").then((j) => { const v = j as { profile?: Profile }; if (v.profile) setP(v.profile); }).catch(() => {}); }, []);
-async function save() { setBusy(true); setMsg(""); try { await apiClient("/company/profile", { method: "PATCH", body: { name: p?.name, address: p?.address ?? "", city: p?.city ?? "", phone: p?.phone ?? "" } }); setMsg("Enregistré."); } finally { setBusy(false); } }
-async function up(f: File) { setBusy(true); setMsg(""); try { const fd = new FormData(); fd.append("file", f); const r = await fetch(proxyUrl("/company/logo"), { method: "POST", body: fd }); const j = await r.json().catch(() => ({})); if (r.ok && j.logoDataUri) setP((x) => (x ? { ...x, logoDataUri: j.logoDataUri } : x)); setMsg(r.ok ? "Logo mis à jour." : (j.error || "Erreur logo.")); } finally { setBusy(false); } }
-async function removeLogo() { setBusy(true); setMsg(""); try { const r = await fetch(proxyUrl("/company/logo"), { method: "DELETE" }); const j = await r.json().catch(() => ({})); if (r.ok) { setP((x) => (x ? { ...x, logoDataUri: null } : x)); setMsg("Logo supprimé."); } else { setMsg(j.error || "Erreur logo."); } } finally { setBusy(false); } }
+async function save() { setBusy(true); setMsg(""); try { await apiClient("/company/profile", { method: "PATCH", body: { name: p?.name, address: p?.address ?? "", city: p?.city ?? "", phone: p?.phone ?? "" } }); setMsg("Enregistré."); } catch (e) { setMsg(errText(e, "Erreur lors de l’enregistrement.")); } finally { setBusy(false); } }
+async function up(f: File) { setBusy(true); setMsg(""); try { const fd = new FormData(); fd.append("file", f); const r = await fetch(proxyUrl("/company/logo"), { method: "POST", body: fd }); const j = await r.json().catch(() => ({})); if (r.ok && j.logoDataUri) setP((x) => (x ? { ...x, logoDataUri: j.logoDataUri } : x)); setMsg(r.ok ? "Logo mis à jour." : errText(j.error, "Erreur logo.")); } finally { setBusy(false); } }
+async function removeLogo() { setBusy(true); setMsg(""); try { const r = await fetch(proxyUrl("/company/logo"), { method: "DELETE" }); const j = await r.json().catch(() => ({})); if (r.ok) { setP((x) => (x ? { ...x, logoDataUri: null } : x)); setMsg("Logo supprimé."); } else { setMsg(errText(j.error, "Erreur logo.")); } } finally { setBusy(false); } }
 if (!p) return (<Card><p className="text-sm text-slate-500">Chargement...</p></Card>);
-const isError = /erreur/i.test(msg);
+const isError = /erreur|error|échec/i.test(msg);
 return (
 <Card>
 <CardTitle hint="Ces informations apparaissent sur vos factures.">Profil de l’entreprise</CardTitle>

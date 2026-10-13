@@ -143,6 +143,13 @@ export default async function InvoiceDetailPage({ params, searchParams }: { para
           </Card>
           <Card>
             <CardTitle hint={t("invoicing.payments.hint")}>{t("invoicing.payments.title")}</CardTitle>
+            {doc.kind === "INVOICE" && (doc.status === "SENT" || doc.status === "PARTIALLY_PAID") ? (
+              <div className="mb-3">
+                <LinkButton href={`/payments/new?partnerId=${doc.partnerId}&documentId=${doc.id}`} size="sm">
+                  {t("invoicing.payments.new")}
+                </LinkButton>
+              </div>
+            ) : null}
             {!payments.ok ? <ApiErrorNotice error={payments.error} /> : null}
             {payments.ok && paymentRows.length === 0 ? <p className="text-sm text-slate-500">{t("invoicing.payments.none")}</p> : null}
             {paymentRows.length > 0 ? (
