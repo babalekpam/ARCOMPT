@@ -5,8 +5,10 @@
 export interface PlanInfo {
   code: string;
   label: string;
-  /** Prix par dossier et par mois, en FCFA (XOF/XAF, même parité). */
+  /** Prix mensuel en FCFA (XOF/XAF, même parité) : par dossier, ou forfait unique si flat. */
   price: number;
+  /** true = forfait mensuel unique pour toute l'organisation (Cabinet). */
+  flat?: boolean;
   tagline: string;
   features: string[];
   highlighted?: boolean;
@@ -40,9 +42,10 @@ export const PLANS: PlanInfo[] = [
   {
     code: "CABINET",
     label: "Cabinet",
-    price: 7500,
+    price: 75000,
+    flat: true,
     tagline: "Pour les cabinets qui gèrent les dossiers de leurs clients.",
-    features: ["Tout le Pro, tarif dégressif selon le volume", "Tableau de bord multi-dossiers", "Marque blanche (votre logo, vos couleurs)", "Jusqu'à 10 utilisateurs"],
+    features: ["Tout le Pro, pour tout le cabinet", "Dossiers illimités", "10 utilisateurs inclus", "Tableau de bord multi-dossiers", "Marque blanche (votre logo, vos couleurs)"],
   },
 ];
 

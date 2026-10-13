@@ -17,7 +17,8 @@ export default function PricingPage() {
         </Link>
         <h1 className="mt-8 text-3xl font-semibold tracking-tight">Des tarifs simples, en francs CFA</h1>
         <p className="mt-3 max-w-2xl leading-relaxed text-slate-600">
-          Un prix par dossier comptable et par mois, sans frais cachés. Les prix sont identiques en XOF et en XAF.
+          Un prix par dossier comptable et par mois pour les entreprises, un forfait unique pour les cabinets,
+          sans frais cachés. Les prix sont identiques en XOF et en XAF.
           L’abonnement annuel fait bénéficier de deux mois offerts.
         </p>
         <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -32,7 +33,7 @@ export default function PricingPage() {
               <h2 className="text-lg font-semibold">{plan.label}</h2>
               <p className="mt-3">
                 <span className="text-2xl font-bold tracking-tight">{plan.price === 0 ? "Gratuit" : formatCfa(plan.price)}</span>
-                {plan.price > 0 ? <span className="mt-1 block text-xs text-slate-500">par dossier et par mois</span> : null}
+                {plan.price > 0 ? <span className="mt-1 block text-xs text-slate-500">{plan.flat ? "par cabinet et par mois" : "par dossier et par mois"}</span> : null}
               </p>
               <p className="mt-3 text-sm leading-relaxed text-slate-600">{plan.tagline}</p>
               <ul className="mt-5 flex-1 space-y-2 text-sm text-slate-700">
@@ -54,8 +55,8 @@ export default function PricingPage() {
         </div>
         <section className="mt-12 space-y-4 text-sm leading-relaxed text-slate-600">
           <p>
-            <strong className="text-slate-900">Cabinets :</strong> le tarif Cabinet est dégressif — 7 500 FCFA par dossier
-            jusqu’à 5 dossiers, puis 6 500, 5 500 et 4 500 FCFA au-delà. Vous ne payez que pour les dossiers actifs.
+            <strong className="text-slate-900">Cabinets :</strong> le forfait Cabinet est un prix unique de 75 000 FCFA
+            par mois pour tout le cabinet, quel que soit le nombre de dossiers : dossiers illimités et 10 utilisateurs inclus.
           </p>
           <p>
             <strong className="text-slate-900">Changement d’offre :</strong> vous pouvez monter ou descendre d’offre à tout

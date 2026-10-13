@@ -382,11 +382,13 @@ export class PortalService {
         SELECT count(*)::int AS n FROM company
         WHERE organization_id = ${ctx.organizationId} AND created_at < (${month + "-01"}::date + interval '1 month')`;
       const n = int(count?.n);
+      const planFeatures = (sub.plan_features ?? {}) as { billing?: string };
       const invoice = computeDegressiveInvoice({
         dossiers: n,
         tiers: sub.degressive_tiers ?? sub.plan_tiers,
         pricePerDossier: str(sub.price_per_dossier ?? sub.plan_price),
         mode: str(sub.pricing_mode ?? sub.plan_mode) as PricingMode,
+        flatMonthly: planFeatures.billing === "flat" ? str(sub.price_per_dossier ?? sub.plan_price) : undefined,
       });
       return { ...invoice, organizationId: ctx.organizationId, month, planCode: str(sub.plan_code), currency: str(sub.currency), activeDossiers: n };
     });
@@ -468,7 +470,7 @@ export class PortalService {
   /** Abonnement de l'organisation, créé au besoin sur le plan de l'organisation (ou TRIAL). */
   private async subscription(tx: Sql, organizationId: string): Promise<Row> {
     const select = () => tx`
-      SELECT s.*, p.degressive_tiers AS plan_tiers, p.price_per_dossier AS plan_price, p.pricing_mode AS plan_mode, p.currency
+      SELECT s.*, p.degressive_tiers AS plan_tiers, p.price_per_dossier AS plan_price, p.pricing_mode AS plan_mode, p.features AS plan_features, p.currency
       FROM organization_subscription s JOIN subscription_plan p ON p.code = s.plan_code
       WHERE s.organization_id = ${organizationId}`;
     let [row] = await select();

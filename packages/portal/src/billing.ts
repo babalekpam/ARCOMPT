@@ -64,11 +64,16 @@ export function unitPriceFor(count: number, tiers: DegressiveTier[], fallback: s
   return Money.parse(sorted[sorted.length - 1]!.price);
 }
 
-export function computeDegressiveInvoice(input: { dossiers: number; tiers: unknown; pricePerDossier: string; mode?: PricingMode }): DegressiveInvoice {
+export function computeDegressiveInvoice(input: { dossiers: number; tiers: unknown; pricePerDossier: string; mode?: PricingMode; flatMonthly?: string | undefined }): DegressiveInvoice {
   if (!Number.isInteger(input.dossiers) || input.dossiers < 0) throw new Error(`nombre de dossiers invalide : ${input.dossiers}`);
   const mode = input.mode ?? "VOLUME";
-  const tiers = parseTiers(input.tiers);
   const n = input.dossiers;
+  // Forfait mensuel unique (offre Cabinet) : le montant ne dépend pas du nombre de dossiers.
+  if (input.flatMonthly !== undefined) {
+    const flat = Money.parse(input.flatMonthly);
+    return { dossiers: n, mode, unitPrice: flat.toString(), total: flat.toString(), lines: [{ from: 1, to: Math.max(n, 1), count: 1, unitPrice: flat.toString(), amount: flat.toString() }] };
+  }
+  const tiers = parseTiers(input.tiers);
   if (n === 0) return { dossiers: 0, mode, unitPrice: null, total: Money.zero().toString(), lines: [] };
 
   if (mode === "VOLUME" || tiers.length === 0) {
