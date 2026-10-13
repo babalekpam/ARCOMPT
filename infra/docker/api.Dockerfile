@@ -42,6 +42,7 @@ COPY tsconfig.base.json ./
 COPY infra/docker/tsconfig.api.json infra/docker/
 COPY packages ./packages
 COPY apps/api ./apps/api
+COPY apps/web/lib ./apps/web/lib
 # `scripts/*.mts` : outils d'exploitation du dépôt (provisionnement du rôle,
 # création d'un compte de test). Compilés ici pour être utilisables depuis
 # l'image, qui n'embarque ni pnpm ni tsx.

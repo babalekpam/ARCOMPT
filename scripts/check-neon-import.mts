@@ -29,13 +29,13 @@ const denied = async (fn: () => Promise<unknown>, codes: string[]) => {
 };
 try {
   const [empty] = await app`SELECT count(*)::int AS n FROM account`;
-  assert.equal(empty.n, 0);
+  assert.equal(empty!.n, 0);
   stage = "tenant-scoped reads";
   await withTenant(app, { tenantId: entry.tenant_id }, async (tx) => {
     const [own] = await tx`SELECT count(*)::int AS n FROM account WHERE tenant_id=${entry.tenant_id}`;
     const [foreign] = await tx`SELECT count(*)::int AS n FROM account WHERE tenant_id=${other.id}`;
-    assert(own.n > 0);
-    assert.equal(foreign.n, 0);
+    assert(own!.n > 0);
+    assert.equal(foreign!.n, 0);
   });
   console.log("PASS: contextless and cross-company reads denied; own-company reads work");
   stage = "validated entry immutability";

@@ -6,6 +6,7 @@ import type { Db } from "../../packages/db/src/client.js";
 import { natureOfClass, resolveChart } from "../../packages/db/src/chart.js";
 import { DEFAULT_JOURNALS, monthlyRanges } from "../../packages/ledger/src/memory-store.js";
 import { audit } from "../../packages/portal/src/sql.js";
+import type { Sql } from "postgres";
 
 export interface FirstOwnerInput {
   email: string;
@@ -183,7 +184,7 @@ export async function createFirstOwner(
         VALUES (${companyId}, ${fy!.id}, ${start}, ${end})`;
     }
     await tx`INSERT INTO company_member (company_id, user_id, role) VALUES (${companyId}, ${userId}, 'OWNER')`;
-    await audit(tx, {
+    await audit(tx as unknown as Sql, {
       tenantId: companyId, userId, action: "MEMBER_ADDED", entity: "company_member",
       entityId: `${companyId}:${userId}`, before: null, after: { role: "OWNER", source: "first-owner-bootstrap" },
     });

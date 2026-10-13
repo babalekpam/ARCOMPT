@@ -92,7 +92,7 @@ const app = createApp({
 // Browsers use the Next.js same-origin proxy in both environments. Keeping
 // this listener private also prevents development port discovery from adding
 // a second public port to the publishing configuration.
-const server = serve({ fetch: app.fetch, port: cfg.port, hostname: "127.0.0.1" }, () => {
+const server = serve({ fetch: app.fetch, port: cfg.port, hostname: process.env.API_HOST ?? "127.0.0.1" }, () => {
   log("info", "api.started", {
     port: cfg.port,
     auth: cfg.auth.mode,

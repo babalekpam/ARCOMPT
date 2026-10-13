@@ -11,6 +11,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
     // Pas de déclarations : rien ne consomme ce paquet en TypeScript.
     "declaration": false,
     // Conservées : NODE_OPTIONS=--enable-source-maps rend les traces lisibles.
@@ -19,6 +20,6 @@
     "outDir": "../../dist",
     "types": ["node"]
   },
-  "include": ["../../apps/api/src/**/*.ts", "../../packages/*/src/**/*.ts", "../../scripts/**/*.mts"],
+  "include": ["../../apps/api/src/**/*.ts", "../../packages/*/src/**/*.ts", "../../scripts/**/*.mts", "../../apps/web/lib/clerk-hosting.ts"],
   "exclude": ["../../**/*.test.ts", "../../**/*.test.tsx", "../../**/*.test.mts", "../../**/*.spec.ts"]
 }

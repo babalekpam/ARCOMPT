@@ -37,7 +37,7 @@
  * réservé à l'étape de construction de l'image, jamais sur un poste de travail.
  */
 import console from "node:console";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 
@@ -140,7 +140,13 @@ if (MOVE_NODE_MODULES) {
     if (!existsSync(from)) continue;
     const to = join(OUT, dir, "node_modules");
     mkdirSync(dirname(to), { recursive: true });
-    renameSync(from, to);
+    try {
+      renameSync(from, to);
+    } catch (e) {
+      if (e.code !== 'EXDEV') throw e;
+      cpSync(from, to, { recursive: true });
+      rmSync(from, { recursive: true, force: true });
+    }
   }
 }
 
