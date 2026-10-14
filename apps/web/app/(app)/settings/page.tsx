@@ -71,7 +71,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
           )}
           <p className="mt-3 text-sm text-slate-500">
             Pour changer d’offre, écrivez à <a href="mailto:info@arcompt.com" className="underline underline-offset-4">info@arcompt.com</a> —{" "}
-            <Link href="/pricing" className="underline underline-offset-4">voir les offres</Link>.
+            <Link href="/settings/offers" className="underline underline-offset-4">voir les offres</Link>.
           </p>
         </Card>
         <Card>

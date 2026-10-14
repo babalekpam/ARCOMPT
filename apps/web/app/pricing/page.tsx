@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PLANS, formatCfa } from "@/lib/plans";
+import { getAuthContext } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Tarifs — ARCOMPT",
@@ -8,13 +9,27 @@ export const metadata: Metadata = {
     "Les offres ARCOMPT pour les PME et les cabinets d'expertise comptable de l'espace OHADA : comptabilité, facturation, paie et multi-dossiers, en francs CFA.",
 };
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  // Un visiteur connecté ne doit jamais se sentir éjecté de l'application :
+  // le retour le ramène à son tableau de bord, pas à la page marketing.
+  let signedIn = false;
+  try {
+    signedIn = (await getAuthContext()) !== null;
+  } catch {
+    signedIn = false;
+  }
   return (
     <main className="min-h-screen bg-[#F7F5F0] text-slate-900">
       <div className="mx-auto w-full max-w-5xl px-6 py-12">
-        <Link href="/" className="text-sm font-medium text-slate-600 underline-offset-4 hover:underline">
-          ← Retour à l’accueil
-        </Link>
+        {signedIn ? (
+          <Link href="/dashboard" className="text-sm font-medium text-slate-600 underline-offset-4 hover:underline">
+            ← Retour à l’application
+          </Link>
+        ) : (
+          <Link href="/" className="text-sm font-medium text-slate-600 underline-offset-4 hover:underline">
+            ← Retour à l’accueil
+          </Link>
+        )}
         <h1 className="mt-8 text-3xl font-semibold tracking-tight">Des tarifs simples, en francs CFA</h1>
         <p className="mt-3 max-w-2xl leading-relaxed text-slate-600">
           Un prix par dossier comptable et par mois pour les entreprises, un forfait unique pour les cabinets,
