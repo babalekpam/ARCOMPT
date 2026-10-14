@@ -15,15 +15,39 @@ export async function POST() {
     if (config.authMode() === "clerk") {
       const { auth, clerkClient } = await import("@clerk/nextjs/server");
       const session = await auth();
-      if (session.sessionId) {
-        const client = await clerkClient();
-        await client.sessions.revokeSession(session.sessionId);
+      const client = await clerkClient();
+      // TOUTES les sessions actives de l'utilisateur, pas seulement celle de
+      // la requête : un appareil peut porter plusieurs sessions Clerk
+      // (navigateur + application installée, sessions résiduelles), et n'en
+      // révoquer qu'une laissait l'utilisateur « à moitié déconnecté » — il
+      // devait cliquer deux fois (constaté le 2026-10-13 au soir). Un clic =
+      // déconnexion partout, déterministe.
+      const ids = new Set<string>();
+      if (session.sessionId) ids.add(session.sessionId);
+      if (session.userId) {
+        const list = (await client.sessions.getSessionList({ userId: session.userId, status: "active", limit: 50 })) as unknown as {
+          data: Array<{ id: string }>;
+        };
+        for (const s of list.data ?? []) ids.add(s.id);
+      }
+      for (const id of ids) {
+        await client.sessions.revokeSession(id).catch(() => { /* déjà révoquée ou expirée */ });
       }
     }
   } catch {
     // La déconnexion locale continue quoi qu'il arrive.
   }
   const res = NextResponse.json({ ok: true });
+  // Effacer aussi les cookies Clerk eux-mêmes : le JWT __session reste
+  // « valide en apparence » jusqu'à ~60 s après la révocation (vérification
+  // locale sans appel réseau), ce qui laissait l'application se rouvrir une
+  // fois avant de retomber sur l'écran de connexion. Sans __session ni
+  // __client dans le navigateur, la déconnexion est immédiate et finale.
+  if (config.authMode() === "clerk") {
+    for (const name of ["__session", "__client", "__clerk_db_jwt"]) {
+      res.cookies.set(name, "", { path: "/", maxAge: 0 });
+    }
+  }
   res.cookies.set(COOKIES.dev, "", sessionCookieOptions(0));
   res.cookies.set(COOKIES.tenant, "", sessionCookieOptions(0));
   res.cookies.set(COOKIES.mfa, "", sessionCookieOptions(0));

@@ -25,7 +25,7 @@
  * états financiers. Les servir depuis un cache ferait lire des chiffres d'hier
  * en croyant lire ceux d'aujourd'hui.
  */
-const VERSION = "v3";
+const VERSION = "v4";
 const STATIC_CACHE = `arcompt-static-${VERSION}`;
 const API_CACHE = `arcompt-api-${VERSION}`;
 const PAGE_CACHE = `arcompt-pages-${VERSION}`;
@@ -42,6 +42,10 @@ const PRECACHE = ["/offline.html", "/manifest.webmanifest"];
 const SHELL_ROUTES = ["/", "/sync", "/entries", "/entries/new", "/invoices/new", "/expenses/new", "/documents", "/accounts"];
 
 self.addEventListener("install", (event) => {
+  // Une mise à jour de l'application doit s'appliquer dès l'ouverture
+  // suivante : sans skipWaiting, l'ancien worker (et ses pages en cache)
+  // survivaient jusqu'à la fermeture complète de l'application installée.
+  self.skipWaiting();
   event.waitUntil(
     caches
       .open(STATIC_CACHE)
