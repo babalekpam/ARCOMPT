@@ -5,11 +5,13 @@
 -- Le forfait couvre dossiers illimités et 10 utilisateurs ; la facturation
 -- lit features.billing = 'flat' (montant indépendant du nombre de dossiers).
 -- Schéma réel (vérifié en base le 2026-10-13) : le prix vit dans
--- price_per_dossier, sur subscription_plan comme sur organization_subscription.
+-- price_per_dossier, sur subscription_plan comme sur organization_subscription,
+-- et degressive_tiers est NOT NULL : on le vide avec un tableau JSON vide
+-- (le mode flat ignore de toute façon les paliers).
 
 UPDATE subscription_plan
 SET price_per_dossier = 75000,
-    degressive_tiers = NULL,
+    degressive_tiers = '[]'::jsonb,
     features = features || '{"billing": "flat"}'::jsonb
 WHERE code = 'CABINET';
 
