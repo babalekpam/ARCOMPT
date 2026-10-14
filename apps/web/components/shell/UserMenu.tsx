@@ -15,11 +15,17 @@ export function UserMenu({ displayName, platformAdmin = false }: { displayName: 
   const menu = useRef<HTMLDetailsElement>(null);
   const logout = () =>
     start(async () => {
-      await fetch("/api/session/logout", { method: "POST" }).catch(() => undefined);
-      resetOfflineServices();
-    try { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } catch { void 0; }
-    if (process.env.NEXT_PUBLIC_AUTH_MODE !== "dev") await signOut({ redirectUrl: "/login" });
-    else window.location.replace("/login");
+      // La route serveur révoque la session Clerk (le signOut client seul
+      // laissait la session active). La navigation finale est forcée dans
+      // tous les cas : l'utilisateur ne doit jamais rester sur la page.
+      try {
+        await fetch("/api/session/logout", { method: "POST" }).catch(() => undefined);
+        resetOfflineServices();
+        try { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } catch { void 0; }
+        if (process.env.NEXT_PUBLIC_AUTH_MODE !== "dev") await signOut({ redirectUrl: "/login" }).catch(() => undefined);
+      } finally {
+        window.location.replace("/login");
+      }
     });
   return (
     <div className="flex items-center gap-2">

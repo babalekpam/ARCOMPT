@@ -106,7 +106,10 @@ export function MfaSecurity({ onRecoveryCodesChange }: { onRecoveryCodesChange?:
 
   async function logout() {
     try { await fetch("/api/session/logout", { method: "POST", credentials: "same-origin" }); }
-    finally { await signOut({ redirectUrl: "/login" }); }
+    finally {
+      await signOut({ redirectUrl: "/login" }).catch(() => undefined);
+      window.location.replace("/login");
+    }
   }
 
   return (

@@ -7,9 +7,13 @@ export function RetrySignIn() {
   return (
     <button type="button" className="mt-5 block text-sm font-medium text-teal-700 underline dark:text-teal-300"
       onClick={async () => {
-        await fetch("/api/session/logout", { method: "POST" });
-        resetOfflineServices();
-        await signOut({ redirectUrl: "/login" });
+        try {
+          await fetch("/api/session/logout", { method: "POST" });
+          resetOfflineServices();
+          await signOut({ redirectUrl: "/login" }).catch(() => undefined);
+        } finally {
+          window.location.replace("/login");
+        }
       }}>
       Sign out and sign in again
     </button>
