@@ -95,7 +95,21 @@ export function createApp(deps: AppDeps) {
       ...deps.auth,
       ...(db
         ? {
-            resolveIdentity: (sub: string, hints: TokenIdentityHints) => resolveIdentity(db, sub, hints),
+            resolveIdentity: async (sub: string, hints: TokenIdentityHints) => {
+              const found = await resolveIdentity(db, sub, hints);
+              if (found || !hints?.email || !hints.emailVerified) return found;
+              // Réparation d'identité : le sujet Clerk a changé (compte
+              // supprimé puis recréé avec la même adresse vérifiée) alors
+              // qu'un unique utilisateur ARCOMPT porte cette adresse. La
+              // fonction définie par la migration 0039 rattache la ligne au
+              // nouveau sujet ; absente (base pas encore migrée), on garde
+              // l'ancien comportement sans erreur.
+              try {
+                const [row] = await db`SELECT auth_relink_identity(${sub}, ${hints.email}) AS linked`;
+                if (row?.linked) return resolveIdentity(db, sub, hints);
+              } catch { /* migration 0039 non appliquée : aucun rattachement */ }
+              return found;
+            },
             resolveAppMfa: (sub: string, sid: string, proof?: string) => mfaStatus(db, sub, sid, proof),
             touchLastActive: (userId: string) => touchLastActive(db, userId),
             resolvePlatformAdmin: (sub: string) => resolvePlatformAdmin(db, sub),

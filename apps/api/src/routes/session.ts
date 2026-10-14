@@ -55,6 +55,37 @@ export function sessionRoutes(deps: AppDeps) {
         if (replay) return { companyId: String(replay.company_id), replay: true };
         const [eligibility] = await sql`SELECT state, company_id FROM auth_bootstrap_lookup(${auth.clerkSub!}, ${auth.clerkEmail!})`;
         if (eligibility?.state === "REPLAY") return { companyId: String(eligibility.company_id), replay: true };
+        if (auth.userId && auth.organizationId) {
+          // Identité existante sans aucun dossier (compte recréé ou
+          // inscription interrompue) : le dossier est créé dans
+          // l'organisation existante, pour l'utilisateur existant. Le
+          // middleware a déjà vérifié l'absence de membership.
+          const orgId = auth.organizationId;
+          const userId = auth.userId;
+          const companyId = randomUUID();
+          await sql`INSERT INTO organization_subscription (organization_id, plan_code, started_at, ended_at) VALUES (${orgId}, 'TRIAL', current_date, current_date + 14) ON CONFLICT (organization_id) DO NOTHING`;
+          await sql`UPDATE organization_subscription SET started_at = current_date, ended_at = current_date + 14 WHERE organization_id = ${orgId} AND plan_code = 'TRIAL' AND ended_at < current_date`;
+          await sql`select set_config('app.organization_id', ${orgId}, true)`;
+          await sql`INSERT INTO company (id, organization_id, name, country_code, currency, accounting_system, pack_version) VALUES (${companyId}, ${orgId}, ${input.name}, ${input.countryCode}, ${pack.identity.currency}, ${system}, ${pack.code + "@" + pack.version})`;
+          await sql`select set_config('app.tenant_id', ${companyId}, true), set_config('app.organization_id', ${orgId}, true), set_config('app.user_id', ${userId}, true)`;
+          for (const a of resolveChart()) await sql`INSERT INTO account (tenant_id, number, label, class, nature, lettrable, postable) VALUES (${companyId}, ${a.number}, ${a.label}, ${a.class}, ${a.nature}, ${a.lettrable}, ${a.postable})`;
+          for (const o of pack.chart_overrides) {
+            const cls = Number(o.number[0]);
+            await sql`INSERT INTO account (tenant_id, number, label, class, nature, lettrable, postable)
+              VALUES (${companyId}, ${o.number}, ${o.label}, ${cls}, ${natureOfClass(cls)}, ${o.lettrable ?? false}, true)
+              ON CONFLICT (tenant_id, number) DO UPDATE SET label = EXCLUDED.label, lettrable = EXCLUDED.lettrable`;
+            await sql`UPDATE account SET postable = false WHERE tenant_id = ${companyId} AND number <> ${o.number} AND ${o.number} LIKE number || '%'`;
+          }
+          for (const j of DEFAULT_JOURNALS) await sql`INSERT INTO journal (tenant_id, code, label, type) VALUES (${companyId}, ${j.code}, ${j.label}, ${j.type})`;
+          const [fy] = await sql`INSERT INTO fiscal_year (tenant_id, code, start_date, end_date) VALUES (${companyId}, ${input.fiscalYear.code}, ${input.fiscalYear.startDate}, ${input.fiscalYear.endDate}) RETURNING id`;
+          await sql`INSERT INTO period (tenant_id, fiscal_year_id, start_date, end_date)
+            SELECT ${companyId}, ${String(fy!.id)}, greatest(gs::date, ${input.fiscalYear.startDate}::date),
+                   least((gs + interval '1 month - 1 day')::date, ${input.fiscalYear.endDate}::date)
+            FROM generate_series(date_trunc('month', ${input.fiscalYear.startDate}::date), ${input.fiscalYear.endDate}::date, interval '1 month') gs`;
+          await sql`INSERT INTO company_member (company_id, user_id, role) VALUES (${companyId}, ${userId}, 'OWNER')`;
+          await sql`INSERT INTO onboarding_bootstrap (clerk_sub, company_id) VALUES (${auth.clerkSub!}, ${companyId})`;
+          return { companyId, replay: false };
+        }
         if (eligibility?.state !== "ELIGIBLE") throw new BootstrapError("ALREADY_LINKED", "Une identité ou adresse est déjà rattachée à un compte");
         const orgId = randomUUID();
         const userId = randomUUID();

@@ -453,7 +453,22 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
           }
         }
       }
-      if (bootstrapPath && identity) return forbidden(c, "Compte déjà connu : utilisez votre dossier existant");
+      if (bootstrapPath && identity) {
+        if (identity.memberships.length > 0) return forbidden(c, "Compte déjà connu : utilisez votre dossier existant");
+        // Identité connue sans aucun dossier (compte Clerk recréé après
+        // suppression, ou inscription interrompue avant la création du
+        // dossier) : la création du premier dossier dans l'organisation
+        // existante est autorisée, avec l'adresse vérifiée du jeton.
+        let account;
+        try {
+          account = await clerkLookup!(sub);
+        } catch {
+          return c.json({ error: { code: "IDENTITY_PROVIDER_UNAVAILABLE", message: "Profil Clerk inexploitable" } }, 503);
+        }
+        if (!account?.email || !account.emailVerified) return forbidden(c, "Adresse Clerk vérifiée requise");
+        c.set("auth", { userId: identity.userId, tenantId: "", roles: [], clerkSub: sub, clerkEmail: account.email, organizationId: identity.organizationId, ...(account.displayName ? { clerkDisplayName: account.displayName } : {}) });
+        return next();
+      }
       if (membershipsPath) {
         try {
           const account = await clerkLookup!(sub);
@@ -463,7 +478,7 @@ export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
           return c.json({ companies: identity.memberships.map((membership) => ({
           id: membership.companyId,
           role: membership.role,
-          })), canBootstrap: state === "ELIGIBLE" });
+          })), canBootstrap: state === "ELIGIBLE" || identity.memberships.length === 0 });
         } catch {
           return c.json({ error: { code: "IDENTITY_PROVIDER_UNAVAILABLE", message: "Profil Clerk inexploitable" } }, 503);
         }
