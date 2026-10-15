@@ -15,6 +15,13 @@ export interface AiProviderSelection {
   defaultProvider: AiProviderName;
   routes: Record<AiCapability, AiProviderName>;
   selected: AiProviderName[];
+  /**
+   * Explicit opt-in fallback (AI_FALLBACK_PROVIDER) : when the routed provider's
+   * call fails, the call is retried once on this provider. Never inferred from
+   * whichever keys happen to be present, and opportunistic : it activates only
+   * when its own key is configured, so its absence never invalidates the config.
+   */
+  fallback: AiProviderName | null;
   /** Only the legacy, implicit no-key local configuration may simulate AI. */
   simulated: boolean;
   issues: string[];
@@ -37,6 +44,11 @@ export function resolveAiProviderSelection(env: NodeJS.ProcessEnv): AiProviderSe
   const defaultProvider = parse("AI_PROVIDER", "anthropic");
   const capture = parse("AI_CAPTURE_PROVIDER", defaultProvider);
   const categorize = parse("AI_CATEGORIZE_PROVIDER", defaultProvider);
+  const fallbackRaw = env.AI_FALLBACK_PROVIDER?.trim().toLowerCase();
+  const fallback = fallbackRaw
+    ? (Object.hasOwn(AI_PROVIDER_KEYS, fallbackRaw) ? (fallbackRaw as AiProviderName) : null)
+    : null;
+  if (fallbackRaw && !fallback) issues.push(`AI_FALLBACK_PROVIDER : fournisseur inconnu « ${fallbackRaw} » (anthropic, openai ou gemini attendu).`);
   const routes: Record<AiCapability, AiProviderName> = {
     capture,
     categorize,
@@ -53,10 +65,50 @@ export function resolveAiProviderSelection(env: NodeJS.ProcessEnv): AiProviderSe
       if (!configured(env[keyName])) issues.push(`${keyName} : absente pour le fournisseur IA sélectionné (${provider}).`);
     }
   }
-  return { defaultProvider, routes, selected, simulated: implicitOffline, issues };
+  return { defaultProvider, routes, selected, fallback, simulated: implicitOffline, issues };
 }
 
-/** One provider per capability. A failed call is surfaced, never retried elsewhere. */
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Wraps a provider with an explicit, opt-in fallback : if the primary call
+ * throws (transport, authentication, configuration or quota error), the call
+ * is retried once on the fallback provider and the result's model is tagged
+ * "primary→fallback/model" so call logs show the failover. Without a distinct
+ * fallback this returns the primary untouched — a failed call is surfaced,
+ * never silently retried elsewhere.
+ */
+export function wrapWithFallback(
+  primary: ModelProvider,
+  primaryName: AiProviderName,
+  fallback: ModelProvider | null,
+  fallbackName: AiProviderName | null,
+): ModelProvider {
+  if (!fallback || !fallbackName || fallbackName === primaryName) return primary;
+  return {
+    async complete(req) {
+      try {
+        return await primary.complete(req);
+      } catch (primaryError) {
+        try {
+          const result = await fallback.complete(req);
+          return { ...result, model: `${primaryName}→${fallbackName}/${result.model}` };
+        } catch (fallbackError) {
+          throw new Error(
+            `Échec du fournisseur ${primaryName} (${errorMessage(primaryError)}), puis du fournisseur de repli ${fallbackName} (${errorMessage(fallbackError)}).`,
+          );
+        }
+      }
+    },
+  };
+}
+
+/**
+ * One provider per capability, plus the explicit opt-in fallback above :
+ * without AI_FALLBACK_PROVIDER, a failed call is surfaced, never retried elsewhere.
+ */
 export function createRoutedProvider(
   selection: AiProviderSelection,
   providers: Partial<Record<AiProviderName, ModelProvider>>,
@@ -67,8 +119,11 @@ export function createRoutedProvider(
     async complete(req) {
       const name = selection.routes[req.capability];
       const provider = providers[name]!;
-      const result = await provider.complete(req);
-      return { ...result, model: `${name}/${result.model}` };
+      const fallbackName = selection.fallback && selection.fallback !== name ? selection.fallback : null;
+      const wrapped = wrapWithFallback(provider, name, fallbackName ? (providers[fallbackName] ?? null) : null, fallbackName);
+      const result = await wrapped.complete(req);
+      // wrapWithFallback already tags failovers ("primary→fallback/model").
+      return result.model.includes("→") ? result : { ...result, model: `${name}/${result.model}` };
     },
   };
 }

@@ -48,4 +48,51 @@ describe("explicit AI provider routing", () => {
     await expect(router.complete(request("capture"))).rejects.toThrow("Gemini unavailable");
     expect(fallback).not.toHaveBeenCalled();
   });
+
+  it("parses the explicit fallback provider and rejects unknown values", () => {
+    expect(resolveAiProviderSelection({}).fallback).toBeNull();
+    expect(resolveAiProviderSelection({ AI_FALLBACK_PROVIDER: "openai", ANTHROPIC_API_KEY: "k" }).fallback).toBe("openai");
+    expect(resolveAiProviderSelection({ AI_FALLBACK_PROVIDER: "bogus", ANTHROPIC_API_KEY: "k" }).issues.join(" ")).toContain("AI_FALLBACK_PROVIDER");
+  });
+
+  it("retries once on the explicit fallback when the routed provider fails", async () => {
+    const selection = resolveAiProviderSelection({
+      AI_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "key",
+      AI_FALLBACK_PROVIDER: "openai", OPENAI_API_KEY: "key",
+    });
+    const primary = vi.fn(async () => { throw new Error("workspace header required"); });
+    const fallback = vi.fn(async () => ({ text: "{}", model: "gpt-4o-mini", inputTokens: 2, outputTokens: 3 }));
+    const router = createRoutedProvider(selection, {
+      anthropic: { complete: primary }, openai: { complete: fallback },
+    });
+    const result = await router.complete(request("assistant"));
+    expect(result.model).toBe("anthropic→openai/gpt-4o-mini");
+    expect([primary.mock.calls.length, fallback.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it("does not call the fallback when the routed provider succeeds", async () => {
+    const selection = resolveAiProviderSelection({
+      AI_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "key",
+      AI_FALLBACK_PROVIDER: "openai", OPENAI_API_KEY: "key",
+    });
+    const fallback = vi.fn(async () => ({ text: "{}", model: "gpt-4o-mini", inputTokens: 1, outputTokens: 1 }));
+    const router = createRoutedProvider(selection, {
+      anthropic: { complete: async () => ({ text: "{}", model: "sonnet", inputTokens: 1, outputTokens: 1 }) },
+      openai: { complete: fallback },
+    });
+    expect((await router.complete(request("assistant"))).model).toBe("anthropic/sonnet");
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a combined error when the fallback also fails", async () => {
+    const selection = resolveAiProviderSelection({
+      AI_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "key",
+      AI_FALLBACK_PROVIDER: "openai", OPENAI_API_KEY: "key",
+    });
+    const router = createRoutedProvider(selection, {
+      anthropic: { complete: async () => { throw new Error("primary down"); } },
+      openai: { complete: async () => { throw new Error("fallback down"); } },
+    });
+    await expect(router.complete(request("assistant"))).rejects.toThrow(/primary down.*fallback down/);
+  });
 });

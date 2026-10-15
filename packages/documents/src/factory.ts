@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import {
   AiGateway, AnthropicProvider, GeminiProvider, OpenAIProvider, createRoutedProvider, resolveAiProviderSelection,
+  wrapWithFallback, AI_PROVIDER_KEYS,
   type AiProviderName, type ModelProvider, type ModelRequest, type ModelResponse,
 } from "@arcompt/ai-gateway";
 import { Ledger, PostgresStore } from "@arcompt/ledger";
@@ -101,7 +102,18 @@ export function createDocumentsInfraFromEnv(db: Sql, env: NodeJS.ProcessEnv = pr
       const selection = resolveAiProviderSelection(effective);
       if (selection.issues.length) throw new Error("Configuration IA persistée invalide");
       if (selection.simulated) return offlineProvider(effective).complete(req);
-      return configuredAiProvider(selection.routes[req.capability], effective).complete(req);
+      const routedName = selection.routes[req.capability];
+      const primary = configuredAiProvider(routedName, effective);
+      // Explicit opt-in fallback (AI_FALLBACK_PROVIDER) : opportunistic, it only
+      // activates when its key is configured in the effective (persisted) settings.
+      const fallbackName = selection.fallback && selection.fallback !== routedName
+        && (effective[AI_PROVIDER_KEYS[selection.fallback]] ?? "").trim()
+        ? selection.fallback
+        : null;
+      return wrapWithFallback(
+        primary, routedName,
+        fallbackName ? configuredAiProvider(fallbackName, effective) : null, fallbackName,
+      ).complete(req);
     },
   } : createEnvironmentAiProvider(env);
   cached = {
@@ -125,7 +137,10 @@ function createEnvironmentAiProvider(env: NodeJS.ProcessEnv): ModelProvider {
   const selection = resolveAiProviderSelection(env);
   if (selection.issues.length) throw new Error(`Configuration IA invalide : ${selection.issues.join(" ")}`);
   const providers: Partial<Record<AiProviderName, ModelProvider>> = {};
-  for (const name of selection.simulated ? [] : selection.selected) {
+  const providerNames = selection.simulated ? [] : [...new Set([...selection.selected, ...(selection.fallback ? [selection.fallback] : [])])];
+  for (const name of providerNames) {
+    // The fallback is opportunistic : never instantiate it without its key.
+    if (name === selection.fallback && !selection.selected.includes(name) && !(env[AI_PROVIDER_KEYS[name]] ?? "").trim()) continue;
     const anthropicModel = env.AI_ANTHROPIC_MODEL || env.AI_MODEL;
     if (name === "anthropic") providers.anthropic = new AnthropicProvider({
       apiKey: env.ANTHROPIC_API_KEY!,
