@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="ARCOMPT tile mark, concept B">
+  <rect x="4" y="4" width="112" height="112" rx="24" fill="#0F2A43"/>
+  <g transform="translate(14,14) scale(0.7667)">
+    <rect x="16" y="56" width="13" height="38" rx="3" fill="#FAF6EF"/>
+    <rect x="34.75" y="38" width="13" height="56" rx="3" fill="#FAF6EF"/>
+    <rect x="53.5" y="20" width="13" height="74" rx="3" fill="#0E9F6E"/>
+    <rect x="72.25" y="38" width="13" height="56" rx="3" fill="#FAF6EF"/>
+    <rect x="91" y="56" width="13" height="38" rx="3" fill="#FAF6EF"/>
+    <rect x="10" y="60" width="100" height="6" rx="3" fill="#0E9F6E"/>
+    <rect x="10" y="94" width="100" height="5" rx="2.5" fill="#FAF6EF"/>
+  </g>
+</svg>

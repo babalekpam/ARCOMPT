@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 452 120" role="img" aria-label="ARCOMPT logo, concept B">
+  <!-- Concept B "Monogram": the letter A built from five ledger columns, crossed by a ruled line. -->
+  <g>
+    <rect x="16" y="56" width="13" height="38" rx="3" fill="#0F2A43"/>
+    <rect x="34.75" y="38" width="13" height="56" rx="3" fill="#0F2A43"/>
+    <rect x="53.5" y="20" width="13" height="74" rx="3" fill="#0E9F6E"/>
+    <rect x="72.25" y="38" width="13" height="56" rx="3" fill="#0F2A43"/>
+    <rect x="91" y="56" width="13" height="38" rx="3" fill="#0F2A43"/>
+    <rect x="10" y="60" width="100" height="6" rx="3" fill="#0E9F6E"/>
+    <rect x="10" y="94" width="100" height="5" rx="2.5" fill="#0F2A43"/>
+  </g>
+  <text x="142" y="80" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="54" font-weight="700" letter-spacing="-1" fill="#0F2A43">ARCOMPT</text>
+</svg>
