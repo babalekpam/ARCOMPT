@@ -222,6 +222,17 @@ describe("loadConfig — production incomplète", () => {
     expect(problemsOf(productionEnv({ AUTH_MODE: "dev" })).join("\n")).toContain("AUTH_MODE");
   });
 
+  it("l'échappatoire e2e ARCOMPT_E2E_DEV_AUTH=1 lève le refus du mode dev, et elle seule", () => {
+    // Posée explicitement : le démarrage est accepté et l'échappatoire est
+    // annoncée dans les fonctions dégradées (jamais silencieuse).
+    const cfg = loadConfig(productionEnv({ AUTH_MODE: "dev", ARCOMPT_E2E_DEV_AUTH: "1" }), { warn: () => {} });
+    expect(cfg.auth.mode).toBe("dev");
+    expect(cfg.degraded.join("\n")).toContain("ARCOMPT_E2E_DEV_AUTH");
+    // Toute autre valeur laisse le garde exactement comme avant.
+    expect(problemsOf(productionEnv({ AUTH_MODE: "dev", ARCOMPT_E2E_DEV_AUTH: "0" })).join("\n")).toContain("AUTH_MODE");
+    expect(problemsOf(productionEnv({ AUTH_MODE: "dev", ARCOMPT_E2E_DEV_AUTH: "" })).join("\n")).toContain("AUTH_MODE");
+  });
+
   it("refuse le connecteur de certification simulé, sans opt-out possible", () => {
     const problems = problemsOf(productionEnv({ CERTIFICATION_CONNECTOR: "mock", ALLOW_INSECURE_CERTIFICATION: "1" }));
     expect(problems.join("\n")).toContain("CERTIFICATION_CONNECTOR");

@@ -17,6 +17,7 @@ import {
 } from "@arcompt/invoicing";
 import { requireRole } from "../auth.js";
 import type { AppDeps } from "../app.js";
+import { idempotencyErrorResponse, withIdempotencyAround } from "../idempotency.js";
 
 /**
  * Routes stocks — inventaire intermittent SYSCOHADA.
@@ -39,7 +40,11 @@ const account = z.string().regex(/^[1-9]\d{1,12}$/);
 const CATEGORIES = ["MARCHANDISE", "MATIERE_PREMIERE", "AUTRE_APPRO", "EN_COURS", "PRODUIT_FINI", "PRODUIT_INTERMEDIAIRE"] as const;
 const REASONS = ["OPENING", "PURCHASE", "PRODUCTION", "RETURN_IN", "SALE", "CONSUMPTION", "LOSS", "RETURN_OUT", "COUNT_ADJUSTMENT", "OTHER"] as const;
 
+/** Identifiant de rejeu posé par la file hors ligne (même contrat que la facturation). */
+const clientId = z.string().uuid().optional();
+
 const ArticleSchema = z.object({
+  clientId,
   code: z.string().min(1).max(40),
   label: z.string().min(1).max(200),
   unit: z.string().min(1).max(20).optional(),
@@ -54,6 +59,7 @@ const ArticleSchema = z.object({
 const UpdateArticleSchema = ArticleSchema.omit({ code: true, category: true }).partial();
 
 const MovementSchema = z.object({
+  clientId,
   articleId: uuid,
   date: isoDate,
   kind: z.enum(["OPENING", "IN", "OUT"]),
@@ -68,6 +74,7 @@ const MovementSchema = z.object({
 });
 
 const CountSchema = z.object({
+  clientId,
   fiscalYearCode: z.string().min(1).max(20),
   date: isoDate,
   label: z.string().max(200).optional(),
@@ -111,6 +118,29 @@ export function stockRoutes(deps: AppDeps) {
     return new StockService(sd, { tenantId: auth.tenantId, userId: auth.userId, ...(auth.organizationId ? { organizationId: auth.organizationId } : {}) });
   }
 
+  /**
+   * Création rejouable depuis la file hors ligne — même contrat que la
+   * facturation (routes/invoicing.ts) : la file annonce les kinds
+   * stock.article / stock.movement / stock.count, le serveur doit donc
+   * reconnaître un rejeu par `clientId` au lieu de créer un doublon
+   * (un mouvement rejoué fausserait l'inventaire). Sans `clientId`,
+   * comportement inchangé.
+   */
+  async function replayable<T>(c: Context, replayId: string | undefined, operation: string, resourceKind: string, body: unknown, run: () => Promise<T>) {
+    const auth = c.get("auth");
+    const ctx = { tenantId: auth.tenantId, userId: auth.userId, ...(auth.organizationId ? { organizationId: auth.organizationId } : {}) };
+    const idOf = (b: unknown): string | null => (b && typeof b === "object" && "id" in b ? String((b as { id: unknown }).id) : null);
+    try {
+      const out = await withIdempotencyAround({ db: deps.db!, ctx, clientId: replayId, operation, body, resourceKind }, run, idOf);
+      if (out.replayed) c.header("Idempotent-Replay", "true");
+      return c.json(out.body as object, out.replayed ? 200 : 201);
+    } catch (e) {
+      const mapped = idempotencyErrorResponse(e);
+      if (mapped) return c.json(mapped.body, mapped.status);
+      throw e;
+    }
+  }
+
   r.use("*", async (c, next) => {
     if (!deps.db) return c.json({ error: { code: "UNAVAILABLE", message: "Module stocks indisponible sans base de données" } }, 503);
     return next();
@@ -133,7 +163,9 @@ export function stockRoutes(deps: AppDeps) {
   r.post("/articles", manage, async (c) => {
     const parsed = ArticleSchema.safeParse(await c.req.json());
     if (!parsed.success) return invalid(c, parsed.error.issues);
-    return c.json(await (await serviceFor(c)).createArticle(strip(parsed.data) as CreateStockArticleInput), 201);
+    const { clientId: replayId, ...input } = parsed.data;
+    const service = await serviceFor(c);
+    return replayable(c, replayId, "stock.article", "stock_article", input, () => service.createArticle(strip(input) as CreateStockArticleInput));
   });
 
   r.get("/articles/:id", async (c) => c.json(await (await serviceFor(c)).getArticle(c.req.param("id"))));
@@ -170,7 +202,9 @@ export function stockRoutes(deps: AppDeps) {
   r.post("/movements", write, async (c) => {
     const parsed = MovementSchema.safeParse(await c.req.json());
     if (!parsed.success) return invalid(c, parsed.error.issues);
-    return c.json(await (await serviceFor(c)).recordMovement(strip(parsed.data) as RecordMovementInput), 201);
+    const { clientId: replayId, ...input } = parsed.data;
+    const service = await serviceFor(c);
+    return replayable(c, replayId, "stock.movement", "stock_movement", input, () => service.recordMovement(strip(input) as RecordMovementInput));
   });
 
   // ---------------------------------------------------------------------------
@@ -184,7 +218,9 @@ export function stockRoutes(deps: AppDeps) {
   r.post("/counts", write, async (c) => {
     const parsed = CountSchema.safeParse(await c.req.json());
     if (!parsed.success) return invalid(c, parsed.error.issues);
-    return c.json(await (await serviceFor(c)).createCount(strip(parsed.data) as CreateStockCountInput), 201);
+    const { clientId: replayId, ...input } = parsed.data;
+    const service = await serviceFor(c);
+    return replayable(c, replayId, "stock.count", "stock_count", input, () => service.createCount(strip(input) as CreateStockCountInput));
   });
 
   r.get("/counts/:id", async (c) => c.json(await (await serviceFor(c)).getCount(c.req.param("id"))));

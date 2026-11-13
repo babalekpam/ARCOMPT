@@ -273,6 +273,7 @@
   "soon.back": "Retour au tableau de bord",
   "pwa.updateAvailable": "Une nouvelle version est disponible.",
   "pwa.reload": "Recharger",
+  "pwa.install": "Installer l'application sur cet appareil",
   "nav.assets": "Immobilisations",
   "nav.closing": "Clôture",
   "pack.notice.vat.title": "Pack {pack} en cours de validation",

@@ -7,6 +7,7 @@ import type { Identity, PlatformAdminIdentity, PlatformCompany, TokenIdentityHin
 import { log } from "./telemetry.js";
 import { TokenVerificationErrorReason } from "@clerk/backend/errors";
 import { modeEvidence, type AdminModeEvidence } from "./admin-mode.js";
+import { isE2eDevAuthEnabled } from "./config.js";
 
 const safeClerkReasons = new Set<string>(Object.values(TokenVerificationErrorReason));
 
@@ -240,7 +241,11 @@ function jwksResolverFor(opts: AuthOptions): () => Promise<JwksResolver> {
 }
 
 export function authMiddleware(opts: AuthOptions): MiddlewareHandler {
-  if (opts.mode === "dev" && process.env.NODE_ENV === "production") {
+  // Garde-fou : le mode dev fait foi des en-têtes X-User-Id / X-Tenant-Id.
+  // Unique exception : l'échappatoire e2e explicite ARCOMPT_E2E_DEV_AUTH=1
+  // (suites Playwright contre un build de production, machine jetable) —
+  // ne JAMAIS la poser sur un serveur déployé. Voir config.ts.
+  if (opts.mode === "dev" && process.env.NODE_ENV === "production" && !isE2eDevAuthEnabled(process.env)) {
     throw new Error("AUTH_MODE=dev est interdit en production");
   }
   const resolve = opts.resolveIdentity;

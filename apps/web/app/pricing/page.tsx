@@ -40,10 +40,10 @@ export default async function PricingPage() {
           {PLANS.map((plan) => (
             <article
               key={plan.code}
-              className={`flex flex-col rounded-2xl border bg-white p-6 ${plan.highlighted ? "border-teal-600 shadow-lg ring-1 ring-teal-600" : "border-slate-200"}`}
+              className={`flex flex-col rounded-3xl border bg-[#FFFDF8] p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${plan.highlighted ? "border-[#0E9F6E] shadow-lg ring-1 ring-[#0E9F6E]" : "border-[#E6E1D5]"}`}
             >
               {plan.highlighted ? (
-                <p className="mb-3 w-fit rounded-full bg-teal-700 px-2.5 py-0.5 text-xs font-semibold text-white">Le plus choisi</p>
+                <p className="mb-3 w-fit rounded-full bg-[#0E9F6E] px-2.5 py-0.5 text-xs font-semibold text-white">Le plus choisi</p>
               ) : null}
               <h2 className="text-lg font-semibold">{plan.label}</h2>
               <p className="mt-3">
@@ -54,14 +54,14 @@ export default async function PricingPage() {
               <ul className="mt-5 flex-1 space-y-2 text-sm text-slate-700">
                 {plan.features.map((f) => (
                   <li key={f} className="flex gap-2">
-                    <span aria-hidden className="text-teal-700">✓</span>
+                    <span aria-hidden className="text-[#0B7A55]">✓</span>
                     <span>{f}</span>
                   </li>
                 ))}
               </ul>
               <Link
                 href="/sign-up"
-                className={`mt-6 rounded-lg px-4 py-2.5 text-center text-sm font-semibold ${plan.highlighted ? "bg-teal-700 text-white hover:bg-teal-800" : "border border-slate-300 hover:bg-slate-50"}`}
+                className={`mt-6 rounded-xl px-4 py-2.5 text-center text-sm font-semibold ${plan.highlighted ? "bg-[#0E9F6E] text-white shadow-md hover:bg-[#0B7A55]" : "border border-[#D8D2C4] bg-white hover:bg-[#FAF8F2]"}`}
               >
                 {plan.code === "TRIAL" ? "Commencer l’essai" : "Créer un compte"}
               </Link>
@@ -82,8 +82,8 @@ export default async function PricingPage() {
             <a href="mailto:info@arcompt.com" className="underline-offset-4 hover:underline">info@arcompt.com</a>.
           </p>
         </section>
-        <footer className="mt-14 border-t border-slate-200 pt-6 text-sm text-slate-500">
-          ARCOMPT — un service ARGILETTE.{" "}
+        <footer className="mt-14 border-t border-[#E6E1D5] pt-6 text-sm text-slate-500">
+          ARCOMPT · un service ARGILETTE.{" "}
           <Link href="/privacy" className="underline-offset-4 hover:underline">Politique de confidentialité</Link>
         </footer>
       </div>

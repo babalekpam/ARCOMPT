@@ -273,6 +273,7 @@
   "soon.back": "Back to dashboard",
   "pwa.updateAvailable": "A new version is available.",
   "pwa.reload": "Reload",
+  "pwa.install": "Install the app on this device",
   "nav.assets": "Fixed assets",
   "nav.closing": "Closing",
   "pack.notice.vat.title": "Pack {pack} awaiting validation",

@@ -31,7 +31,7 @@ const fr: LandingCopy = {
   hero: {
     eyebrow: "Comptabilité OHADA, avec discernement",
     title: "Les chiffres importants méritent plus qu’un bouton « valider ».",
-    body: "ARCOMPT donne aux PME et aux cabinets un espace de travail clair pour tenir, vérifier et expliquer leur comptabilité — dans le respect du cadre SYSCOHADA.",
+    body: "ARCOMPT donne aux PME et aux cabinets un espace de travail clair pour tenir, vérifier et expliquer leur comptabilité, dans le respect du cadre SYSCOHADA.",
     primary: "Entrer dans ARCOMPT",
     secondary: "Voir comment nous travaillons",
     note: "Une plateforme en construction sérieuse. Pas une promesse de conformité automatique.",
@@ -97,7 +97,7 @@ const en: LandingCopy = {
   hero: {
     eyebrow: "OHADA accounting, with judgment",
     title: "Important numbers deserve more than a “confirm” button.",
-    body: "ARCOMPT gives SMEs and accounting firms a clear workspace to keep, review and explain their accounts — within the SYSCOHADA framework.",
+    body: "ARCOMPT gives SMEs and accounting firms a clear workspace to keep, review and explain their accounts, within the SYSCOHADA framework.",
     primary: "Enter ARCOMPT",
     secondary: "See how we work",
     note: "A serious platform in progress. Not a promise of automatic compliance.",

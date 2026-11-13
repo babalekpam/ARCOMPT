@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/lib/i18n-client";
 import { getOfflineServices } from "@/lib/offline-browser";
-import { notifySyncChanged, pendingCount, refreshSnapshots, syncNow, SYNC_EVENT } from "@/lib/offline-sync";
+import { notifySyncChanged, pendingCount, refreshSnapshotsAuto, syncNow, SYNC_EVENT } from "@/lib/offline-sync";
 
 /**
  * Bandeau hors ligne : état réseau, nombre d'éléments en attente, rejeu au
@@ -43,9 +43,10 @@ export function OfflineIndicator() {
       else if (report.sent > 0) setMessage({ tone: "ok", text: t("offline.synced") });
       // Le réseau vient de répondre : on en profite pour rafraîchir le cliché
       // de référence, sans quoi la coupure suivante travaillerait sur des
-      // listes vieillissantes. Le code du pack vient du cliché lui-même.
-      const pack = await svc.snapshots.read<{ code?: string }>("pack");
-      if (pack?.data?.code) void refreshSnapshots({ packCode: pack.data.code });
+      // listes vieillissantes. Le contexte se résout tout seul — y compris
+      // le premier jour, quand le cliché est encore vide (voir
+      // resolveSnapshotContext : le code ne doit plus venir du cliché seul).
+      void refreshSnapshotsAuto();
       notifySyncChanged();
     } finally {
       setSyncing(false);

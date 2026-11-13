@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: © ARGILETTE LLC — ARCOMPT, plateforme comptable OHADA (arcompt.com)
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 import Link from "next/link"; import { CompanyProfileForm } from "@/components/settings/CompanyProfileForm";
+import { ResetDataCard } from "@/components/settings/ResetDataCard";
+import { InstallAppCard } from "@/components/pwa/InstallAppCard";
 import { apiTry } from "@/lib/api";
 import { requireAuthContext } from "@/lib/auth";
 import { config } from "@/lib/config";
@@ -48,6 +50,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="lg:col-span-2">
           <CompanyProfileForm />
+        </div>
+        <InstallAppCard />
+        <div className="lg:col-span-2">
+          <ResetDataCard />
         </div>
         <Card>
           <CardTitle>Votre forfait</CardTitle>

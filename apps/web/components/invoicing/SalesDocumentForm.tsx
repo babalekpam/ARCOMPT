@@ -7,6 +7,7 @@ import { apiClient, ApiError, errorMessage } from "@/lib/api-client";
 import { useT } from "@/lib/i18n-client";
 import { generateClientId } from "@/lib/offline";
 import { createOrQueue } from "@/lib/offline-submit";
+import { getOfflineServices } from "@/lib/offline-browser";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Field";
@@ -54,7 +55,13 @@ export function SalesDocumentForm({ rates, currency, initialKind = "INVOICE", ex
   useEffect(() => {
     apiClient<Product[]>("/products")
       .then((p) => setProducts(p))
-      .catch(() => setProducts([]));
+      .catch(async () => {
+        // Hors ligne : les produits conservés sur l'appareil restent
+        // sélectionnables dans les lignes, au lieu d'une liste vide.
+        const svc = await getOfflineServices();
+        const snap = await svc?.snapshots.read<Product[]>("products").catch(() => null);
+        setProducts(snap?.data ?? []);
+      });
   }, []);
 
   const productOf = (id: string) => products?.find((p) => p.id === id);

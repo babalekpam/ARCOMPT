@@ -69,6 +69,10 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   // ce que l'API avait pris soin de dire.
   const official = upstream.headers.get("x-arcompt-official");
   if (official) res.headers.set("x-arcompt-official", official);
+  // Rejeu idempotent : le client (et le centre de synchronisation) doit
+  // pouvoir VOIR qu'un envoi répété a été reconnu au lieu de créer un doublon.
+  const replay = upstream.headers.get("idempotent-replay");
+  if (replay) res.headers.set("idempotent-replay", replay);
   res.headers.set("cache-control", "no-store");
   return res;
 }

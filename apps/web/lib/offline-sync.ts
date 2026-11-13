@@ -20,7 +20,7 @@
 import { apiClient, ApiError, NetworkError } from "./api-client";
 import { toRecentEntry } from "./entries";
 import { RetryableError } from "./offline";
-import { getOfflineServices } from "./offline-browser";
+import { getOfflineServices, revalidateOfflineServices } from "./offline-browser";
 import { SNAPSHOT_SOURCES, SNAPSHOT_KEYS, type SnapshotContext, type SnapshotKey } from "./offline-snapshot";
 import type { OperationKind } from "./offline-queue";
 import type { JournalEntry } from "./types";
@@ -43,6 +43,10 @@ function asRetryable(e: unknown): never {
 }
 
 export async function syncNow(): Promise<SyncReport> {
+  // Avant tout envoi : s'assurer que les services portent la clé de la
+  // session courante (un onglet démarré hors ligne a pu rouvrir le coffre
+  // avec la clé conservée sur l'appareil).
+  if (typeof navigator === "undefined" || navigator.onLine) await revalidateOfflineServices();
   const svc = await getOfflineServices();
   const report: SyncReport = { sent: 0, waiting: 0, blocked: [], interrupted: false };
   if (!svc) return report;
@@ -83,6 +87,50 @@ export async function syncNow(): Promise<SyncReport> {
   }
 
   return report;
+}
+
+/** Le code du pack d'un dossier est son code pays en minuscules (« TG » → « tg »). */
+export function packCodeFromCountryCode(countryCode: string | null | undefined): string | null {
+  const code = (countryCode ?? "").trim().toLowerCase();
+  return /^[a-z]{2}$/.test(code) ? code : null;
+}
+
+/**
+ * D'où vient le code du pack quand on veut rafraîchir le cliché ?
+ *
+ * C'était le défaut du premier jour : chaque appelant le lisait DANS le
+ * cliché « pack » lui-même. Sur un appareil neuf, le cliché est vide, donc
+ * le code était toujours absent, donc le rafraîchissement ne partait
+ * jamais — et le centre de synchronisation affichait « Jamais rafraîchi »
+ * avec un bouton désactivé, en ligne comme hors ligne. Les formulaires,
+ * eux, lisent le cliché : un compte créé le matin restait inutilisable
+ * sans réseau le soir.
+ *
+ * L'ordre de résolution casse le cercle : le cliché d'abord (aucun réseau),
+ * sinon le profil du dossier courant, qui porte le code pays — la source
+ * que le serveur connaît déjà.
+ */
+export async function resolveSnapshotContext(): Promise<SnapshotContext | null> {
+  const svc = await getOfflineServices();
+  if (!svc) return null;
+  const pack = await svc.snapshots.read<{ code?: string }>("pack").catch(() => null);
+  const fromSnapshot = packCodeFromCountryCode(pack?.data?.code);
+  if (fromSnapshot) return { packCode: fromSnapshot };
+  try {
+    const res = await apiClient<{ profile?: { countryCode?: string } }>("/company/profile");
+    const fromProfile = packCodeFromCountryCode(res?.profile?.countryCode);
+    if (fromProfile) return { packCode: fromProfile };
+  } catch {
+    // Hors ligne, ou dossier non encore créé : le cliché partira au prochain passage en ligne.
+  }
+  return null;
+}
+
+/** Rafraîchit le cliché en résolvant seul le contexte : le geste « premier jour » et « retour du réseau ». */
+export async function refreshSnapshotsAuto(keys: readonly SnapshotKey[] = SNAPSHOT_KEYS): Promise<SnapshotKey[]> {
+  const ctx = await resolveSnapshotContext();
+  if (!ctx) return [];
+  return refreshSnapshots(ctx, keys);
 }
 
 /** Jeux de référence rafraîchis à chaque passage en ligne. */

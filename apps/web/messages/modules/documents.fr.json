@@ -56,6 +56,8 @@
   "documents.upload.send": "Envoyer",
   "documents.upload.sending": "Envoi…",
   "documents.upload.done": "Pièce déposée.",
+  "documents.upload.queued": "Pièce conservée sur cet appareil : elle partira dès le retour du réseau.",
+  "documents.upload.tooLargeOffline": "Pièce trop lourde pour la file hors ligne (10 Mo maximum) : déposez-la quand le réseau sera revenu.",
   "documents.upload.processingFailed": "Le traitement de la pièce a échoué. Vous pouvez relancer l'extraction.",
   "documents.upload.duplicate": "Doublon détecté :",
   "documents.upload.duplicateHint": "cette pièce existe déjà dans le dossier (même empreinte). La pièce existante est affichée ci-dessous.",

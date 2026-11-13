@@ -78,6 +78,18 @@ Le registre est cloisonné par dossier, immuable une fois complété, et ne
 s'efface pas avant sept jours — le temps qu'un appareil resté hors ligne
 revienne.
 
+Le contrat vaut pour **toutes** les créations que la file peut contenir :
+tiers, produits, brouillons de vente et d'achat, écritures — et, depuis la
+v5 de la coquille, articles, mouvements et inventaires de stock
+(`apps/api/src/routes/stock.ts`). Un mouvement de stock rejoué qui recréerait
+sa ligne fausserait l'inventaire en silence : c'était le dernier kind de la
+file sans reconnaissance de rejeu côté serveur.
+
+Les pièces justificatives suivent une voie voisine : le serveur les
+déduplique par **empreinte du contenu**. Une pièce envoyée deux fois — coupure
+en plein envoi, puis rejeu de la file — est reconnue comme doublon et la
+pièce existante est renvoyée, jamais un second exemplaire.
+
 ## 4. Comment une facture désigne un client créé hors ligne
 
 Une facture saisie à 10 h 05 peut viser un client créé à 10 h 03, sans réseau
@@ -118,6 +130,19 @@ Le changement de session change la clé : les données de l'ancienne deviennent
 illisibles. Elles ne sont pas effacées en silence — l'écran de synchronisation
 les montre comme illisibles, pour que personne ne croie sa saisie envoyée.
 
+**Démarrage à froid hors ligne.** Un onglet ouvert sans réseau ne peut pas
+récupérer le matériau de session — au départ, il ne voyait donc ni la file ni
+la copie locale, alors que tout était sur l'appareil. Désormais, si
+l'appareil conserve **exactement** la clé de la dernière session ouverte en
+ligne (repère posé en localStorage, effacé à la déconnexion), le coffre se
+rouvre avec elle : la file et les copies sont là. Au retour du réseau, avant
+tout envoi, la clé est revérifiée contre la session courante ; si elle a
+changé, les services sont reconstruits sur la nouvelle et les éléments de
+l'ancienne ne sont **jamais** envoyés sous une autre identité. La clé est
+liée à l'utilisateur **et** au dossier : se reconnecter avec le même compte
+dans le même dossier redonne la même clé, la file survit donc à une session
+expirée.
+
 ## 7. Limites connues, dites ici plutôt que découvertes
 
 - **Un brouillon de vente hors ligne n'a pas de numéro.** Il en recevra un à
@@ -134,6 +159,46 @@ les montre comme illisibles, pour que personne ne croie sa saisie envoyée.
 - **Deux appareils hors ligne ne se voient pas.** Deux comptables qui saisissent
   le même achat sans réseau créeront deux brouillons. Le rapprochement se fait à
   la validation, par une personne — c'est aussi ce que faisait le papier.
+- **La première visite exige le réseau.** Créer le compte, se connecter et
+  charger l'application une première fois ne se font pas hors ligne ; c'est à
+  cette visite que la coquille s'installe et que les copies locales se
+  remplissent. Les écrans principaux sont ensuite **réchauffés** (leurs
+  morceaux de code sont préchargés en ligne) pour s'ouvrir sans réseau même
+  jamais visités.
+- **Une pièce hors ligne est plafonnée à 10 Mo en file.** Au-delà, le dépôt
+  attend le réseau ; en file, elle part en base64 et le serveur la déduplique
+  par empreinte (voir §3).
+- **L'installation dépend du navigateur.** Sur Chrome/Edge bureau,
+  l'application propose son bouton d'installation dès que le navigateur
+  l'autorise ; sur iOS, l'installation passe par Partager → « Sur l'écran
+  d'accueil », sans invite programmable. Depuis la v6, l'application ne
+  laisse plus l'utilisateur chercher ce bouton : à la première arrivée sur
+  le tableau de bord d'un dossier configuré (activation du compte et
+  configuration terminées), une carte propose l'installation en un geste —
+  ou le mode d'emploi du navigateur détecté, en trois pas, quand il n'y a
+  pas d'invite programmable. « Plus tard » la fait taire une semaine, trois
+  affichages automatiques au plus, et les réglages gardent une entrée
+  manuelle permanente (`lib/install-prompt.ts`,
+  `components/pwa/InstallPromptGate.tsx`, `InstallAppCard.tsx`).
+- **Une navigation fraîche hors ligne sert l'application.** Un écran
+  atteint par la navigation interne n'a pas de document conservé : son
+  rechargement sans réseau (et le lancement de l'application installée,
+  qui est la même navigation) sert le document exact s'il existe, sinon la
+  coquille — le tableau de bord précaché — et le routeur client affiche
+  l'écran demandé. La page statique `/offline.html` n'est servie que si
+  aucun document de l'application n'est conservé. Défaut constaté en
+  conditions réelles le 2026-10-29, corrigé dans le service worker v6 et
+  exercé par `lib/sw-worker.test.ts` et `e2e/sw-navigation.spec.ts`.
+- **Le cliché de référence se résout tout seul.** Le code du pack venait
+  du cliché « pack » lui-même : sur un appareil neuf, le rafraîchissement
+  ne partait jamais et le centre de synchronisation affichait « Jamais
+  rafraîchi » avec un bouton désactivé. `resolveSnapshotContext` lit le
+  cliché d'abord, sinon le profil du dossier (son code pays) : le
+  rafraîchissement du premier jour et de chaque retour en ligne part
+  réellement.
+- **Ce qui reste en ligne, toujours** : l'envoi effectif d'un e-mail ou d'un
+  WhatsApp, les fonctions IA (extraction, propositions), la paie et ses
+  télétransmissions, et bien sûr les actes refusés du §1.
 
 ## 8. Où c'est écrit dans le code
 
@@ -147,3 +212,103 @@ les montre comme illisibles, pour que personne ne croie sa saisie envoyée.
 | Écran de synchronisation | `apps/web/components/pwa/SyncCenter.tsx` |
 | Coque et caches | `apps/web/public/sw.js` |
 | Registre de rejeu, côté serveur | `apps/api/src/idempotency.ts`, `packages/db/migrations/0015_idempotency.sql` |
+| Clé de session, démarrage à froid, revérification | `apps/web/lib/offline-browser.ts` |
+| Rejeu des créations de stock | `apps/api/src/routes/stock.ts` (`stock-idempotency.test.ts`) |
+| Dépôt de pièces en file | `apps/web/components/documents/UploadFlow.tsx` |
+| Réchauffement de la coquille, invite d'installation | `apps/web/components/pwa/ShellWarmer.tsx`, `InstallAppButton.tsx` |
+| Invite du premier jour, capture de l'invite native, report | `apps/web/lib/install-prompt.ts`, `components/pwa/InstallPromptGate.tsx`, `components/pwa/InstallAppCard.tsx` |
+| Résolution du contexte du cliché (amorçage) | `apps/web/lib/offline-sync.ts` (`resolveSnapshotContext`, `refreshSnapshotsAuto`) |
+| Scénario propriétaire de bout en bout | `e2e/offline.spec.ts` |
+| Navigation fraîche hors ligne (coquille, pas page statique) | `e2e/sw-navigation.spec.ts`, `apps/web/lib/sw-worker.test.ts` |
+| Invite d'installation : affichage, report, mode installé | `e2e/install-prompt.spec.ts` |
+
+## 9. Exécuter les suites contre le build de production
+
+Les suites Playwright (`e2e/offline.spec.ts`, `sw-navigation.spec.ts`,
+`install-prompt.spec.ts`) doivent tourner contre le build de production :
+en développement, Next appose un `?v=<horodatage>` par document sur les
+chunks, qu'aucun précache ne peut contenir — la page servie hors ligne n'y
+hydrate jamais, ce qui ne dit rien du moteur de synchronisation.
+
+Recette locale (machine jetable uniquement) :
+
+1. PostgreSQL local ; base vierge migrée (`pnpm db:migrate`) et amorcée
+   (`NODE_ENV=development ALLOW_DEMO_SEED=1 SEED_FIRM=1 pnpm db:seed`) par
+   le rôle propriétaire.
+2. Créer les rôles de connexion `arcompt_app_login` (membre de
+   `arcompt_app`) et `arcompt_queue_login` (membre de `arcompt_queue`) —
+   le démarrage de production vérifie les privilèges réels des deux rôles.
+3. API : `NODE_ENV=production AUTH_MODE=dev ARCOMPT_E2E_DEV_AUTH=1
+   API_PORT=4100 APP_DATABASE_URL=… QUEUE_DATABASE_URL=…
+   PAYROLL_ENCRYPTION_KEY=… ALLOW_INSECURE_AI=1 ALLOW_INSECURE_STORAGE=1
+   ALLOW_INSECURE_ANTIVIRUS=1 ALLOW_INSECURE_MAIL=1 pnpm --filter
+   @arcompt/api start`.
+4. Web : `pnpm --filter @arcompt/web build` (clés Clerk factices au format
+   `pk_live_`/`sk_live_`), puis `next start -p 3100` avec `AUTH_MODE=dev`,
+   `ARCOMPT_E2E_DEV_AUTH=1`, `API_URL=http://localhost:4100`.
+5. `DATABASE_URL=… playwright test -c e2e/playwright.offline.config.ts`
+   (idem `playwright.sw.config.ts`, `playwright.install.config.ts`).
+
+**`ARCOMPT_E2E_DEV_AUTH=1` ne doit JAMAIS être posée sur un serveur
+déployé** : elle autorise `AUTH_MODE=dev` sous `NODE_ENV=production`
+(API et web) pour ces seuls tests. Absente — le défaut — le mode dev
+reste interdit en production, exactement comme avant. Son activation est
+annoncée au démarrage de l'API dans les fonctions dégradées. Avant tout
+déploiement, vérifier qu'elle n'apparaît pas dans l'environnement du
+serveur (`/opt/arcompt/oracle.env`).
+
+État au 2026-10-29 (build de production, machine locale) :
+`sw-navigation` 1/1 et `install-prompt` 4/4 au vert. Le scénario
+propriétaire hydrate et met en file hors ligne (deux brouillons en
+attente visibles dans la coque), mais échoue après l'enregistrement du
+devis hors ligne : le navigateur aboutit sur l'URL `/sync` en affichant
+le tableau de bord (document coquille) au lieu de la fiche du devis ou
+du centre de synchronisation — la navigation qui suit une mise en file
+hors ligne reste un point ouvert, la suite s'arrête là.
+
+Résolution (2026-10-29, SW v7) — le point ouvert ci-dessus est clos, et
+le scénario propriétaire passe désormais de bout en bout (les trois
+suites au vert contre le build de production). Cause racine, en deux
+moitiés :
+
+1. **Le service worker détruisait ce que l'installation avait
+   précaché.** Les écrans de l'application lisent les cookies (langue,
+   session) : Next les sert « Cache-Control: private, no-store ». À
+   chaque navigation document en ligne, `navigationResponse` traitait
+   cette politique en `cache.delete(request)` — la visite en ligne de
+   `/sync` (étape « visites en ligne » du scénario) supprimait donc le
+   document `/sync` précaché à l'installation. Après l'enregistrement
+   hors ligne d'un devis, le routeur client aboutit à `/sync` ; faute de
+   document exact, le repli « coquille » servait le document du tableau
+   de bord à l'adresse `/sync` (celui de `/dashboard` avait survécu par
+   accident : visité avec `?sw=1`, autre clé de cache). `sw-navigation`
+   ne voyait pas le défaut : `/sync` n'y était atteint qu'en navigation
+   interne, sans chargement de document, donc sans suppression. Correctif
+   v7 : une réponse que la politique interdit de conserver est servie
+   telle quelle et le cache n'est pas touché — en ligne rien ne change
+   (réseau d'abord), hors ligne le document précaché reste le filet.
+   Cas couvert par `lib/sw-worker.test.ts` (le harnais sert désormais
+   les documents avec la politique réelle « private, no-store »).
+2. **Le scénario décrivait le flux en ligne, pas le flux hors ligne.**
+   Après un enregistrement EN LIGNE, le formulaire mène à la fiche
+   `/invoices/<id>` ; hors ligne, le produit mène délibérément à
+   `/sync` (« on emmène l'utilisateur là où il peut le voir ») — la
+   fiche est rendue côté serveur à partir de l'API et ne peut pas
+   exister pour un brouillon encore en file. Le scénario attend
+   désormais `/sync` et sa file visible. Trois autres dérives du
+   scénario par rapport aux contrats réels ont été corrigées au même
+   passage : les enveloppes de réponse (`/partners` rend
+   `{ partners: [...] }`, `/entries` rend `{ entries: [...] }`, `/sales`
+   un tableau nu — l'ancien lecteur ne déballait que `{ items }` et a
+   « vu » un tiers au départ puis aucun après synchronisation, alors
+   même que le serveur avait tout accepté dès le retour du réseau) ;
+   la preuve « exactement une fois » des écritures passe par l'écran
+   « Écritures récentes » (le seul qui montre les brouillons :
+   `GET /entries` ne rend que les écritures validées, par conception,
+   et la liste récente est alimentée par la réponse du serveur au
+   rejeu) ; le rejeu d'idempotence répond 200 et non 201 (contrat écrit
+   dans routes/partners.ts) ; et le dépôt de pièce suit l'UI réelle
+   (lien « Déposer une pièce », confirmation « Pièce conservée sur cet
+   appareil ») avec une preuve par les propositions, tous statuts —
+   l'API n'expose pas `GET /documents`, la liste des pièces en est
+   dérivée.

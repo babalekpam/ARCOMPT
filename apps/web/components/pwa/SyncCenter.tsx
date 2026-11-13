@@ -22,7 +22,7 @@ import { formatDate, type Locale } from "@/lib/i18n";
 import { getOfflineServices } from "@/lib/offline-browser";
 import { OPERATION_ROUTES, type OperationKind, type QueuedOperation } from "@/lib/offline-queue";
 import { SNAPSHOT_KEYS, type SnapshotKey } from "@/lib/offline-snapshot";
-import { notifySyncChanged, refreshSnapshots, syncNow, SYNC_EVENT } from "@/lib/offline-sync";
+import { notifySyncChanged, refreshSnapshotsAuto, resolveSnapshotContext, syncNow, SYNC_EVENT } from "@/lib/offline-sync";
 import type { QueuedDraft } from "@/lib/offline";
 
 interface Row {
@@ -100,9 +100,11 @@ export function SyncCenter() {
     }));
     setRows([...fromDrafts, ...fromOps].sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
     setAges(snapshotAges.map((a) => ({ key: a.key, fetchedAt: a.fetchedAt })));
-    // Le code du pack vient du cliché : hors ligne, il n'y a rien d'autre pour le connaître.
-    const pack = await svc.snapshots.read<{ code?: string }>("pack");
-    setPackCode(pack?.data?.code ?? null);
+    // Le code du pack se résout (cliché, sinon profil du dossier) : c'est ce
+    // qui rend le bouton « Rafraîchir » utilisable dès le premier jour, au
+    // lieu de dépendre d'un cliché que personne n'a encore pu écrire.
+    const ctx = await resolveSnapshotContext();
+    setPackCode(ctx?.packCode ?? null);
   }, []);
 
   useEffect(() => {
@@ -125,15 +127,14 @@ export function SyncCenter() {
   }, [load, t]);
 
   const runRefresh = useCallback(async () => {
-    if (!packCode) return;
     setBusy(true);
     try {
-      await refreshSnapshots({ packCode });
+      await refreshSnapshotsAuto();
     } finally {
       setBusy(false);
       await load();
     }
-  }, [load, packCode]);
+  }, [load]);
 
   const discard = useCallback(
     async (row: Row) => {

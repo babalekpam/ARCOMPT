@@ -14,18 +14,25 @@
  *     porte, avec son identifiant de rejeu. Un service worker qui rejouerait
  *     lui-même un POST le ferait sans idempotence ni ordre.
  *   - NAVIGATIONS : réseau d'abord, repli sur la page en cache, puis sur la
- *     coque hors ligne.
+ *     coquille de l'application (le routeur client affiche l'écran demandé),
+ *     et seulement en tout dernier sur la page hors ligne statique.
  *
- * L'ajout de cette version : la coque des écrans utiles hors ligne est
+ * L'ajout de la v6 : la coque des écrans utiles hors ligne est
  * PRÉCHARGÉE à l'installation. Sans cela, un écran jamais visité en ligne
  * renvoyait /offline.html — y compris le centre de synchronisation, c'est-à-dire
  * l'écran qu'on ouvre précisément quand le réseau manque.
+ *
+ * L'ajout de la v7 : une visite en ligne ne détruit plus le document
+ * précaché. Les écrans sont servis « private, no-store » ; l'ancien repli
+ * supprimait leur entrée du cache au nom de cette politique, et /sync —
+ * l'écran d'atterrissage après une saisie hors ligne — affichait alors le
+ * tableau de bord à la mauvaise adresse.
  *
  * Ce qui n'est délibérément PAS préchargé : la balance, le grand livre et les
  * états financiers. Les servir depuis un cache ferait lire des chiffres d'hier
  * en croyant lire ceux d'aujourd'hui.
  */
-const VERSION = "v4";
+const VERSION = "v7";
 const STATIC_CACHE = `arcompt-static-${VERSION}`;
 const API_CACHE = `arcompt-api-${VERSION}`;
 const PAGE_CACHE = `arcompt-pages-${VERSION}`;
@@ -39,7 +46,7 @@ const PRECACHE = ["/offline.html", "/manifest.webmanifest"];
  * est « au mieux » : un écran refusé par les droits du rôle ne fait pas échouer
  * l'installation.
  */
-const SHELL_ROUTES = ["/", "/sync", "/entries", "/entries/new", "/invoices/new", "/expenses/new", "/documents", "/accounts"];
+const SHELL_ROUTES = ["/", "/dashboard", "/sync", "/entries", "/entries/new", "/invoices/new", "/expenses/new", "/documents", "/accounts"];
 
 self.addEventListener("install", (event) => {
   // Une mise à jour de l'application doit s'appliquer dès l'ouverture
@@ -99,6 +106,71 @@ async function networkFirst(request, cacheName, fallbackUrl) {
   }
 }
 
+/**
+ * Ordre de repli d'une navigation sans réseau. Le document exact d'abord ;
+ * sinon la coquille de l'application — le tableau de bord, racine des écrans
+ * authentifiés — puis les autres écrans précachés. /offline.html n'arrive
+ * qu'en tout dernier : quand AUCUN document de l'application n'est conservé.
+ */
+const SHELL_FALLBACKS = ["/dashboard", ...SHELL_ROUTES];
+
+/**
+ * Navigations : réseau d'abord, puis le cache — mais pas seulement la page
+ * demandée.
+ *
+ * Le défaut corrigé ici a été constaté en conditions réelles : un écran
+ * atteint par la navigation INTERNE (lien de la coque, sans rechargement)
+ * n'a jamais produit de document à conserver. Le rechargement hors ligne de
+ * cet écran tombait donc dans le vide, puis sur /offline.html — alors même
+ * que l'application entière était sur l'appareil. Le lancement de
+ * l'application installée est lui aussi une navigation fraîche : il
+ * subissait le même sort.
+ *
+ * Le repli « coquille » sert le document racine conservé et laisse le
+ * routeur client afficher l'écran demandé : l'application s'ouvre, la file
+ * et les copies locales sont là. Mieux vaut le tableau de bord à l'adresse
+ * /sync qu'une page d'erreur qui fait croire que rien n'est conservé.
+ */
+async function navigationResponse(request) {
+  const cache = await caches.open(PAGE_CACHE);
+  try {
+    const res = await fetch(request);
+    // Conservation : seulement si le serveur l'autorise. Les écrans de
+    // l'application lisent les cookies (langue, session) et sont servis
+    // « private, no-store » : leur réponse fraîche n'est donc jamais
+    // conservée — mais elle ne doit pas non plus DÉTRUIRE le document
+    // précaché à l'installation, qui est le filet hors ligne.
+    //
+    // Le défaut corrigé (constaté en e2e le 2026-10-29) : l'ancien code
+    // supprimait l'entrée existante dès que la politique interdisait la
+    // conservation. Or l'écran le plus visité en navigation document —
+    // /sync, ouvert en ligne avant de partir — perdait ainsi son document
+    // précaché. Après l'enregistrement hors ligne d'un devis, le routeur
+    // aboutit à /sync en navigation document ; le document exact manquait,
+    // le repli « coquille » servait le document du tableau de bord à
+    // l'adresse /sync : l'utilisateur voyait le tableau de bord là où le
+    // centre de synchronisation était attendu.
+    //
+    // En ligne, rien ne change pour l'utilisateur : réseau d'abord, la
+    // réponse fraîche est toujours celle qui est servie. Le document
+    // conservé n'est lu que sans réseau, et ses données viennent alors
+    // d'IndexedDB et du cache API, pas du HTML précaché.
+    const policy = res.headers.get("cache-control") || "";
+    if (res.ok && !/\b(no-store|private)\b/i.test(policy)) cache.put(request, res.clone());
+    return res;
+  } catch {
+    const exact = await cache.match(request, { ignoreSearch: true });
+    if (exact) return exact;
+    for (const shell of SHELL_FALLBACKS) {
+      const hit = await cache.match(shell, { ignoreSearch: true });
+      if (hit) return hit;
+    }
+    const fb = await caches.match("/offline.html");
+    if (fb) return fb;
+    return new Response("Hors ligne", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
+  }
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -114,6 +186,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request, PAGE_CACHE, "/offline.html"));
+    event.respondWith(navigationResponse(request));
   }
 });

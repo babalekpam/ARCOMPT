@@ -2,14 +2,27 @@
 // SPDX-License-Identifier: LicenseRef-ARGILETTE-Proprietary
 "use client";
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { NetworkError, errorMessage } from "@/lib/api-client";
+import { ApiError, NetworkError, errorMessage } from "@/lib/api-client";
 import { parseApiResponse } from "@/lib/api-shared";
 import { useT } from "@/lib/i18n-client";
+import { getOfflineServices } from "@/lib/offline-browser";
+import { notifySyncChanged } from "@/lib/offline-sync";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { DocumentWorkbench } from "./DocumentWorkbench";
 import { formatBytes, isAcceptedFile } from "./helpers";
 import type { UploadResult } from "./types";
+
+/** Au-delà, une pièce ne tient pas raisonnablement dans la file chiffrée de l'appareil. */
+const OFFLINE_QUEUE_MAX_BYTES = 10 * 1024 * 1024;
+
+async function fileToBase64(file: File): Promise<string> {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let bin = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < buf.length; i += CHUNK) bin += String.fromCharCode(...buf.subarray(i, i + CHUNK));
+  return btoa(bin);
+}
 
 /** Envoi multipart via le proxy (qui relaie le corps en flux) ; jamais de JSON pour un fichier. */
 async function uploadDocument(file: File): Promise<UploadResult> {
@@ -37,6 +50,7 @@ export function UploadFlow({ currency }: { currency: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UploadResult | null>(null);
+  const [queuedName, setQueuedName] = useState<string | null>(null);
   const pickRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -53,6 +67,7 @@ export function UploadFlow({ currency }: { currency: string }) {
   const choose = (f: File | undefined) => {
     setError(null);
     setResult(null);
+    setQueuedName(null);
     if (!f) return;
     if (!isAcceptedFile(f)) {
       setFile(null);
@@ -68,13 +83,49 @@ export function UploadFlow({ currency }: { currency: string }) {
     choose(e.dataTransfer.files?.[0]);
   };
 
+  /**
+   * File hors ligne des pièces (docs/OFFLINE.md) : le corps part en base64,
+   * que l'API accepte sur le même endpoint ; le serveur déduplique par
+   * empreinte du contenu, donc un rejeu après une coupure en plein envoi ne
+   * crée pas de second exemplaire. Renvoie vrai si la pièce est prise en
+   * charge (en file ou message d'erreur propre déjà affiché).
+   */
+  const queueOffline = async (f: File): Promise<boolean> => {
+    if (f.size > OFFLINE_QUEUE_MAX_BYTES) {
+      setError(t("documents.upload.tooLargeOffline"));
+      return true;
+    }
+    const svc = await getOfflineServices();
+    if (!svc) return false;
+    const base64 = await fileToBase64(f);
+    await svc.operations.enqueue("document.upload", { base64, filename: f.name, ...(f.type ? { mimeType: f.type } : {}), source: "UPLOAD" }, {});
+    notifySyncChanged();
+    setQueuedName(f.name);
+    setFile(null);
+    if (pickRef.current) pickRef.current.value = "";
+    if (cameraRef.current) cameraRef.current.value = "";
+    return true;
+  };
+
   const send = async () => {
     if (!file) return;
     setBusy(true);
     setError(null);
     try {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        if (await queueOffline(file)) return;
+        throw new NetworkError("réseau indisponible");
+      }
       setResult(await uploadDocument(file));
     } catch (e) {
+      // Coupure franche ou en plein envoi : la pièce attend sur l'appareil.
+      if (e instanceof NetworkError || (e instanceof ApiError && e.status >= 500)) {
+        try {
+          if (await queueOffline(file)) return;
+        } catch {
+          /* la file elle-même a échoué : on montre l'erreur d'envoi */
+        }
+      }
       setError(errorMessage(e));
     } finally {
       setBusy(false);
@@ -91,7 +142,7 @@ export function UploadFlow({ currency }: { currency: string }) {
 
   return (
     <div className="space-y-4">
-      {!result ? (
+      {!result && !queuedName ? (
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -126,6 +177,15 @@ export function UploadFlow({ currency }: { currency: string }) {
       ) : null}
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
+
+      {queuedName ? (
+        <>
+          <Alert tone="success">
+            {t("documents.upload.queued")} <span className="font-medium">{queuedName}</span>
+          </Alert>
+          <Button variant="secondary" onClick={() => { setQueuedName(null); reset(); }}>{t("documents.upload.reset")}</Button>
+        </>
+      ) : null}
 
       {result ? (
         <>

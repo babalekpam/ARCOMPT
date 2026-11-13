@@ -7,6 +7,9 @@ import { BottomNav } from "./BottomNav";
 import { SideNav } from "./SideNav";
 import { BrandHomeLink, ShellHeader, ShellRouteScope, WorkspaceOnly } from "./ShellRouteScope";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
+import { InstallAppButton } from "@/components/pwa/InstallAppButton";
+import { InstallPromptGate } from "@/components/pwa/InstallPromptGate";
+import { ShellWarmer } from "@/components/pwa/ShellWarmer";
 import { getPlatformAdmin } from "@/lib/platform";
 import { getCurrentMemberReference } from "@/lib/member-reference";
 import { ReminderReviewAlert } from "./ReminderReviewAlert";
@@ -29,6 +32,10 @@ export async function AppShell({ auth, children }: { auth: AuthContext; children
         <ShellHeader name={t("app.name")} platformAdmin={platformAdmin} tenantId={auth.tenantId} displayName={displayName} />
         {auth.mode === "clerk" ? <AdminModeSwitch routeAware /> : null}
         {auth.tenantId ? <WorkspaceOnly platformAdmin={platformAdmin}><ReminderReviewAlert key={auth.tenantId} tenantId={auth.tenantId} /></WorkspaceOnly> : null}
+        <InstallAppButton />
+        {/* L'invite du premier jour ne concerne qu'un dossier configuré, jamais le mode plateforme. */}
+        <InstallPromptGate enabled={Boolean(auth.tenantId) && !platformAdmin} />
+        <ShellWarmer />
         <OfflineIndicator />
         <main className="shell-main flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10">
           {children}

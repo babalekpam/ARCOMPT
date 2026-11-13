@@ -14,6 +14,13 @@ export const config = {
   authMode: (): AuthMode => {
     const value = process.env.AUTH_MODE;
     if (value === "dev" && process.env.NODE_ENV !== "production") return "dev";
+    // Échappatoire STRICTEMENT réservée aux tests de bout en bout locaux :
+    // ARCOMPT_E2E_DEV_AUTH=1 autorise le mode dev sous un build de production
+    // (`next start`) pour les suites Playwright, sur machine jetable.
+    // NE JAMAIS poser cette variable sur un serveur déployé : la session dev
+    // fait foi d'un cookie sans vérification d'identité. Absente (le défaut),
+    // le garde « clerk en production » ci-dessous s'applique tel quel.
+    if (value === "dev" && process.env.ARCOMPT_E2E_DEV_AUTH === "1") return "dev";
     if (value === "clerk") return "clerk";
     if (process.env.NODE_ENV === "production") {
       throw new Error("AUTH_MODE must be explicitly set to clerk in production");

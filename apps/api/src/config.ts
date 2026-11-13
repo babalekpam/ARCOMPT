@@ -48,6 +48,18 @@ export const INSECURE_OPT_OUT = {
   draftPackFilings: DRAFT_PACK_FILINGS_OPT_OUT,
 } as const;
 
+/**
+ * Échappatoire STRICTEMENT réservée aux tests de bout en bout locaux :
+ * `ARCOMPT_E2E_DEV_AUTH=1` autorise `AUTH_MODE=dev` sous
+ * `NODE_ENV=production`, afin d'exécuter les suites Playwright contre un
+ * build de production (`next build` + `next start`) sur une machine de
+ * test jetable. NE JAMAIS poser cette variable sur un serveur déployé :
+ * le mode dev accepte les en-têtes X-User-Id / X-Tenant-Id sans jeton.
+ * Absente (le défaut, partout), chaque garde se comporte exactement
+ * comme avant : le mode dev reste interdit en production.
+ */
+export const E2E_DEV_AUTH_OPT_OUT = "ARCOMPT_E2E_DEV_AUTH";
+
 /** Longueur minimale raisonnable pour un secret HMAC de webhook de paiement. */
 export const MIN_WEBHOOK_SECRET_LENGTH = 32;
 
@@ -106,6 +118,11 @@ export function isOptOutEnabled(value: string | undefined): boolean {
   if (!value) return false;
   const v = value.trim().toLowerCase();
   return v === "1" || v === "true" || v === "yes";
+}
+
+/** Vrai uniquement si l'échappatoire e2e (voir `E2E_DEV_AUTH_OPT_OUT`) est explicitement posée. */
+export function isE2eDevAuthEnabled(env: NodeJS.ProcessEnv): boolean {
+  return isOptOutEnabled(env[E2E_DEV_AUTH_OPT_OUT]);
 }
 
 function present(value: string | undefined): value is string {
@@ -174,11 +191,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
   }
 
   // --- Authentification -----------------------------------------------------
+  const e2eDevAuth = isE2eDevAuthEnabled(env);
+  if (e2eDevAuth && isProduction) {
+    degraded.push(
+      `${E2E_DEV_AUTH_OPT_OUT}=1 : AUTH_MODE=dev accepté sous NODE_ENV=production — réservé aux tests de bout en bout sur machine jetable. NE JAMAIS poser sur un serveur déployé.`,
+    );
+  }
   const mode: AuthMode = env.AUTH_MODE === "oidc" ? "oidc" : env.AUTH_MODE === "clerk" ? "clerk" : "dev";
   if (mode !== "oidc") {
-    if (mode !== "clerk") problems.push("AUTH_MODE : doit valoir « clerk » ou « oidc » en production — le mode « dev » accepte l'en-tête X-Tenant-Id sans jeton.");
+    if (mode !== "clerk" && !(mode === "dev" && e2eDevAuth)) problems.push("AUTH_MODE : doit valoir « clerk » ou « oidc » en production — le mode « dev » accepte l'en-tête X-Tenant-Id sans jeton.");
   }
-  if (mode === "oidc" || mode === "dev") {
+  if (mode === "oidc" || (mode === "dev" && !e2eDevAuth)) {
     if (!present(env.KEYCLOAK_ISSUER)) problems.push("KEYCLOAK_ISSUER : absent — aucun émetteur de jetons à vérifier.");
     if (!present(env.KEYCLOAK_CLIENT_ID)) problems.push("KEYCLOAK_CLIENT_ID : absent — audience des jetons non vérifiable.");
   }

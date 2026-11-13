@@ -40,16 +40,16 @@ export default function DashboardVisual() {
   return (
     <figure className="mx-auto mt-10 w-full min-w-0 max-w-6xl sm:mt-12" aria-label="Aperçu illustratif du tableau de bord ARCOMPT">
       <div className="overflow-hidden rounded-[22px] border border-[#0F2A43]/10 bg-white shadow-[0_24px_60px_rgba(15,42,67,0.16)] ring-1 ring-white/60">
-        <div className="flex items-center gap-3 bg-[#0F2A43] px-4 py-3 sm:px-5">
-          <div className="flex gap-1.5" aria-hidden="true"><span className="h-2.5 w-2.5 rounded-full bg-white/35" /><span className="h-2.5 w-2.5 rounded-full bg-[#0E9F6E]" /><span className="h-2.5 w-2.5 rounded-full bg-white/70" /></div>
-          <div className="min-w-0 flex-1 truncate rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium tracking-wide text-white/85">ARCOMPT · Tableau de bord</div>
+        <div className="flex items-center gap-3 border-b border-[#E9E2D2] bg-[#FAF8F2] px-4 py-3 sm:px-5">
+          <div className="flex gap-1.5" aria-hidden="true"><span className="h-2.5 w-2.5 rounded-full bg-[#0F2A43]/20" /><span className="h-2.5 w-2.5 rounded-full bg-[#0E9F6E]" /><span className="h-2.5 w-2.5 rounded-full bg-[#0F2A43]/35" /></div>
+          <div className="min-w-0 flex-1 truncate rounded-full border border-[#E3E0D8] bg-white px-3 py-1.5 text-[11px] font-medium tracking-wide text-[#0F2A43]/70">ARCOMPT · Tableau de bord</div>
           <span className="hidden shrink-0 rounded-full bg-[#0E9F6E] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-white sm:inline-flex">Aperçu</span>
         </div>
         <div className="flex min-w-0">
-          <aside className="flex w-12 shrink-0 flex-col items-center bg-[#0F2A43] px-2 py-4 text-white sm:w-14 md:w-52 md:items-stretch md:p-4">
-            <div className="mb-5 flex items-center gap-2.5 md:px-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0E9F6E] text-sm font-black">A</span><span className="hidden text-sm font-bold tracking-[0.14em] md:block">ARCOMPT</span></div>
-            <nav className="flex w-full flex-col gap-1.5" aria-hidden="true">{NAV_ITEMS.map((item) => (<span key={item.label} className={`flex items-center justify-center gap-2.5 rounded-lg px-2 py-2.5 text-[12px] font-semibold md:justify-start ${item.active ? "bg-[#0E9F6E] text-white shadow-sm" : "text-white/70"}`}><Icon path={item.path} /><span className="hidden truncate md:block">{item.label}</span></span>))}</nav>
-            <div className="mt-auto hidden rounded-xl bg-white/[.07] p-3 text-[11px] leading-relaxed text-white/70 md:block"><span className="mb-1 block font-semibold text-white">SYSCOHADA</span>Grand livre et balance</div>
+          <aside className="flex w-12 shrink-0 flex-col items-center border-r border-[#E9E2D2] bg-[#F3F6F4] px-2 py-4 text-[#0F2A43] sm:w-14 md:w-52 md:items-stretch md:p-4">
+            <div className="mb-5 flex items-center gap-2.5 md:px-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0E9F6E] text-sm font-black text-white">A</span><span className="hidden text-sm font-bold tracking-[0.14em] md:block">ARCOMPT</span></div>
+            <nav className="flex w-full flex-col gap-1.5" aria-hidden="true">{NAV_ITEMS.map((item) => (<span key={item.label} className={`flex items-center justify-center gap-2.5 rounded-lg px-2 py-2.5 text-[12px] font-semibold md:justify-start ${item.active ? "bg-[#0E9F6E] text-white shadow-sm" : "text-[#0F2A43]/60"}`}><Icon path={item.path} /><span className="hidden truncate md:block">{item.label}</span></span>))}</nav>
+            <div className="mt-auto hidden rounded-xl border border-[#E3E0D8] bg-white p-3 text-[11px] leading-relaxed text-[#0F2A43]/60 md:block"><span className="mb-1 block font-semibold text-[#0F2A43]">SYSCOHADA</span>Grand livre et balance</div>
           </aside>
           <div className="min-w-0 flex-1 bg-[#F7F5F0] p-3 sm:p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><div><p className="text-[15px] font-bold text-[#0F2A43] sm:text-base">Tableau de bord</p><p className="text-[11px] text-[#0F2A43]/55 sm:text-xs">Vue d’ensemble de l’activité comptable</p></div><span className="rounded-full border border-[#0E9F6E]/25 bg-white px-2.5 py-1 text-[10px] font-semibold text-[#0B7A55]">Aperçu illustratif</span></div>

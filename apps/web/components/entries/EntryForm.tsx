@@ -46,9 +46,22 @@ export function EntryForm({ currency }: { currency: string }) {
   const [success, setSuccess] = useState<{ text: string; id?: string } | null>(null);
 
   useEffect(() => {
+    let alive = true;
     apiClient<{ accounts: Account[] }>("/accounts")
-      .then((d) => setAccounts(d.accounts.length > 0 ? d.accounts : null))
-      .catch(() => setAccounts(null));
+      .then((d) => {
+        if (alive) setAccounts(d.accounts.length > 0 ? d.accounts : null);
+      })
+      .catch(async () => {
+        // Hors ligne : le plan de comptes conservé sur l'appareil alimente le
+        // sélecteur (recherche par libellé comprise), au lieu de le réduire à
+        // la saisie libre du numéro.
+        const svc = await getOfflineServices();
+        const snap = await svc?.snapshots.read<{ accounts: Account[] }>("accounts").catch(() => null);
+        if (alive) setAccounts(snap && snap.data.accounts.length > 0 ? snap.data.accounts : null);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const totals = useMemo(() => {
